@@ -4,13 +4,17 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Instalamos únicamente las dependencias de Node.js del proyecto
-RUN npm install
+# Instalamos únicamente las dependencias de producción de Node.js (cero paquetes del SO, cero compiladores)
+RUN npm install --omit=dev
 
 # --- CACHE BUSTING ---
-ENV CACHE_BUST=1.4
+ENV CACHE_BUST=1.5
 
 COPY . .
+
+# Variables de entorno por defecto
+ENV NODE_ENV=production
+ENV PORT=3000
 
 # Puerto expuesto
 EXPOSE 3000
