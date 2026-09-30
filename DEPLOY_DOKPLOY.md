@@ -20,12 +20,16 @@
 
 ## 2. Volúmenes Persistentes (CRÍTICO)
 
-Para que los datos de los pedidos, productos y las imágenes subidas no se borren cuando el contenedor se actualice o reinicie, debes configurar **2 volúmenes persistentes** en la pestaña **Volumes / Mounts** de la aplicación en Dokploy:
+Para que los datos de los pedidos, productos y las imágenes subidas **no se borren** cuando el contenedor se actualice o reinicie, debes configurar **2 volúmenes persistentes** en la pestaña **Volumes / Mounts** de la aplicación en Dokploy:
 
-| Tipo | Host Path / Volume Name | Mount Path (Dentro del Contenedor) | Propósito |
+> ⚠️ **IMPORTANTE EN DOKPLOY**: En el campo **Type**, debes seleccionar **Volume** (NO selecciones *Bind*, ya que *Bind* requiere una ruta absoluta existente en el VPS).
+
+| Type (Tipo) | Volume Name (Nombre) | Mount Path (Ruta en Contenedor) | Propósito |
 | :--- | :--- | :--- | :--- |
-| **Bind / Named Volume** | `digirest_data` | `/app/server/data` | Base de datos SQLite (`pos.sqlite`) |
-| **Bind / Named Volume** | `digirest_uploads` | `/app/server/uploads` | Fotos de platos y comprobantes |
+| **Volume** | `digirest_data` | `/app/server/data` | Base de datos SQLite (`pos.sqlite`) |
+| **Volume** | `digirest_uploads` | `/app/server/uploads` | Fotos de platos y comprobantes |
+
+*(Si el volumen se monta por primera vez estando vacío, el servidor copiará automáticamente la base de datos plantilla limpia con el usuario `digidanMasterAdmin`).*
 
 ---
 

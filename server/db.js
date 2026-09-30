@@ -9,6 +9,18 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const dbPath = path.join(dataDir, 'pos.sqlite');
+const templateDbPath = path.resolve(__dirname, 'default_template.sqlite');
+
+// Si la base de datos no existe (por ejemplo al montar un volumen nuevo y vacío en Dokploy),
+// inicializamos automáticamente copiando la plantilla limpia con el usuario digidanMasterAdmin
+if (!fs.existsSync(dbPath) && fs.existsSync(templateDbPath)) {
+    try {
+        console.log('📦 Inicializando pos.sqlite desde plantilla inicial en volumen montado...');
+        fs.copyFileSync(templateDbPath, dbPath);
+    } catch (e) {
+        console.warn('⚠️ No se pudo copiar la plantilla de BD:', e.message);
+    }
+}
 
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
