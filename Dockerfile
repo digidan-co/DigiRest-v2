@@ -1,16 +1,23 @@
-FROM node:18-alpine
+FROM node:20-slim
 
 WORKDIR /app
+
+# Instalar dependencias del sistema necesarias para sqlite3, openssl y sharp
+RUN apt-get update -y && apt-get install -y openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 
 # Instalamos todas las dependencias
-RUN npm install && npm install helmet compression express-rate-limit sharp axios
+RUN npm install
 
 # --- CACHE BUSTING ---
-ENV CACHE_BUST=1.2
+ENV CACHE_BUST=1.3
 
 COPY . .
+
+# Variables de entorno por defecto
+ENV NODE_ENV=production
+ENV PORT=3000
 
 # Puerto expuesto por defecto
 EXPOSE 3000

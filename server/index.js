@@ -22,6 +22,14 @@ const db = require('./db');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
+// Catch any unhandled errors gracefully so logs show exact details
+process.on('uncaughtException', (err) => {
+    console.error('💥 [CRITICAL] Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 [CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 // --- OPTIMIZACIÓN DE MEMORIA: deshabilitar caché interna de sharp/libvips ---
 // Por defecto sharp guarda imágenes procesadas en memoria C++ (fuera del heap JS).
 // En un servidor multitenancy con imágenes únicas esto crece sin control.
