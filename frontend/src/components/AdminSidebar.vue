@@ -11,7 +11,7 @@ const sections = [
         { tab: 'orders', icon: 'fa-receipt', label: 'Pedidos' },
         { tab: 'reservations', icon: 'fa-calendar-check', label: 'Reservas' },
         { tab: 'delivery-zones', icon: 'fa-motorcycle', label: 'Zonas de Domicilio' },
-        { tab: 'crm', icon: 'fa-users', label: 'Clientes / CRM' },
+        { tab: 'crm', icon: 'fa-users', label: 'Clientes' },
     ]},
     { name: 'Menú & Carta', tabs: [
         { tab: 'products', icon: 'fa-utensils', label: 'Platos y Categorías' },
