@@ -1,0 +1,518 @@
+/* DigiRest - Color Theme Tokens, Contrast, Aside & Form Switches */
+/* ==========================================================================
+   DIGIREST COLOR THEME PALETTE:
+   - System Canvas: #f1f1f1
+   - Primary Solid Accent: #f5b55f
+   - General Text / Dark Solids: #333333
+   - Active Tab / Hover / Toast: #005dbd
+   ========================================================================== */
+
+/* Active toggle switch background */
+input:checked + .toggle-bg,
+input:checked ~ .toggle-bg,
+.peer:checked ~ div.peer-checked\:bg-\[\#f5b55f\],
+.peer:checked ~ [class*="peer-checked:bg-"] {
+    background-color: var(--system-primary, #f5b55f) !important;
+}
+
+/* Ensure contrast: buttons or badges with primary color background have dynamic accent */
+.bg-\[\#f5b55f\],
+.bg-primary-solid,
+[class~="bg-[#f5b55f]"] {
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+}
+
+.text-\[\#f5b55f\],
+.text-primary-solid,
+[class~="text-[#f5b55f]"],
+.text-\[\#f5b55f\] i,
+i.text-\[\#f5b55f\],
+.text-\[\#f5b55f\] svg {
+    color: var(--system-primary, #f5b55f) !important;
+}
+
+.border-\[\#f5b55f\],
+[class~="border-[#f5b55f]"] {
+    border-color: var(--system-primary, #f5b55f) !important;
+}
+
+/* Schedule Day Selection Buttons */
+.sched-day-pill {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid #e5e7eb;
+    background-color: #ffffff;
+    color: #4b5563;
+    font-weight: 700;
+}
+.sched-day-pill:hover {
+    background-color: #f9fafb;
+    border-color: #d1d5db;
+}
+.sched-day-pill.active,
+.sched-day-pill:has(input:checked) {
+    background-color: var(--system-primary, #f5b55f) !important;
+    border-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Interactive primary elements hover state */
+button.bg-\[\#f5b55f\]:hover,
+a.bg-\[\#f5b55f\]:hover,
+.btn-primary:hover {
+    filter: brightness(1.1) !important;
+}
+
+/* Aside Styling & Accordion Navigation */
+.admin-nav-section {
+    position: relative;
+}
+
+.admin-section-content {
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+    overflow: hidden;
+    max-height: 600px;
+    opacity: 1;
+}
+
+.admin-nav-section.collapsed .admin-section-content {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    pointer-events: none;
+}
+
+.admin-section-toggle .section-chevron {
+    transition: transform 0.25s ease;
+}
+
+.admin-nav-section.collapsed .admin-section-toggle .section-chevron {
+    transform: rotate(-90deg);
+}
+
+@media (min-width: 768px) {
+    #admin-sidebar-wrapper {
+        position: sticky !important;
+        top: 12px !important;
+        margin-top: 0 !important;
+        align-self: flex-start !important;
+        z-index: 30 !important;
+        height: calc(100vh - 1.5rem) !important;
+    }
+    #admin-view {
+        min-height: calc(100vh - 1.5rem) !important;
+        align-items: flex-start !important;
+    }
+}
+
+@media (max-width: 767px) {
+    #admin-sidebar-wrapper {
+        position: static !important;
+        z-index: 70 !important;
+    }
+}
+
+#admin-sidebar {
+    background-color: var(--system-bg-aside, #052244) !important;
+    color: var(--sidebar-text, #ffffff) !important;
+    margin-top: 0 !important;
+    z-index: 70 !important;
+    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.1)) !important;
+}
+
+#admin-sidebar-overlay {
+    z-index: 60 !important;
+}
+
+/* Inactive button: background, borde, texto e icono dinámicos por contraste */
+#admin-sidebar .admin-tab-btn:not(.active) {
+    background-color: var(--sidebar-inactive-bg, rgba(255, 255, 255, 0.05)) !important;
+    color: var(--sidebar-inactive-text, #cbd5e1) !important;
+    border: 1px solid var(--sidebar-inactive-border, rgba(255, 255, 255, 0.06)) !important;
+}
+
+#admin-sidebar .admin-tab-btn:not(.active) i {
+    color: var(--sidebar-inactive-icon, #94a3b8) !important;
+    transition: color 0.2s ease;
+}
+
+#admin-sidebar .admin-tab-btn:not(.active) span {
+    color: var(--sidebar-inactive-text, #cbd5e1) !important;
+    transition: color 0.2s ease;
+}
+
+#admin-sidebar .admin-tab-btn:not(.active):hover {
+    background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.12)) !important;
+    color: var(--system-primary, #f5b55f) !important;
+}
+
+#admin-sidebar .admin-tab-btn:not(.active):hover i,
+#admin-sidebar .admin-tab-btn:not(.active):hover span {
+    color: var(--system-primary, #f5b55f) !important;
+}
+
+/* Active button: background --system-primary, icono y texto --system-secondary */
+#admin-sidebar .admin-tab-btn.active {
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #64010e) !important;
+    border: 1px solid transparent !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18) !important;
+}
+
+#admin-sidebar .admin-tab-btn.active i,
+#admin-sidebar .admin-tab-btn.active span {
+    color: var(--system-secondary, #64010e) !important;
+    font-weight: 700 !important;
+}
+
+/* Botón Cerrar Sesión */
+#admin-sidebar #btn-sidebar-logout,
+#admin-sidebar .btn-sidebar-logout {
+    background-color: var(--sidebar-inactive-bg, rgba(255, 255, 255, 0.05)) !important;
+    color: var(--sidebar-inactive-text, #cbd5e1) !important;
+    border: 1px solid var(--sidebar-inactive-border, rgba(255, 255, 255, 0.06)) !important;
+}
+
+#admin-sidebar #btn-sidebar-logout i,
+#admin-sidebar #btn-sidebar-logout span,
+#admin-sidebar .btn-sidebar-logout i,
+#admin-sidebar .btn-sidebar-logout span {
+    color: var(--sidebar-inactive-text, #cbd5e1) !important;
+    transition: color 0.2s ease;
+}
+
+#admin-sidebar #btn-sidebar-logout:hover,
+#admin-sidebar .btn-sidebar-logout:hover {
+    background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.12)) !important;
+    color: var(--system-primary, #f5b55f) !important;
+}
+
+#admin-sidebar #btn-sidebar-logout:hover i,
+#admin-sidebar #btn-sidebar-logout:hover span,
+#admin-sidebar .btn-sidebar-logout:hover i,
+#admin-sidebar .btn-sidebar-logout:hover span {
+    color: var(--system-primary, #f5b55f) !important;
+}
+
+/* Module Section Toggles, Titulos, Puntos y Chevrons */
+#admin-sidebar .admin-section-toggle {
+    color: var(--sidebar-section-title, rgba(255, 255, 255, 0.95)) !important;
+}
+
+#admin-sidebar .admin-section-toggle span {
+    color: var(--sidebar-section-title, rgba(255, 255, 255, 0.95)) !important;
+}
+
+#admin-sidebar .admin-section-toggle:hover span {
+    color: var(--system-primary, #f5b55f) !important;
+}
+
+#admin-sidebar .section-dot {
+    background-color: var(--sidebar-section-dot, rgba(255, 255, 255, 0.6)) !important;
+}
+
+#admin-sidebar .section-chevron {
+    color: var(--sidebar-inactive-icon, rgba(255, 255, 255, 0.5)) !important;
+}
+
+#admin-sidebar .admin-section-content {
+    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.2)) !important;
+}
+
+#admin-sidebar .sidebar-slogan {
+    color: var(--sidebar-slogan-color, var(--sidebar-muted, rgba(255, 255, 255, 0.75))) !important;
+}
+
+#admin-sidebar .sidebar-user-card {
+    background-color: var(--sidebar-greeting-bg, rgba(255, 255, 255, 0.05)) !important;
+    border-color: var(--sidebar-greeting-border, rgba(255, 255, 255, 0.1)) !important;
+}
+
+#admin-sidebar .sidebar-divider {
+    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.1)) !important;
+}
+
+#admin-sidebar .sidebar-close-btn {
+    color: var(--sidebar-close-btn, rgba(255, 255, 255, 0.7)) !important;
+}
+#admin-sidebar .admin-section-toggle:hover .rounded-full {
+    background-color: var(--system-primary, #f5b55f) !important;
+}
+
+/* ====================================================================
+   MODULE BUTTONS DECORATION (--system-primary & --system-secondary)
+   ==================================================================== */
+.btn-system-primary {
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.btn-system-primary i,
+.btn-system-primary span,
+.btn-system-primary svg {
+    color: var(--system-secondary, #1e2122) !important;
+}
+.btn-system-primary:hover {
+    filter: brightness(1.08) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22) !important;
+}
+.btn-system-primary:active {
+    transform: translateY(0);
+}
+
+.btn-system-tertiary {
+    background-color: var(--system-tertiary, #1e2122) !important;
+    color: var(--system-primary, #f5b55f) !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 3px 10px rgba(30, 33, 34, 0.25) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.btn-system-tertiary:hover {
+    background-color: #2b2f31 !important;
+    filter: brightness(1.1) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(30, 33, 34, 0.35) !important;
+}
+.btn-system-tertiary:active {
+    transform: translateY(0);
+}
+
+/* Fallback utilities for arbitrary var classes in precompiled Tailwind */
+.bg-\[var\(--system-primary\)\],
+[class~="bg-[var(--system-primary)]"] {
+    background-color: var(--system-primary, #f5b55f) !important;
+}
+.bg-\[var\(--system-secondary\)\],
+[class~="bg-[var(--system-secondary)]"] {
+    background-color: var(--system-secondary, #1e2122) !important;
+}
+.bg-\[var\(--system-tertiary\)\],
+[class~="bg-[var(--system-tertiary)]"] {
+    background-color: var(--system-tertiary, #1e2122) !important;
+}
+.text-\[var\(--system-secondary\)\],
+[class~="text-[var(--system-secondary)]"] {
+    color: var(--system-secondary, #1e2122) !important;
+}
+.text-\[var\(--system-primary\)\],
+[class~="text-[var(--system-primary)]"] {
+    color: var(--system-primary, #f5b55f) !important;
+}
+.border-\[var\(--system-primary\)\],
+[class~="border-[var(--system-primary)]"] {
+    border-color: var(--system-primary, #f5b55f) !important;
+}
+.focus\:border-\[var\(--system-primary\)\]:focus {
+    border-color: var(--system-primary, #f5b55f) !important;
+}
+.hover\:bg-\[var\(--system-primary\)\]:hover {
+    background-color: var(--system-primary, #f5b55f) !important;
+}
+
+/* Translucent tints with color-mix */
+.bg-\[var\(--system-primary\)\]\/10,
+[class~="bg-[var(--system-primary)]/10"] {
+    background-color: color-mix(in srgb, var(--system-primary, #f5b55f) 10%, transparent) !important;
+}
+.bg-\[var\(--system-primary\)\]\/15,
+[class~="bg-[var(--system-primary)]/15"] {
+    background-color: color-mix(in srgb, var(--system-primary, #f5b55f) 15%, transparent) !important;
+}
+.bg-\[var\(--system-primary\)\]\/20,
+[class~="bg-[var(--system-primary)]/20"] {
+    background-color: color-mix(in srgb, var(--system-primary, #f5b55f) 20%, transparent) !important;
+}
+.hover\:bg-\[var\(--system-primary\)\]\/10:hover {
+    background-color: color-mix(in srgb, var(--system-primary, #f5b55f) 10%, transparent) !important;
+}
+
+/* Dynamic switches & peer checkboxes */
+input[type="checkbox"].peer:checked + div,
+input[type="checkbox"].peer:checked ~ div,
+input.peer:checked + div,
+input.peer:checked ~ div,
+input:checked + div.rounded-full,
+input:checked ~ div.rounded-full,
+.peer:checked ~ div.rounded-full,
+.prod-avail-toggle:checked + div,
+.prod-avail-toggle:checked ~ div,
+.peer:checked ~ .peer-checked\:bg-\[\#f5b55f\],
+.peer:checked ~ .peer-checked-system-primary,
+.peer:checked ~ [class*="peer-checked:bg-"] {
+    background-color: var(--system-primary, #f5b55f) !important;
+}
+
+/* ====================================================================
+   SYSTEM THEME PRESETS GRID (5 COLUMNS x 2 ROWS)
+   ==================================================================== */
+#theme-presets-container,
+.grid-cols-5 {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+
+@media (max-width: 640px) {
+    #theme-presets-container {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+/* ====================================================================
+   PERFECT VERTICAL & HORIZONTAL TOGGLE SWITCH CENTERING
+   ==================================================================== */
+label:has(.peer) div.rounded-full,
+label .peer + div.rounded-full,
+label .peer ~ div.rounded-full,
+.peer + div.rounded-full,
+.peer ~ div.rounded-full {
+    position: relative !important;
+    display: inline-block !important;
+    vertical-align: middle !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-sizing: border-box !important;
+}
+
+/* Large Toggle (w-11 h-6: 44px wide, 24px high) */
+.peer + div.w-11.h-6,
+.peer ~ div.w-11.h-6,
+div.w-11.h-6.rounded-full {
+    width: 44px !important;
+    height: 24px !important;
+    min-width: 44px !important;
+    min-height: 24px !important;
+}
+
+.peer + div.w-11.h-6::after,
+.peer ~ div.w-11.h-6::after,
+div.w-11.h-6.rounded-full::after {
+    content: '' !important;
+    position: absolute !important;
+    top: 2px !important;
+    left: 2px !important;
+    bottom: auto !important;
+    width: 20px !important;
+    height: 20px !important;
+    background-color: #ffffff !important;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+    transform: translateX(0) !important;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-sizing: border-box !important;
+}
+
+.peer:checked + div.w-11.h-6::after,
+.peer:checked ~ div.w-11.h-6::after,
+.peer:checked ~ div.w-11.h-6.rounded-full::after,
+input:checked + div.w-11.h-6::after,
+input:checked ~ div.w-11.h-6::after {
+    transform: translateX(20px) !important;
+}
+
+/* Small/Medium Toggle (w-9 h-5: 36px wide, 20px high) */
+.peer + div.w-9.h-5,
+.peer ~ div.w-9.h-5,
+div.w-9.h-5.rounded-full {
+    width: 36px !important;
+    height: 20px !important;
+    min-width: 36px !important;
+    min-height: 20px !important;
+}
+
+.peer + div.w-9.h-5::after,
+.peer ~ div.w-9.h-5::after,
+div.w-9.h-5.rounded-full::after {
+    content: '' !important;
+    position: absolute !important;
+    top: 2px !important;
+    left: 2px !important;
+    bottom: auto !important;
+    width: 16px !important;
+    height: 16px !important;
+    background-color: #ffffff !important;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+    transform: translateX(0) !important;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-sizing: border-box !important;
+}
+
+.peer:checked + div.w-9.h-5::after,
+.peer:checked ~ div.w-9.h-5::after,
+.peer:checked ~ div.w-9.h-5.rounded-full::after,
+input:checked + div.w-9.h-5::after,
+input:checked ~ div.w-9.h-5::after {
+    transform: translateX(16px) !important;
+}
+
+/* ==========================================================================
+   Bordes de selección, activo y foco: Único borde limpio de 1px (--system-primary)
+   ========================================================================== */
+
+/* Eliminar outlines y aros dobles en botones y enlaces */
+button,
+button:focus,
+button:focus-visible,
+button:active,
+[role="button"],
+[role="button"]:focus,
+[role="button"]:focus-visible,
+a:focus,
+a:focus-visible {
+    outline: none !important;
+    outline-offset: 0 !important;
+    --tw-ring-width: 0px !important;
+    --tw-ring-offset-width: 0px !important;
+    --tw-ring-color: transparent !important;
+}
+
+/* Botones de Temas Predefinidos: exactamente un único borde de 1px */
+.theme-preset-btn {
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.theme-preset-btn:focus,
+.theme-preset-btn:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: var(--system-primary) !important;
+}
+
+.theme-preset-btn.theme-preset-active,
+.theme-preset-btn.is-active,
+.theme-preset-btn[aria-pressed="true"] {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: var(--system-primary) !important;
+    background-color: #ffffff !important;
+}
+
+/* Entradas de formulario, selecciones y áreas de texto en foco: único borde de 1px */
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--system-primary) !important;
+    outline: none !important;
+    box-shadow: none !important;
+    --tw-ring-width: 0px !important;
+    --tw-ring-offset-width: 0px !important;
+    --tw-ring-color: transparent !important;
+}
+
+

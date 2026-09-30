@@ -1,0 +1,26 @@
+/* DigiRest - Modals, Backdrops & Overlays */
+/* ==========================================================================
+   Modales: Fondos oscuros homogéneos (Backdrops) y apilamiento correcto
+   ========================================================================== */
+.bg-black\/75 {
+    background-color: rgba(0, 0, 0, 0.65) !important;
+}
+
+#cf-modal-movement,
+#cf-modal-account,
+#cf-modal-transfer,
+#cf-modal-payable,
+#cf-modal-receivable,
+#cf-modal-abono {
+    background-color: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+}
+
+#cf-modal-category {
+    background-color: rgba(0, 0, 0, 0.65) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    z-index: 110 !important;
+}
+

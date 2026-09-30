@@ -1,0 +1,77 @@
+/* Admin Sidebar Styles */
+.admin-sidebar-fixed {
+    position: fixed;
+    z-index: 50;
+    transition: all 0.3s ease;
+}
+
+/* Desktop: Right Center */
+@media (min-width: 768px) {
+    .admin-sidebar-fixed {
+        top: 50%;
+        right: 1rem;
+        transform: translateY(-50%);
+    }
+
+    .sidebar-tooltip {
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%) translateX(-10px);
+        background: #1f2937;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.2s;
+        pointer-events: none;
+    }
+
+    .sidebar-btn:hover .sidebar-tooltip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) translateX(-5px);
+    }
+}
+
+/* Mobile: Bottom Sticky Horizontal */
+@media (max-width: 767px) {
+    .admin-sidebar-fixed {
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: auto !important;
+        transform: none !important;
+        width: auto !important;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 50;
+        /* Let clicks pass through container */
+    }
+
+    .admin-sidebar-fixed>div {
+        flex-direction: row;
+        width: 100%;
+        justify-content: space-around;
+        padding: 0.5rem 0.75rem;
+        pointer-events: auto;
+        /* Re-enable clicks on bar */
+        box-shadow: none;
+        border-radius: 0;
+        background: rgba(15, 23, 42, 0.95);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .sidebar-tooltip {
+        display: none;
+        /* No tooltips on mobile */
+    }
+}

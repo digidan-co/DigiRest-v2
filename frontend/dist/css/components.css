@@ -1,0 +1,580 @@
+/* DigiRest - Components, Badges, Subtabs, Buttons & Toasts */
+/* Slide to Act Button */
+.slider-container {
+    position: relative;
+    width: 100%;
+    height: 42px !important;
+    border-radius: 16px !important;
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;
+    /* Prevent scroll while dragging */
+}
+
+.slider-text {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    z-index: 1;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    font-size: 0.8rem;
+}
+
+.slider-thumb {
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    height: 34px !important;
+    width: 80px !important;
+    background: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    z-index: 2;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    transition: transform 0.05s linear;
+}
+
+.slider-thumb:active {
+    cursor: grabbing;
+}
+
+.slider-thumb i {
+    color: #4b5563;
+}
+
+/* Status Badges */
+.badge {
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge-pending {
+    background-color: #f3f4f6;
+    color: #4b5563;
+}
+
+/* yellow-100, yellow-600 */
+.badge-cooking {
+    background-color: #ffedd5;
+    color: #ea580c;
+}
+
+/* orange-100, orange-600 */
+.badge-ready {
+    background-color: #dbeafe;
+    color: #2563eb;
+}
+
+/* blue-100, blue-600 */
+.badge-delivery {
+    background-color: #e0e7ff;
+    color: #4f46e5;
+}
+
+/* indigo-100, indigo-600 */
+.badge-done {
+    background-color: rgba(245, 181, 95, 0.2);
+    color: var(--system-tertiary, #1e2122);
+    border: 1px solid rgba(245, 181, 95, 0.4);
+}
+
+/* green-100, green-600 */
+.badge-canceled {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+/* red-100, red-600 */
+
+/* Admin Orders Tabs (Pestaña activa: --system-bg-aside + blanco; Inactiva: gris suave + --system-text) */
+.tab-order-btn {
+    color: var(--system-text, #052244) !important;
+    background-color: #f7f7f7 !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+    cursor: pointer;
+}
+.tab-order-btn i {
+    color: var(--system-text, #052244) !important;
+}
+.tab-order-btn:hover {
+    background-color: #ebebeb !important;
+}
+.tab-order-btn.active {
+    background-color: var(--system-bg-aside, #052244) !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12) !important;
+}
+.tab-order-btn.active i {
+    color: #ffffff !important;
+}
+
+/* Order notification badge (red dot + counter) */
+.order-notification-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 10px;
+    height: 10px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 0 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    line-height: 1;
+    top: -1px;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+}
+.order-notification-badge.hidden {
+    display: none !important;
+}
+.order-notification-badge:empty {
+    min-width: 10px;
+    height: 10px;
+    padding: 0;
+}
+.order-notification-badge:not(:empty) {
+    min-width: 18px;
+    height: 18px;
+    font-size: 10px;
+}
+
+/* Pulse animation for the notification badge */
+@keyframes badgePulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+    }
+    70% {
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+.order-notification-badge.pulse {
+    animation: badgePulse 1.5s ease-in-out infinite;
+}
+
+.tab-order-content.hidden {
+    display: none !important;
+}
+
+/* Toast and notification styling */
+#toast,
+.system-notification {
+    border: none !important;
+    border-width: 0 !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Guardado / Éxito / Sugerencia: misma combinación colorimétrica que los módulos activos */
+#toast.toast-success,
+#toast:not(.toast-error):not(.toast-warning) {
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+    border: none !important;
+    border-width: 0 !important;
+}
+#toast.toast-success i,
+#toast:not(.toast-error):not(.toast-warning) i,
+#toast.toast-success span,
+#toast:not(.toast-error):not(.toast-warning) span {
+    color: var(--system-secondary, #1e2122) !important;
+    font-weight: 700 !important;
+}
+
+/* Advertencia o Error: fondo gris, texto e icono en rojo... Nada de borde */
+#toast.toast-error,
+#toast.toast-warning {
+    background-color: #2b2f31 !important;
+    color: #ef4444 !important;
+    border: none !important;
+    border-width: 0 !important;
+}
+#toast.toast-error i,
+#toast.toast-warning i,
+#toast.toast-error span,
+#toast.toast-warning span {
+    color: #ef4444 !important;
+    font-weight: 700 !important;
+}
+
+/* Botones Importar y Exportar: texto color de realce, fondo gris claro, hover oscurece ligeramente */
+.btn-import-export {
+    background-color: #f3f4f6 !important;
+    color: var(--system-primary, #f5b55f) !important;
+    border: 1px solid #e5e7eb !important;
+    font-weight: 700 !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.btn-import-export i {
+    color: var(--system-primary, #f5b55f) !important;
+    transition: color 0.2s ease !important;
+}
+.btn-import-export:hover {
+    background-color: #e5e7eb !important;
+    color: var(--system-primary, #f5b55f) !important;
+}
+.btn-import-export:hover i {
+    color: var(--system-primary, #f5b55f) !important;
+}
+
+/* Botones Topbar: Notas & Modo GR (Normal: fondo gris suave y realce; Hover: fondo de realce y texto/icono negro o blanco según apariencia) */
+.btn-topbar-quick {
+    background-color: #f7f7f7 !important;
+    color: var(--system-primary, #f5b55f) !important;
+    font-weight: 700 !important;
+    padding: 1rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.btn-topbar-quick i,
+.btn-topbar-quick span {
+    color: var(--system-primary, #f5b55f) !important;
+    transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.btn-topbar-quick:hover {
+    background-color: var(--system-primary, #f5b55f) !important;
+    border-color: var(--system-primary, #f5b55f) !important;
+}
+.btn-topbar-quick:hover i,
+.btn-topbar-quick:hover span {
+    color: var(--system-secondary, #1e2122) !important;
+}
+
+/* ====================================================================
+   CASHFLOW SUBTABS & PERIOD BUTTONS (Active: --system-bg-aside + White; Inactive: Gris suave + --system-text)
+   ==================================================================== */
+.cf-subtab-btn {
+    background-color: #f7f7f7 !important;
+    color: var(--system-text, #052244) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    cursor: pointer;
+    font-weight: 600 !important;
+}
+.cf-subtab-btn i,
+.cf-subtab-btn span {
+    color: var(--system-text, #052244) !important;
+}
+.cf-subtab-btn:hover {
+    background-color: #ebebeb !important;
+}
+.cf-subtab-btn.active {
+    background-color: var(--system-bg-aside, #052244) !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12) !important;
+}
+.cf-subtab-btn.active i,
+.cf-subtab-btn.active span {
+    color: #ffffff !important;
+}
+
+.cf-period-btn {
+    background-color: #f7f7f7 !important;
+    color: var(--system-text, #052244) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    cursor: pointer;
+    font-weight: 600 !important;
+}
+.cf-period-btn:hover {
+    background-color: #ebebeb !important;
+}
+.cf-period-btn.active {
+    background-color: var(--system-bg-aside, #052244) !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12) !important;
+    font-weight: 700 !important;
+}
+
+/* Modo GR Tabs (active: --system-bg-aside + white; inactive: gris suave + --system-text) */
+.gr-tab-btn {
+    background-color: #f7f7f7 !important;
+    color: var(--system-text, #052244) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+.gr-tab-btn i,
+.gr-tab-btn span {
+    color: var(--system-text, #052244) !important;
+}
+.gr-tab-btn.active {
+    background-color: var(--system-bg-aside, #052244) !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12) !important;
+}
+.gr-tab-btn.active i,
+.gr-tab-btn.active span {
+    color: #ffffff !important;
+}
+
+/* ==========================================================================
+   Banner de Nuevo Pedido Entrante (Color de realce, texto/icono según tema, sin sombra)
+   ========================================================================== */
+.order-incoming-banner {
+    position: fixed !important;
+    bottom: 1rem !important;
+    right: 1rem !important;
+    top: auto !important;
+    left: auto !important;
+    z-index: 99999 !important;
+    margin: 0 !important;
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+    box-shadow: none !important;
+    border: none !important;
+    animation: none !important;
+}
+
+.order-incoming-banner * {
+    color: var(--system-secondary, #1e2122) !important;
+}
+
+/* ==========================================================================
+   Botón Flotante "Pedido Actual" (Mesero / Nuevo Pedido)
+   ========================================================================== */
+#btn-view-waiter-cart {
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+    border: none !important;
+}
+
+#btn-view-waiter-cart i,
+#btn-view-waiter-cart span:not(#w-cart-count-badge) {
+    color: var(--system-secondary, #1e2122) !important;
+}
+
+#btn-view-waiter-cart #w-cart-count-badge {
+    background-color: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: var(--system-primary, #f5b55f) !important;
+}
+
+/* No Scrollbar Utility for Smooth Touch Carousels */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* ==========================================================================
+   Category Chips (High-Contrast, Vibrant & Theme-Safe)
+   ========================================================================== */
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.45rem 1.1rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.filter-chip:active {
+    transform: scale(0.96);
+}
+
+/* Default / Category Chip */
+.filter-chip-default {
+    background-color: #ffffff;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.filter-chip-default:hover {
+    color: #ea580c;
+    border-color: #fdba74;
+    background-color: #fffaf5;
+}
+.filter-chip-default.active {
+    background-color: #111827 !important;
+    color: #ffffff !important;
+    border-color: #111827 !important;
+    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.25);
+    transform: scale(1.05);
+}
+
+/* Promo Chip - High Contrast Red */
+.filter-chip-promo {
+    background-color: #fee2e2 !important;
+    color: #b91c1c !important;
+    border: 1.5px solid #f87171 !important;
+    box-shadow: 0 1px 3px rgba(239, 68, 68, 0.15);
+}
+.filter-chip-promo:hover {
+    background-color: #fecaca !important;
+    color: #991b1b !important;
+}
+.filter-chip-promo.active {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    border-color: #dc2626 !important;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+    transform: scale(1.05);
+}
+
+/* Más Pedidos Chip - High Contrast Orange */
+.filter-chip-top {
+    background-color: #ffedd5 !important;
+    color: #c2410c !important;
+    border: 1.5px solid #fb923c !important;
+    box-shadow: 0 1px 3px rgba(249, 115, 22, 0.15);
+}
+.filter-chip-top:hover {
+    background-color: #fed7aa !important;
+    color: #9a3412 !important;
+}
+.filter-chip-top.active {
+    background-color: #ea580c !important;
+    color: #ffffff !important;
+    border-color: #ea580c !important;
+    box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
+    transform: scale(1.05);
+}
+
+/* Recomendados Chip - High Contrast Amber / Gold */
+.filter-chip-rec {
+    background-color: #fef3c7 !important;
+    color: #b45309 !important;
+    border: 1.5px solid #facc15 !important;
+    box-shadow: 0 1px 3px rgba(245, 158, 11, 0.15);
+}
+.filter-chip-rec:hover {
+    background-color: #fde68a !important;
+    color: #92400e !important;
+}
+.filter-chip-rec.active {
+    background-color: #d97706 !important;
+    color: #ffffff !important;
+    border-color: #d97706 !important;
+    box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+    transform: scale(1.05);
+}
+
+/* ====================================================================
+   TOPPING INVENTORY MODE SWITCHER (OPTION C)
+   ==================================================================== */
+.topping-inv-box {
+    background: #fffbeb !important;
+    border: 1.5px solid #fde68a !important;
+    border-radius: 16px;
+    padding: 12px;
+}
+
+.topping-mode-track {
+    background: #ffffff !important;
+    border: 1px solid #fde68a !important;
+    padding: 4px;
+    border-radius: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.topping-mode-btn {
+    padding: 7px 12px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #4b5563;
+}
+
+.topping-mode-btn:hover {
+    color: #1f2937;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.topping-mode-btn.active {
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+}
+
+.topping-mode-btn.active i {
+    color: var(--system-secondary, #1e2122) !important;
+}
+
+/* Featured Carousels Containers */
+.carousel-container-promos {
+    background-color: #fefce8 !important; /* Soft yellow / amber */
+    border: 1px solid #fef08a !important;
+}
+
+.carousel-container-recommended {
+    background-color: #fff7ed !important; /* Soft orange */
+    border: 1px solid #fed7aa !important;
+}
+
+.carousel-container-top {
+    background-color: #eff6ff !important; /* Soft blue */
+    border: 1px solid #bfdbfe !important;
+}
+
+/* Carousel scroll navigation buttons */
+.carousel-nav-btn {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #374151;
+    border: 1px solid rgba(229, 231, 235, 0.9);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carousel-nav-btn:hover {
+    background-color: #ffffff;
+    color: #111827;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
+}
+
+.carousel-nav-btn:active {
+    transform: scale(0.95);
+}
+
+/* Badge Recomendado */
+.badge-recommended {
+    background-color: #d97706 !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    font-weight: 800 !important;
+}

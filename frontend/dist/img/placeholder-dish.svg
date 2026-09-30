@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="plateGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+  </defs>
+  <rect width="300" height="300" fill="url(#bgGrad)"/>
+  <circle cx="150" cy="150" r="95" fill="url(#plateGrad)" stroke="#cbd5e1" stroke-width="4"/>
+  <circle cx="150" cy="150" r="65" fill="#f8fafc" stroke="#e2e8f0" stroke-width="3" stroke-dasharray="6,4"/>
+  <!-- Cloche / Plate icon -->
+  <path d="M120 145 C120 120, 180 120, 180 145 Z" fill="#ea580c" opacity="0.85"/>
+  <rect x="110" y="148" width="80" height="7" rx="3.5" fill="#ea580c"/>
+  <circle cx="150" cy="115" r="5" fill="#ea580c"/>
+  <!-- Fork and Knife accents -->
+  <path d="M92 125 L92 165 M87 125 L87 140 C87 145 97 145 97 140 L97 125" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M208 125 L208 165 C208 165 214 150 214 135 C214 127 208 125 208 125 Z" fill="#94a3b8"/>
+  <text x="150" y="195" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#64748b" letter-spacing="1">DIGIREST</text>
+</svg>

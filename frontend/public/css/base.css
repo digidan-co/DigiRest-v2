@@ -1,0 +1,599 @@
+/* DigiRest - Base Styles, Typography, Animations & Layout */
+/* Global Font Enforcement - Excluding Icons */
+*:not(.fa):not(.fas):not(.far):not(.fal):not(.fab):not(.fad):not(.fa-solid):not(.fa-regular):not(.fa-brands) {
+    font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* Glassmorphism & Elegant Touches */
+:root {
+    --system-bg: #f7f7f7;
+    --system-primary: #f5b55f;
+    --system-secondary: #64010e;
+    --system-tertiary: #1e2122;
+    --system-text: #052244;
+    --system-active: #005dbd;
+    --system-bg-aside: #052244;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    background-color: var(--system-bg) !important;
+    color: #333333 !important;
+}
+
+#toast {
+    background-color: #005dbd !important;
+    color: #ffffff !important;
+}
+
+.glass-panel {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+/* Universal Table Action Dropdown Menus */
+.table-action-container {
+    position: relative;
+    display: inline-block;
+}
+
+.table-action-menu {
+    position: absolute;
+    right: 0;
+    margin-top: 0.25rem;
+    width: max-content;
+    min-width: 10.5rem;
+    max-width: 13.5rem;
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    border: 1px solid #f3f4f6;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    z-index: 50;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.table-action-menu.hidden {
+    display: none !important;
+}
+
+.table-action-menu .action-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    text-align: left;
+    color: #374151;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.table-action-menu .action-item:hover {
+    background-color: #f9fafb;
+}
+
+
+.elegant-shadow {
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, #1f2937 0%, #4b5563 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/*User editing*/
+::placeholder {
+    color: #9ca3af;
+    opacity: 1;
+    font-size: inherit;
+}
+
+/* Scrollbar styling */
+#main-container {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* Button Hover Effects */
+.btn-hover-effect {
+    transition: all 0.3s ease;
+}
+
+.btn-hover-effect:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.1);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+
+    70% {
+        transform: scale(0.9);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+.slide-up {
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.scale-in {
+    animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-bounce-in {
+    animation: bounceIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Modal Animations */
+/* We will apply classes directly in HTML */
+/* Login Feedback Animations */
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateX(-5px);
+    }
+
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateX(5px);
+    }
+}
+
+@keyframes successScale {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.02);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.login-error {
+    animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+    border: 2px solid #ef4444 !important;
+}
+
+.login-success {
+    animation: successScale 0.5s ease-out both;
+    background-color: rgba(245, 181, 95, 0.15) !important;
+    border: 2px solid var(--system-primary, #f5b55f) !important;
+}
+
+/* Pulse Fade Animation for Chef Headers */
+@keyframes pulse-fade {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.animate-pulse-fade {
+    animation: pulse-fade 2s infinite ease-in-out;
+}
+
+/* Online Indicator */
+.online-indicator {
+    width: 10px;
+    height: 10px;
+    background-color: var(--system-primary, #f5b55f);
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+    box-shadow: 0 0 0 0 rgba(245, 181, 95, 0.7);
+    animation: pulse-primary 2s infinite;
+}
+
+@keyframes pulse-primary {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(245, 181, 95, 0.7);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(245, 181, 95, 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(245, 181, 95, 0);
+    }
+}
+
+/* Fade Out Slow Animation */
+@keyframes fadeOutSlow {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+}
+
+.fade-out-slow {
+    animation: fadeOutSlow 1s ease-out forwards;
+    pointer-events: none;
+    /* Prevent clicks during fade */
+}
+
+/*
+   Total Duration: 3.5s (2s animation + 1.5s pause)
+   2s is approx 57% of 3.5s.
+*/
+@keyframes jump-swing {
+    0% {
+        transform: translateY(0) rotate(0deg);
+    }
+
+    5% {
+        transform: translateY(-4px) rotate(0deg);
+    }
+
+    17% {
+        transform: translateY(0) rotate(-25deg);
+    }
+
+    28% {
+        transform: translateY(-2px) rotate(25deg);
+    }
+
+    40% {
+        transform: translateY(0) rotate(-10deg);
+    }
+
+    57% {
+        transform: translateY(0) rotate(0deg);
+    }
+
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+}
+
+.animate-jump-spin {
+    animation: jump-swing 3.5s infinite ease-in-out;
+}
+
+/* Pulsing Ring Effect */
+.bell-ring-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible !important;
+    z-index: 10;
+}
+
+.bell-pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: rgba(254, 215, 170, 0.8);
+    z-index: 0;
+    animation: pulse-ring-grow 3.5s infinite ease-out;
+}
+
+@keyframes pulse-ring-grow {
+    0% {
+        width: 100%;
+        height: 100%;
+        opacity: 0.8;
+    }
+
+    57% {
+        width: 200%;
+        height: 200%;
+        opacity: 0;
+    }
+
+    100% {
+        width: 200%;
+        height: 200%;
+        opacity: 0;
+    }
+}
+
+/* Display View Specifics */
+body.view-display nav {
+    display: none !important;
+}
+
+body.view-display #main-container {
+    padding-bottom: 0 !important;
+}
+
+/* Display View Styles */
+.display-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+}
+
+.display-card:active {
+    transform: scale(0.95);
+}
+
+/* Flying Image Animation Class */
+.flying-img {
+    position: fixed;
+    z-index: 60;
+    /* Above everything except modal content potentially, but below modal container if needed, actually needs to be high */
+    transition: all 0.5s cubic-bezier(0.2, 0, 0.2, 1);
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    pointer-events: none;
+    object-fit: cover;
+}
+
+@keyframes fadeInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.animate-fade-in-right {
+    animation: fadeInRight 0.4s ease-out forwards;
+}
+
+/* Accordion Chevron Rotation */
+.rotate-180 {
+    transform: rotate(180deg);
+}
+
+/* Global Table Header Standardization */
+table thead tr th,
+table thead th {
+    background-color: #f9fafb !important;
+    color: #6b7280 !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+/* Active tab state */
+.tab-active,
+.cf-subtab-btn.active {
+    background-color: #005dbd !important;
+    color: #ffffff !important;
+}
+
+/* ==========================================================================
+   UTILITIES (classes not present in the precompiled Tailwind build)
+   ========================================================================== */
+.aspect-square {
+    aspect-ratio: 1 / 1;
+}
+
+/* Position utilities missing from the precompiled Tailwind build */
+.top-1\.5 { top: 0.375rem; }
+.right-1\.5 { right: 0.375rem; }
+.bottom-1\.5 { bottom: 0.375rem; }
+.left-1\.5 { left: 0.375rem; }
+.top-2 { top: 0.5rem; }
+.right-2 { right: 0.5rem; }
+.bottom-2 { bottom: 0.5rem; }
+.left-2 { left: 0.5rem; }
+.bottom-4 { bottom: 1rem; }
+.top-5 { top: 1.25rem; }
+.right-5 { right: 1.25rem; }
+.bottom-5 { bottom: 1.25rem; }
+.left-5 { left: 1.25rem; }
+
+/* Gradient color stops missing from the precompiled Tailwind build */
+.from-black\/70 {
+    --tw-gradient-from: rgba(0, 0, 0, 0.7) var(--tw-gradient-from-position);
+    --tw-gradient-to: transparent var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.via-black\/20 {
+    --tw-gradient-via: rgba(0, 0, 0, 0.2) var(--tw-gradient-via-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to);
+}
+
+/* Mobile admin sidebar stacking: ensure the sidebar renders above the dimming overlay */
+#admin-sidebar-overlay {
+    z-index: 40;
+}
+#admin-sidebar {
+    z-index: 70;
+}
+
+/* Missing position utilities */
+.top-1 { top: 0.25rem; }
+.right-1 { right: 0.25rem; }
+.bottom-1 { bottom: 0.25rem; }
+.left-1 { left: 0.25rem; }
+
+/* Dish card square aspect ratio and image bounds */
+.client-product-card .aspect-square {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+}
+.client-product-card .aspect-square img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Featured carousel card width: exactly matches category grid columns at every breakpoint */
+.carousel-product-card {
+    width: calc(50% - 5px) !important;
+    flex-shrink: 0 !important;
+}
+@media (min-width: 640px) {
+    .carousel-product-card {
+        width: calc(33.333% - 6.66px) !important;
+    }
+}
+@media (min-width: 768px) {
+    .carousel-product-card {
+        width: calc(25% - 7.5px) !important;
+    }
+}
+@media (min-width: 1024px) {
+    .carousel-product-card {
+        width: calc(20% - 8px) !important;
+    }
+}
+@media (min-width: 1280px) {
+    .carousel-product-card {
+        width: calc(16.666% - 8.33px) !important;
+    }
+}
+
+/* Barra de desplazamiento ultra sutil para modales y listas compactas */
+.subtle-scrollbar {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(156, 163, 175, 0.35) transparent !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+}
+.subtle-scrollbar::-webkit-scrollbar {
+    width: 3.5px !important;
+    height: 3.5px !important;
+}
+.subtle-scrollbar::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+.subtle-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.35) !important;
+    border-radius: 9999px !important;
+}
+.subtle-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.6) !important;
+}
+
+/* Ocultar flechitas (spinners) de inputs tipo number */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+}
+input[type=number] {
+    -moz-appearance: textfield !important;
+    appearance: textfield !important;
+}
+

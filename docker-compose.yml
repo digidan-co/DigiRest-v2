@@ -1,0 +1,21 @@
+services:
+  app:
+    container_name: pos-app
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./server/uploads:/app/server/uploads
+      - ./server/data:/app/server/data
+      - ./.env:/app/server/.env
+    environment:
+      - NODE_ENV=production
+    # --- LÍMITE DE SEGURIDAD OPTIMIZADO ---
+    # Uso normal: ~100-160MB con sharp.cache(false) y concurrency(1).
+    # 256MB da margen suficiente para picos transitorios al procesar imágenes.
+    # Si el contenedor alcanza este límite: se reinicia automáticamente
+    # gracias a restart:always (caída de ~10 seg). Los datos en SQLite
+    # son persistentes y no se pierden.
+    mem_limit: 256m
+    memswap_limit: 256m
