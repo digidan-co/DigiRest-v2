@@ -20,7 +20,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 
 const show = ref(false);
 const data = ref({ daysLeft: 0, message: '' });
@@ -30,8 +30,7 @@ function dismiss() {
   sessionStorage.removeItem('_warningSaaS_digirest');
 }
 
-onMounted(() => {
-  // Leer el warning que el login guardó en sessionStorage (1 vez al día via localStorage)
+function checkWarning() {
   const raw = sessionStorage.getItem('_warningSaaS_digirest');
   if (raw) {
     try {
@@ -39,6 +38,15 @@ onMounted(() => {
       show.value = true;
     } catch (e) { /* ignore */ }
   }
+}
+
+onMounted(() => {
+  checkWarning();
+  window.addEventListener('saas-refresh', checkWarning);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('saas-refresh', checkWarning);
 });
 </script>
 

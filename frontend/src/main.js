@@ -185,13 +185,15 @@ if (reservationsMount) {
     reservationsApp.mount(reservationsMount);
 }
 
-// SaaS Status Panel: muestra el estado de suscripción en el dashboard admin.
-const saasPanelMount = document.getElementById('panel-saas');
-if (saasPanelMount) {
-    const saasPanelApp = createApp(SaasStatusPanel);
-    saasPanelApp.use(pinia);
-    saasPanelApp.mount(saasPanelMount);
-}
+// SaaS Status Panel: muestra el estado de suscripción en el dashboard admin y en configuración.
+['panel-saas', 'panel-saas-dashboard', 'panel-saas-config'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        const app = createApp(SaasStatusPanel);
+        app.use(pinia);
+        app.mount(el);
+    }
+});
 
 // SaaS Warning Modal: aviso de suscripción por vencer (≤3 días, admin, 1x/día).
 const saasWarnMount = document.getElementById('modal-saas-warning');

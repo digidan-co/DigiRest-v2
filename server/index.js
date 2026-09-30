@@ -275,6 +275,34 @@ app.get('/api/saas/anuncios', async (req, res) => {
     res.json(anuncios);
 });
 
+// Endpoint de diagnóstico para verificar la conexión con panel / app.digidan.co
+app.get('/api/saas/diagnostics', async (req, res) => {
+    const { url, key } = saasService.getSaasConfig();
+    let statusTest = null;
+    let anunciosTest = null;
+
+    try {
+        statusTest = await saasService.getSaaSStatus();
+    } catch (e) {
+        statusTest = { error: e.message };
+    }
+
+    try {
+        anunciosTest = await saasService.getAnunciosActivos();
+    } catch (e) {
+        anunciosTest = { error: e.message };
+    }
+
+    res.json({
+        configured_url: url || '(no definida en Dokploy)',
+        has_key: Boolean(key),
+        key_preview: key ? `${key.substring(0, 8)}...${key.substring(key.length - 4)}` : '(no definida en Dokploy)',
+        status: statusTest,
+        anuncios_count: Array.isArray(anunciosTest) ? anunciosTest.length : 0,
+        anuncios: anunciosTest
+    });
+});
+
 // Health check endpoint (no rate limiting)
 app.get('/api/health', (req, res) => {
     const health = {

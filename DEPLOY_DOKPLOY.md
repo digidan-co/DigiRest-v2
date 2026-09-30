@@ -45,11 +45,11 @@ PORT=3000
 # Clave secreta para firmar tokens JWT (genera una cadena aleatoria segura)
 JWT_SECRET=pon_aqui_una_cadena_larga_y_segura_de_al_menos_32_caracteres
 
-# ── Enlace SaaS Central con panel.digidan.co ──
-# URL de tu panel maestro
-SAAS_MANAGER_URL=https://panel.digidan.co
+# ── Enlace SaaS Central con app.digidan.co ──
+# URL de tu panel maestro central (app.digidan.co)
+SAAS_MANAGER_URL=https://app.digidan.co
 
-# Token / API Key de la instancia generada en panel.digidan.co (Módulo Clientes / SaaS)
+# Token / API Key de la instancia generada en el panel (Módulo Clientes / SaaS -> Copiar Token)
 SAAS_TENANT_KEY=pon_aqui_el_tenant_secret_key_generado_en_el_panel
 
 # CORS
@@ -58,6 +58,9 @@ ALLOWED_ORIGINS=*
 # (Opcional) Master Key de rescate si necesitas entrar sin credenciales
 MASTER_KEY=
 ```
+
+> ⚠️ **MUY IMPORTANTE EN DOKPLOY**: Al guardar o modificar las variables de entorno en Dokploy, los cambios **no se aplican automáticamente**. Debes hacer clic en **Deploy / Redeploy** en la esquina superior derecha para que el contenedor se reinicie con las nuevas variables.
+
 
 ---
 

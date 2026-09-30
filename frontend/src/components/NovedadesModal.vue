@@ -63,7 +63,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 const show = ref(false);
 const anuncios = ref([]);
@@ -97,7 +97,7 @@ const formatDate = (dt) => {
   if (!dt) return '';
   try {
     const str = String(dt).trim();
-    const isoLike = str.replace(' ', 'T');
+    const isoLike = str.includes('T') ? str : str.replace(' ', 'T');
     let d = new Date(isoLike);
     if (!isNaN(d.getTime())) {
       return d.toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -113,7 +113,7 @@ const formatDate = (dt) => {
   return '';
 };
 
-onMounted(async () => {
+async function checkAnuncios() {
   let list = [];
   
   // 1. Primero intentar obtener de sessionStorage
@@ -122,10 +122,10 @@ onMounted(async () => {
     try { list = JSON.parse(raw); } catch (e) {}
   }
 
-  // 2. Si no hay en sessionStorage, consultar al endpoint
+  // 2. Si no hay en sessionStorage, consultar al endpoint local /api/saas/anuncios
   if (!Array.isArray(list) || list.length === 0) {
     try {
-      const res = await fetch('/api/saas/anuncios');
+      const res = await fetch('/api/saas/anuncios', { cache: 'no-store' });
       if (res.ok) {
         list = await res.json();
       }
@@ -136,14 +136,27 @@ onMounted(async () => {
 
   if (!Array.isArray(list) || list.length === 0) return;
 
-  // 3. Filtrar no vistos
+  // 3. Filtrar no vistos por este navegador
   const seenIds = getSeenIds();
   const pendientes = list.filter(a => !seenIds.includes(a.id));
 
   if (pendientes.length > 0) {
     anuncios.value = pendientes;
-    setTimeout(() => { show.value = true; }, 400);
+    currentIndex.value = 0;
+    setTimeout(() => { show.value = true; }, 350);
   }
+}
+
+onMounted(() => {
+  checkAnuncios();
+  window.addEventListener('saas-refresh', checkAnuncios);
+  window.addEventListener('saas-check-anuncios', checkAnuncios);
+  window.checkSaasAnuncios = checkAnuncios;
+});
+
+onUnmounted(() => {
+  window.removeEventListener('saas-refresh', checkAnuncios);
+  window.removeEventListener('saas-check-anuncios', checkAnuncios);
 });
 </script>
 

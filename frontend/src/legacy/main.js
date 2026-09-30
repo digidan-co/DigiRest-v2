@@ -1222,6 +1222,9 @@ window.switchView = (viewName) => {
         $('admin-sidebar-container')?.classList.remove('hidden');
         alignSidebarSticky();
 
+        // Disparar chequeo de anuncios y novedades SaaS para el admin
+        window.dispatchEvent(new CustomEvent('saas-check-anuncios'));
+
         // Tab filtering by role and tab restore are now handled by the Vue AdminSidebar.
 
         // Update admin name in header
@@ -1678,6 +1681,9 @@ $('login-form').addEventListener('submit', async (e) => {
             $('login-modal').classList.add('hidden');
             $('login-form').reset();
             proceedAfterLogin(userData);
+            window.dispatchEvent(new CustomEvent('saas-refresh', {
+                detail: { user: userData, anuncios: response.anuncios, warningSaaS: response.warningSaaS }
+            }));
             return;
         }
 
