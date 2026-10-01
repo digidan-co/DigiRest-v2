@@ -222,7 +222,7 @@ watch(() => state.user, (u) => {
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         <tr v-if="filteredSupplies.length === 0">
-                            <td colspan="8" class="text-center py-10 text-gray-400"><i class="fas fa-boxes-stacked text-3xl mb-2 text-gray-300 block"></i>{{ suppliesSearch ? 'No se encontraron insumos con ese nombre.' : 'Aún no has registrado insumos. Haz clic en "Nuevo Insumo".' }}</td>
+                            <td colspan="8" class="text-center py-10 text-gray-400">{{ suppliesSearch ? 'No se encontraron insumos con ese nombre.' : 'Aún no has registrado insumos. Haz clic en "Nuevo Insumo".' }}</td>
                         </tr>
                         <tr v-for="s in filteredSupplies" :key="s.id" class="hover:bg-gray-50/80 transition-colors">
                             <td class="p-3.5 font-bold text-gray-800">{{ s.name }}</td>
@@ -283,7 +283,7 @@ watch(() => state.user, (u) => {
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         <tr v-if="kardexPageItems.length === 0">
-                            <td colspan="7" class="text-center py-10 text-gray-400"><i class="fas fa-search text-3xl mb-2 text-gray-300 block"></i>No se encontraron movimientos registrados con los filtros actuales.</td>
+                            <td colspan="7" class="text-center py-10 text-gray-400">No se encontraron movimientos registrados con los filtros actuales.</td>
                         </tr>
                         <tr v-for="m in kardexPageItems" :key="m.id" class="hover:bg-gray-50/80 transition-colors">
                             <td class="p-3 font-mono text-gray-500 text-xs">{{ fmtDate(m.created_at) }}</td>
@@ -332,7 +332,7 @@ watch(() => state.user, (u) => {
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         <tr v-if="recipes.length === 0">
-                            <td colspan="8" class="text-center py-10 text-gray-400"><i class="fas fa-book-open text-3xl mb-2 text-gray-300 block"></i>Aún no has creado recetas para tus platos. Haz clic en "Crear / Editar Receta" para empezar.</td>
+                            <td colspan="8" class="text-center py-10 text-gray-400">Aún no has creado recetas para tus platos. Haz clic en "Crear / Editar Receta" para empezar.</td>
                         </tr>
                         <tr v-for="r in recipes" :key="r.id" class="hover:bg-gray-50/80 transition-colors">
                             <td class="p-3.5">

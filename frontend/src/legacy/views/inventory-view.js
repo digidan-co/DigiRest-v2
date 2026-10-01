@@ -68,7 +68,6 @@ function renderSuppliesTable() {
         tbody.innerHTML = `
             <tr>
                 <td colspan="8" class="text-center py-10 text-gray-400">
-                    <i class="fas fa-boxes-stacked text-3xl mb-2 text-gray-300 block"></i>
                     ${_searchSuppliesTerm ? 'No se encontraron insumos con ese nombre.' : 'Aún no has registrado insumos. Haz clic en "Nuevo Insumo".'}
                 </td>
             </tr>

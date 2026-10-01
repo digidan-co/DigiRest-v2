@@ -131,7 +131,7 @@ watch(() => state.user, (u) => {
 <template>
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
         <div>
-            <h3 class="text-sm font-black text-gray-900 flex items-center gap-2"><i class="fas fa-users text-orange-500"></i> Directorio de Clientes & CRM</h3>
+            <h3 class="text-sm font-black text-gray-900 flex items-center gap-2"><i class="fas fa-users text-orange-500"></i> Directorio de Clientes</h3>
             <p class="text-[11px] text-gray-400">Historial de consumo y clientes frecuentes</p>
         </div>
         <div class="flex items-center gap-2 flex-wrap">

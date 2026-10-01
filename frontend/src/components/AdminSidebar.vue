@@ -15,7 +15,7 @@ const sections = [
     ]},
     { name: 'Menú & Carta', tabs: [
         { tab: 'products', icon: 'fa-utensils', label: 'Platos y Categorías' },
-        { tab: 'supplies', icon: 'fa-boxes-stacked', label: 'Insumos y recetas' },
+        { tab: 'supplies', icon: 'fa-boxes-stacked', label: 'Insumos y Recetas' },
         { tab: 'toppings', icon: 'fa-cookie-bite', label: 'Toppings / Adiciones' },
     ]},
     { name: 'Caja & Finanzas', tabs: [

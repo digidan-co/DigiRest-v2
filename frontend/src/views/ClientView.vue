@@ -445,7 +445,6 @@ onMounted(async () => {
             <i class="fas fa-utensils"></i>
         </div>
         <p class="text-gray-700 font-bold text-sm">Sin platos disponibles</p>
-        <p class="text-gray-400 text-xs mt-1">Aún no hay platos en el menú.</p>
     </div>
     <div v-else-if="filteredProducts.length === 0" class="text-center py-16 px-4 my-6">
         <div class="w-14 h-14 mx-auto rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400 text-2xl mb-3">
