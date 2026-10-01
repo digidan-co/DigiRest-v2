@@ -180,7 +180,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- 2. TARIFA (Grande) -->
-                <div class="my-4 py-2.5 px-3.5 bg-gray-50/80 rounded-xl border border-gray-100">
+                <div class="dz-tariff-box py-3 px-3.5 bg-gray-50/90 rounded-xl border border-gray-100">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Tarifa</span>
                     <div class="text-2xl font-black text-gray-900 tracking-tight leading-none">
                         {{ formatMoney(zone.fee) }}
@@ -188,11 +188,11 @@ onUnmounted(() => {
                 </div>
 
                 <!-- 3. TIEMPO -->
-                <div class="flex items-center gap-2 text-xs text-gray-600 font-medium mb-4">
+                <div class="dz-time-row flex items-center gap-2 text-xs text-gray-600 font-medium">
                     <span class="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-[11px] shrink-0">
                         <i class="fas fa-clock"></i>
                     </span>
-                    <div class="mt-2">
+                    <div>
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block leading-none mb-0.5">Tiempo Estimado</span>
                         <span class="text-xs font-semibold text-gray-700">{{ estimatedTime(zone) }}</span>
                     </div>
@@ -219,7 +219,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Empty State -->
-    <div v-else class="text-center py-14 bg-white rounded-2xl border border-gray-100">
+    <div v-else class="text-center p-4 bg-white rounded-2xl border border-gray-100">
         <div class="w-14 h-14 mx-auto rounded-2xl bg-orange-50 text-orange-400 flex items-center justify-center text-2xl mb-3 shadow-xs">
             <i class="fas fa-motorcycle"></i>
         </div>
@@ -229,3 +229,13 @@ onUnmounted(() => {
         </p>
     </div>
 </template>
+
+<style scoped>
+.dz-tariff-box {
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+}
+.dz-time-row {
+    margin-bottom: 1rem !important;
+}
+</style>
