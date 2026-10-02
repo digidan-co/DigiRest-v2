@@ -153,10 +153,17 @@ export function renderDisplayGrid(category, searchTerm) {
     const availableProducts = (state.products || []).filter(p => p.available !== 0 && p.available !== false);
 
     if (isDefaultAll) {
-        if (featuredContainer) featuredContainer.classList.remove('hidden');
-
         // 1. Promociones
         const promoDishes = availableProducts.filter(p => p.is_promo);
+        const recDishes = availableProducts.filter(p => p.is_recommended);
+        const topDishes = (state.topDishes7d || []).filter(p => p.available !== 0 && p.available !== false).slice(0, 8);
+        const hasAnyFeatured = promoDishes.length > 0 || recDishes.length > 0 || topDishes.length > 0;
+
+        if (featuredContainer) {
+            if (hasAnyFeatured) featuredContainer.classList.remove('hidden');
+            else featuredContainer.classList.add('hidden');
+        }
+
         const promoSection = $('display-section-promos');
         const promoSlider = $('display-promos-slider');
         if (promoSection && promoSlider) {
@@ -169,7 +176,6 @@ export function renderDisplayGrid(category, searchTerm) {
         }
 
         // 2. Recomendados
-        const recDishes = availableProducts.filter(p => p.is_recommended);
         const recSection = $('display-section-recommended');
         const recSlider = $('display-recommended-slider');
         if (recSection && recSlider) {
@@ -182,7 +188,6 @@ export function renderDisplayGrid(category, searchTerm) {
         }
 
         // 3. Los más pedidos (últimos 7 días)
-        const topDishes = (state.topDishes7d || []).filter(p => p.available !== 0 && p.available !== false).slice(0, 8);
         const topSection = $('display-section-top-dishes');
         const topSlider = $('display-top-dishes-slider');
         if (topSection && topSlider) {
@@ -456,10 +461,17 @@ export function renderMenuGrid(category, searchTerm) {
     const availableProducts = (state.products || []).filter(p => p.available !== 0 && p.available !== false);
 
     if (isDefaultAll) {
-        if (featuredContainer) featuredContainer.classList.remove('hidden');
-
         // 1. Promociones
         const promoDishes = availableProducts.filter(p => p.is_promo);
+        const recDishes = availableProducts.filter(p => p.is_recommended);
+        const topDishes = (state.topDishes7d || []).filter(p => p.available !== 0 && p.available !== false).slice(0, 8);
+        const hasAnyFeatured = promoDishes.length > 0 || recDishes.length > 0 || topDishes.length > 0;
+
+        if (featuredContainer) {
+            if (hasAnyFeatured) featuredContainer.classList.remove('hidden');
+            else featuredContainer.classList.add('hidden');
+        }
+
         const promoSection = $('section-promos');
         const promoSlider = $('promos-slider');
         if (promoSection && promoSlider) {
@@ -472,7 +484,6 @@ export function renderMenuGrid(category, searchTerm) {
         }
 
         // 2. Recomendados
-        const recDishes = availableProducts.filter(p => p.is_recommended);
         const recSection = $('section-recommended');
         const recSlider = $('recommended-slider');
         if (recSection && recSlider) {
@@ -485,7 +496,6 @@ export function renderMenuGrid(category, searchTerm) {
         }
 
         // 3. Los más pedidos (últimos 7 días)
-        const topDishes = (state.topDishes7d || []).filter(p => p.available !== 0 && p.available !== false).slice(0, 8);
         const topSection = $('section-top-dishes');
         const topSlider = $('top-dishes-slider');
         if (topSection && topSlider) {
@@ -1361,6 +1371,10 @@ export function updateCheckoutTotals() {
     if (subtotalEl) subtotalEl.textContent = formatMoney(subtotal);
     const grandTotal = subtotal + deliveryFee;
     if (totalEl) totalEl.textContent = formatMoney(grandTotal);
+
+    if ($('c-pay')?.value === 'Mixto' && typeof window.updateClientMixedBalance === 'function') {
+        window.updateClientMixedBalance();
+    }
 }
 
 export function updateCartUI() {
@@ -1491,6 +1505,29 @@ export async function handleSendOrder() {
             return showModalAlert("Comprobante Requerido", "Debes subir el comprobante de pago", "error");
         }
         paymentProof = file;
+    } else if (paymentMethod === 'Mixto') {
+        const splits = state.clientSplits || [];
+        const assigned = splits.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+        if (Math.abs(assigned - totalWithDelivery) > 1) {
+            setLoading('btn-go-checkout', false);
+            setLoading('btn-send-wa', false);
+            return showModalAlert(
+                "Descuadre en Pago Mixto",
+                `El total asignado (${formatMoney(assigned)}) debe ser igual al total del pedido (${formatMoney(totalWithDelivery)}).`,
+                "warning"
+            );
+        }
+
+        const hasTransfer = splits.some(s => s.method === 'Transferencia');
+        if (hasTransfer) {
+            const file = state.tempProofFile || $('c-proof').files[0];
+            if (!file) {
+                setLoading('btn-go-checkout', false);
+                setLoading('btn-send-wa', false);
+                return showModalAlert("Comprobante Requerido", "Al incluir transferencia en tu pago mixto, debes subir el comprobante de pago", "error");
+            }
+            paymentProof = file;
+        }
     }
 
     const orderData = {
@@ -1509,6 +1546,26 @@ export async function handleSendOrder() {
         total: totalWithDelivery,
         status: 'Pendiente'
     };
+
+    if (paymentMethod === 'Mixto') {
+        let sumCash = 0;
+        let sumTrans = 0;
+        const splitsList = (state.clientSplits || []).map(s => {
+            const amt = parseFloat(s.amount) || 0;
+            if (s.method === 'Efectivo') sumCash += amt;
+            else if (s.method === 'Transferencia') sumTrans += amt;
+            return {
+                method: s.method,
+                amount: amt
+            };
+        });
+        orderData.cash_amount = sumCash;
+        orderData.transfer_amount = sumTrans;
+        orderData.payment_details = {
+            method: 'Mixto',
+            splits: splitsList
+        };
+    }
 
     try {
         const newId = await createOrder(orderData);
@@ -1552,7 +1609,12 @@ export async function handleSendOrder() {
         if (orderType === 'Domicilio') {
             msg += `${roundPin} Sector: ${deliveryZoneName}\n${roundPin} Dir: ${orderData.address}\n`;
         }
-        msg += `${bag} Método de Pago: ${orderData.payment}\n${memo} Nota: ${orderData.notes}`;
+        if (orderData.payment === 'Mixto' && orderData.payment_details?.splits) {
+            const splitSummary = orderData.payment_details.splits.map(s => `${s.method}: ${formatMoney(s.amount)}`).join(' + ');
+            msg += `${bag} Método de Pago: Pago Mixto (${splitSummary})\n${memo} Nota: ${orderData.notes}`;
+        } else {
+            msg += `${bag} Método de Pago: ${orderData.payment}\n${memo} Nota: ${orderData.notes}`;
+        }
         if (paymentProof) msg += `\n(Comprobante adjunto en sistema)`;
 
         const waNumber = state.restaurantData.phone || state.config.whatsapp || '';
@@ -1589,6 +1651,8 @@ function resetOrderForm() {
     state.tempProofFile = null;
 
     $('transfer-info')?.classList.add('hidden');
+    $('client-mixed-container')?.classList.add('hidden');
+    state.clientSplits = [];
     $('proof-container')?.classList.add('hidden');
     $('c-address')?.classList.add('hidden');
     $('delivery-zone-container')?.classList.add('hidden');

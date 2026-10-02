@@ -451,6 +451,34 @@ function attachSliderListeners() {
     });
 }
 
+window.openOrderCobro = async (orderOrId) => {
+    let order = typeof orderOrId === 'object' && orderOrId !== null ? orderOrId : null;
+    if (!order) {
+        order = (state.orders || []).find(o => o.id == orderOrId) || (state.waiterOrders || []).find(o => o.id == orderOrId);
+    }
+    if (!order && typeof orderOrId !== 'object') {
+        if (window.OfflineDB) {
+            try {
+                order = await window.OfflineDB.getOfflineOrder(orderOrId);
+            } catch (_) {}
+        }
+    }
+    if (!order && typeof orderOrId !== 'object' && navigator.onLine) {
+        if (window.ApiClient) {
+            try {
+                const res = await window.ApiClient.get(`/orders/${orderOrId}`);
+                order = res?.order || res;
+            } catch (_) {}
+        }
+    }
+    if (order && window.openPaymentModal) {
+        window.openPaymentModal(order, () => {
+            if (window.renderRapidManagement) window.renderRapidManagement();
+            if (window.reloadAdminData) window.reloadAdminData();
+        });
+    }
+};
+
 function handleStatusChange(sliderElement) {
     const card = sliderElement.closest('.gr-card');
     const id = card.id.replace('gr-card-', '');
@@ -461,6 +489,14 @@ function handleStatusChange(sliderElement) {
     if (!nextStatus) {
         console.error("No next status defined");
         resetSlider(sliderElement);
+        return;
+    }
+
+    if (nextStatus === 'Cobrado') {
+        resetSlider(sliderElement);
+        if (window.openOrderCobro) {
+            window.openOrderCobro(id);
+        }
         return;
     }
 

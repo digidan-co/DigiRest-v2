@@ -83,8 +83,13 @@ import { initToppingsManager, resetDishToppingsConfig, getDishToppingsConfig } f
 import { initDeliveryZonesManager, populateClientDeliveryZones } from './features/delivery-zones-manager.js';
 import { getDeliveryZones } from './services/delivery-service.js';
 import { initCrmManager } from './features/crm-manager.js';
+import { initPaymentModal, openPaymentModal, closePaymentModal } from './features/payment-modal.js';
+import { getAccounts } from './services/cashflow-service.js';
 
 // Expose globals for HTML inline events (Legacy support)
+window.openPaymentModal = openPaymentModal;
+window.closePaymentModal = closePaymentModal;
+window.initPaymentModal = initPaymentModal;
 window.showImageModal = showImageModal;
 window.showConfirmModal = showConfirmModal;
 window.updateChefStatus = handleUpdateChefStatus;
@@ -95,6 +100,9 @@ window.openWaiterModal = openWaiterModal;
 window.closeWaiterModal = () => {
     const modal = $('waiter-order-modal');
     if (modal) modal.classList.add('hidden');
+    if (typeof window.resetWaiterOrderForm === 'function') {
+        window.resetWaiterOrderForm();
+    }
     if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero')) {
         const adminView = $('admin-view');
         const grView = $('rapid-management-view');
@@ -212,6 +220,47 @@ window.openOrderEditModal = async (id, isWaiter) => {
         
         // Disable reason input if discount is 0 on load
         $('oe-discount-reason').disabled = parseFloat(order.discount || 0) <= 0;
+
+        // Populate accounts for destination routing
+        try {
+            const accounts = await getAccounts({ active: true }) || [];
+            const populateSel = (selectEl, defaultVal) => {
+                if (!selectEl) return;
+                selectEl.innerHTML = '<option value="">(Cuenta predeterminada / Ninguna)</option>' +
+                    accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)} (${a.type || 'General'})</option>`).join('');
+                if (defaultVal) selectEl.value = String(defaultVal);
+            };
+
+            populateSel($('oe-account'), order.account_id);
+            populateSel($('oe-mixed-cash-account'), order.cash_account_id);
+            populateSel($('oe-mixed-transfer-account'), order.transfer_account_id);
+        } catch (accErr) {
+            console.warn("Could not load accounts for edit modal:", accErr);
+        }
+
+        // Set mixed values if payment is Mixto
+        if ($('oe-mixed-cash')) $('oe-mixed-cash').value = order.cash_amount || '';
+        if ($('oe-mixed-transfer')) $('oe-mixed-transfer').value = order.transfer_amount || '';
+
+        // Auto balancing between mixed cash and transfer
+        if ($('oe-mixed-cash') && $('oe-mixed-transfer')) {
+            $('oe-mixed-cash').oninput = () => {
+                const total = (currentEditingOrder?.items?.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0) || 0)
+                    + (parseFloat($('oe-tip').value) || 0) - (parseFloat($('oe-discount').value) || 0);
+                let cash = parseFloat($('oe-mixed-cash').value);
+                if (isNaN(cash) || cash < 0) cash = 0;
+                if (cash > total) cash = total;
+                $('oe-mixed-transfer').value = Math.max(0, total - cash);
+            };
+            $('oe-mixed-transfer').oninput = () => {
+                const total = (currentEditingOrder?.items?.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0) || 0)
+                    + (parseFloat($('oe-tip').value) || 0) - (parseFloat($('oe-discount').value) || 0);
+                let trans = parseFloat($('oe-mixed-transfer').value);
+                if (isNaN(trans) || trans < 0) trans = 0;
+                if (trans > total) trans = total;
+                $('oe-mixed-cash').value = Math.max(0, total - trans);
+            };
+        }
 
         // Toggle fields based on data
         toggleEditFields();
@@ -445,11 +494,11 @@ async function loadAdminUsers() {
 }
 
 function loadAdminConfig() {
-    $('conf-name').value = state.restaurantData.name || state.config.nombreRestaurante || "";
-    $('conf-slogan').value = state.restaurantData.slogan || state.config.sloganRestaurante || "";
-    $('conf-phone').value = state.restaurantData.phone || "";
-    $('conf-address').value = state.restaurantData.address || "";
-    $('conf-welcome').value = state.restaurantData.welcome || "";
+    if ($('conf-name')) $('conf-name').value = state.restaurantData.name || state.config.nombreRestaurante || "";
+    if ($('conf-slogan')) $('conf-slogan').value = state.restaurantData.slogan || state.config.sloganRestaurante || "";
+    if ($('conf-phone')) $('conf-phone').value = state.restaurantData.phone || "";
+    if ($('conf-address')) $('conf-address').value = state.restaurantData.address || "";
+    if ($('conf-welcome')) $('conf-welcome').value = state.restaurantData.welcome || "";
 
     // Sync AI automation toggle
     if (window.syncAiAutomationToggle) window.syncAiAutomationToggle();
@@ -496,9 +545,10 @@ function loadAdminConfig() {
     }
 
     const acc = state.accountData || {};
-    $('conf-bank-name').value = acc.typeAcount || "";
-    $('conf-bank-holder').value = acc.name || "";
-    $('conf-bank-number').value = acc.number || "";
+    if ($('conf-bank-name')) $('conf-bank-name').value = acc.typeAcount || "";
+    if ($('conf-bank-holder')) $('conf-bank-holder').value = acc.name || "";
+    if ($('conf-bank-number')) $('conf-bank-number').value = acc.number || "";
+    renderConfBankAccounts();
 
     if (state.config.logo) {
         $('conf-logo-preview').src = state.config.logo;
@@ -527,6 +577,80 @@ function loadAdminConfig() {
     applySidebarTheme(sidebarColor, primaryColor);
     initThemeListeners();
 }
+
+export function renderConfBankAccounts() {
+    const container = $('conf-banks-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!Array.isArray(state.bankAccounts) || state.bankAccounts.length === 0) {
+        state.bankAccounts = [{ bank: '', holder: '', number: '', type: 'Ahorros' }];
+    }
+
+    state.bankAccounts.forEach((acc, index) => {
+        const row = document.createElement('div');
+        row.className = 'conf-bank-row bg-gray-50/80 p-3 rounded-xl border border-gray-200/80 space-y-2.5';
+        row.innerHTML = `
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+                    <i class="fas fa-university text-blue-600"></i> Cuenta #${index + 1}
+                </span>
+                ${state.bankAccounts.length > 1 ? `
+                    <button type="button" class="btn-delete-conf-bank text-red-500 hover:text-red-700 text-xs p-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer" data-index="${index}" title="Eliminar cuenta">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                ` : ''}
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div>
+                    <label class="text-[9px] font-bold text-gray-400 uppercase ml-1 block mb-0.5">Banco / Entidad</label>
+                    <input type="text" class="conf-bank-name w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-xs bg-white" placeholder="Ej: Bancolombia, Nequi" value="${acc.bank || ''}">
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold text-gray-400 uppercase ml-1 block mb-0.5">Tipo de Cuenta</label>
+                    <input type="text" class="conf-bank-type w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-xs bg-white" placeholder="Ahorros / Celular / Cte" value="${acc.type || 'Ahorros'}">
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold text-gray-400 uppercase ml-1 block mb-0.5">Titular</label>
+                    <input type="text" class="conf-bank-holder w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-xs bg-white" placeholder="Nombre completo" value="${acc.holder || ''}">
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold text-gray-400 uppercase ml-1 block mb-0.5">Número de Cuenta</label>
+                    <input type="text" class="conf-bank-number w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-xs bg-white" placeholder="000-000-0000" value="${acc.number || ''}">
+                </div>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+
+    container.querySelectorAll('.btn-delete-conf-bank').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.currentTarget.dataset.index, 10);
+            if (state.bankAccounts.length > 1) {
+                syncBankAccountsFromDOM();
+                state.bankAccounts.splice(idx, 1);
+                renderConfBankAccounts();
+            }
+        });
+    });
+}
+
+export function syncBankAccountsFromDOM() {
+    const rows = Array.from(document.querySelectorAll('#conf-banks-container .conf-bank-row'));
+    if (rows.length === 0) return;
+    state.bankAccounts = rows.map(r => ({
+        bank: r.querySelector('.conf-bank-name')?.value.trim() || '',
+        type: r.querySelector('.conf-bank-type')?.value.trim() || 'Ahorros',
+        holder: r.querySelector('.conf-bank-holder')?.value.trim() || '',
+        number: r.querySelector('.conf-bank-number')?.value.trim() || ''
+    }));
+}
+
+$('btn-add-conf-bank')?.addEventListener('click', () => {
+    syncBankAccountsFromDOM();
+    state.bankAccounts.push({ bank: '', type: 'Ahorros', holder: '', number: '' });
+    renderConfBankAccounts();
+});
 
 // ... (Rest of init logic)
 
@@ -653,6 +777,7 @@ async function init() {
         initToppingsManager();
         initDeliveryZonesManager();
         initCrmManager();
+        initPaymentModal();
 
         // ====================================================================
         // ROLE-BASED PWA APP BADGE (via Socket.IO)
@@ -697,7 +822,7 @@ async function init() {
 
         // Load Config (Parallel)
         try {
-            const [restData, accData, imgData, bannerData, colorData, primaryColorData, contrastColorData, themeIdData, bgAsideData] = await Promise.all([
+            const [restData, accData, imgData, bannerData, colorData, primaryColorData, contrastColorData, themeIdData, bgAsideData, bankAccountsData] = await Promise.all([
                 ApiClient.get('/config/dataRestaurant').catch(() => ({})),
                 ApiClient.get('/config/AcountMoney').catch(() => ({})),
                 ApiClient.get('/config/imgRestaurantDefault').catch(() => ({})),
@@ -706,7 +831,8 @@ async function init() {
                 ApiClient.get('/config/uiPrimaryColor').catch(() => (null)),
                 ApiClient.get('/config/uiContrastColor').catch(() => (null)),
                 ApiClient.get('/config/uiThemeId').catch(() => (null)),
-                ApiClient.get('/config/uiBgAside').catch(() => (null))
+                ApiClient.get('/config/uiBgAside').catch(() => (null)),
+                ApiClient.get('/config/bankAccounts').catch(() => (null))
             ]);
 
             state.restaurantData = restData || {};
@@ -715,6 +841,18 @@ async function init() {
             state.config.isOpen = state.restaurantData.isOpen;
 
             state.accountData = accData || {};
+            if (Array.isArray(bankAccountsData) && bankAccountsData.length > 0) {
+                state.bankAccounts = bankAccountsData;
+            } else if (accData && (accData.typeAcount || accData.name || accData.number)) {
+                state.bankAccounts = [{
+                    bank: accData.typeAcount || '',
+                    holder: accData.name || '',
+                    number: accData.number || '',
+                    type: 'Ahorros'
+                }];
+            } else {
+                state.bankAccounts = [];
+            }
             if (imgData && (imgData.url || imgData.Base64)) {
                 state.config.logo = imgData.url || imgData.Base64;
             }
@@ -2117,12 +2255,12 @@ $('config-form').addEventListener('submit', async (e) => {
         });
 
         const data = {
-            name: $('conf-name').value,
-            slogan: $('conf-slogan').value,
-            phone: $('conf-phone').value,
-            address: $('conf-address').value,
-            welcome: $('conf-welcome').value,
-            isOpen: $('conf-is-open').checked,
+            name: $('conf-name') ? $('conf-name').value : '',
+            slogan: $('conf-slogan') ? $('conf-slogan').value : '',
+            phone: $('conf-phone') ? $('conf-phone').value : '',
+            address: $('conf-address') ? $('conf-address').value : '',
+            welcome: $('conf-welcome') ? $('conf-welcome').value : (state.restaurantData.welcome || ''),
+            isOpen: $('conf-is-open') ? $('conf-is-open').checked : (state.config.isOpen !== false),
             socialNetworks: sn,
             businessHours: hours
         };
@@ -2133,11 +2271,18 @@ $('config-form').addEventListener('submit', async (e) => {
         state.config.nombreRestaurante = data.name;
         state.config.sloganRestaurante = data.slogan;
 
-        // Save Bank Account
+        // Save Bank Accounts
+        syncBankAccountsFromDOM();
+        const activeBanks = (state.bankAccounts || []).filter(b => b.bank || b.number || b.holder);
+        await ApiClient.post('/config', { key: 'bankAccounts', value: activeBanks });
+        state.bankAccounts = activeBanks;
+
+        // Keep primary AcountMoney synced for backwards compatibility
+        const primaryBank = activeBanks[0] || { bank: '', holder: '', number: '' };
         const accData = {
-            typeAcount: $('conf-bank-name').value,
-            name: $('conf-bank-holder').value,
-            number: $('conf-bank-number').value
+            typeAcount: primaryBank.bank,
+            name: primaryBank.holder,
+            number: primaryBank.number
         };
         await ApiClient.post('/config', { key: 'AcountMoney', value: accData });
         state.accountData = accData;
@@ -2715,35 +2860,56 @@ function toggleEditFields() {
     if (!isWaiter) {
         if (type === 'Domicilio') $('oe-address').parentElement.classList.remove('hidden');
         else $('oe-address').parentElement.classList.add('hidden');
+    } else {
+        // For waiter orders, show address (customer data now editable)
+        $('oe-address').parentElement.classList.remove('hidden');
+    }
 
-        if (pay === 'Transferencia') {
-            $('oe-proof-container').classList.remove('hidden');
-            // Show existing proof if it exists in the original order
+    const accountContainer = $('oe-account-container');
+    const mixedContainer = $('oe-mixed-container');
+    const proofContainer = $('oe-proof-container');
+    const noProofMsg = $('oe-no-proof');
+    const currentProofImg = $('oe-current-proof');
+
+    if (pay === 'Mixto') {
+        if (accountContainer) accountContainer.classList.add('hidden');
+        if (mixedContainer) mixedContainer.classList.remove('hidden');
+        if (proofContainer) proofContainer.classList.remove('hidden');
+        if (currentProofImg) {
             if (currentEditingOrder.proof) {
-                $('oe-current-proof').classList.remove('hidden');
-                $('oe-no-proof').classList.add('hidden');
+                currentProofImg.classList.remove('hidden');
+                if (noProofMsg) noProofMsg.classList.add('hidden');
             } else {
-                $('oe-current-proof').classList.add('hidden');
-                $('oe-no-proof').classList.remove('hidden');
+                currentProofImg.classList.add('hidden');
+                if (noProofMsg) noProofMsg.classList.remove('hidden');
             }
-        } else {
-            // Hide the NEW proof upload container (file input) for non-transfer payments
-            $('oe-proof-container').classList.add('hidden');
-            $('oe-no-proof').classList.add('hidden');
-            // BUT keep the existing proof image visible if the order already has proof.
-            // This handles offline-created orders that synced with a data URL proof
-            // even when the payment method is not Transferencia.
+        }
+    } else if (pay === 'Transferencia') {
+        if (accountContainer) accountContainer.classList.remove('hidden');
+        if (mixedContainer) mixedContainer.classList.add('hidden');
+        if (proofContainer) proofContainer.classList.remove('hidden');
+        if (currentProofImg) {
             if (currentEditingOrder.proof) {
-                $('oe-current-proof').classList.remove('hidden');
+                currentProofImg.classList.remove('hidden');
+                if (noProofMsg) noProofMsg.classList.add('hidden');
             } else {
-                $('oe-current-proof').classList.add('hidden');
+                currentProofImg.classList.add('hidden');
+                if (noProofMsg) noProofMsg.classList.remove('hidden');
             }
         }
     } else {
-        // For waiter orders, show address (customer data now editable) but keep proof hidden
-        $('oe-address').parentElement.classList.remove('hidden'); // Show address for customer data
-        $('oe-proof-container').classList.add('hidden');
-        $('oe-no-proof').classList.add('hidden');
+        // Efectivo, Datáfono, etc.
+        if (accountContainer) accountContainer.classList.remove('hidden');
+        if (mixedContainer) mixedContainer.classList.add('hidden');
+        if (proofContainer) proofContainer.classList.add('hidden');
+        if (noProofMsg) noProofMsg.classList.add('hidden');
+        if (currentProofImg) {
+            if (currentEditingOrder.proof) {
+                currentProofImg.classList.remove('hidden');
+            } else {
+                currentProofImg.classList.add('hidden');
+            }
+        }
     }
 }
 
@@ -2795,11 +2961,19 @@ $('order-edit-form').addEventListener('submit', async (e) => {
 
         // ── OFFLINE / TEMP ID ORDER SAVE PATH ──
         const isTempId = String(currentEditingOrder.id).startsWith('OFF-');
+        const payMethod = $('oe-pay').value;
+        const isTransferOrMixed = payMethod === 'Transferencia' || payMethod === 'Mixto';
+        const cashAmt = payMethod === 'Mixto' ? (parseFloat($('oe-mixed-cash')?.value) || 0) : (payMethod === 'Efectivo' ? calculatedTotal : 0);
+        const transAmt = payMethod === 'Mixto' ? (parseFloat($('oe-mixed-transfer')?.value) || 0) : (payMethod === 'Transferencia' ? calculatedTotal : 0);
+        const cashAccId = payMethod === 'Mixto' ? ($('oe-mixed-cash-account')?.value ? parseInt($('oe-mixed-cash-account').value) : null) : (payMethod === 'Efectivo' && $('oe-account')?.value ? parseInt($('oe-account').value) : null);
+        const transAccId = payMethod === 'Mixto' ? ($('oe-mixed-transfer-account')?.value ? parseInt($('oe-mixed-transfer-account').value) : null) : (payMethod === 'Transferencia' && $('oe-account')?.value ? parseInt($('oe-account').value) : null);
+        const accId = payMethod !== 'Mixto' && $('oe-account')?.value ? parseInt($('oe-account').value) : null;
+
         // Save locally when: offline, has temp ID, or has _offline flag
         if (currentEditingOrder._offline === true || isTempId || !navigator.onLine) {
             // Build updated order object
             let proofValue = currentEditingOrder.proof;
-            if (file && $('oe-pay').value === 'Transferencia') {
+            if (file && isTransferOrMixed) {
                 // Convert file to data URL for offline storage
                 proofValue = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -2807,15 +2981,15 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                     reader.onerror = reject;
                     reader.readAsDataURL(file);
                 });
-            } else if ($('oe-pay').value !== 'Transferencia') {
-                proofValue = undefined; // Remove proof if not transfer
+            } else if (!isTransferOrMixed) {
+                proofValue = undefined; // Remove proof if not transfer/mixed
             }
 
             const updatedOfflineOrder = {
                 ...currentEditingOrder,
                 client: $('oe-client').value,
                 phone: $('oe-phone').value,
-                payment: $('oe-pay').value,
+                payment: payMethod,
                 status: $('oe-status').value,
                 address: $('oe-address').value,
                 notes: $('oe-notes').value,
@@ -2827,6 +3001,11 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 discount_reason: discountReasonVal,
                 total: calculatedTotal,
                 proof: proofValue,
+                account_id: accId,
+                cash_amount: cashAmt,
+                transfer_amount: transAmt,
+                cash_account_id: cashAccId,
+                transfer_account_id: transAccId,
                 _editedAt: Date.now()
             };
 
@@ -2841,7 +3020,7 @@ $('order-edit-form').addEventListener('submit', async (e) => {
             const queueBody = {
                 client: $('oe-client').value,
                 phone: $('oe-phone').value,
-                payment: $('oe-pay').value,
+                payment: payMethod,
                 address: $('oe-address').value,
                 notes: $('oe-notes').value,
                 type: $('oe-type').value,
@@ -2853,6 +3032,11 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 total: calculatedTotal,
                 proof: proofValue,
                 status: $('oe-status').value,
+                account_id: accId,
+                cash_amount: cashAmt,
+                transfer_amount: transAmt,
+                cash_account_id: cashAccId,
+                transfer_account_id: transAccId,
                 waiterId: currentEditingOrder.waiterId || null,
                 waiterName: currentEditingOrder.waiterName || null,
                 chefName: currentEditingOrder.chefName || null,
@@ -2895,14 +3079,14 @@ $('order-edit-form').addEventListener('submit', async (e) => {
             return;
         }
 
-        // ── ONLINE ORDER SAVE PATH (existing) ──
-        if (file && $('oe-pay').value === 'Transferencia') {
+        // ── ONLINE ORDER SAVE PATH ──
+        if (file && isTransferOrMixed) {
             // Use FormData to send file with compressed image
             const formData = new FormData();
             formData.append('proof', file); // compressed file from change listener
             formData.append('client', $('oe-client').value);
             formData.append('phone', $('oe-phone').value);
-            formData.append('payment', $('oe-pay').value);
+            formData.append('payment', payMethod);
             formData.append('status', $('oe-status').value);
             formData.append('address', $('oe-address').value);
             formData.append('notes', $('oe-notes').value);
@@ -2912,6 +3096,12 @@ $('order-edit-form').addEventListener('submit', async (e) => {
             formData.append('tip', tipVal);
             formData.append('discount', discountVal);
             formData.append('discount_reason', discountReasonVal);
+            formData.append('cash_amount', cashAmt);
+            formData.append('transfer_amount', transAmt);
+            if (cashAccId) formData.append('cash_account_id', cashAccId);
+            if (transAccId) formData.append('transfer_account_id', transAccId);
+            if (accId) formData.append('account_id', accId);
+
             // Include user fields to prevent null after update
             if (currentEditingOrder.waiterId) formData.append('waiterId', currentEditingOrder.waiterId);
             if (currentEditingOrder.waiterName) formData.append('waiterName', currentEditingOrder.waiterName);
@@ -2925,13 +3115,10 @@ $('order-edit-form').addEventListener('submit', async (e) => {
             await ApiClient.put(`/orders/${currentEditingOrder.id}`, formData);
         } else {
             // No file upload, use regular JSON
-            // If payment is NOT Transferencia, we must ensure proof is removed if it existed
-            const isTransfer = $('oe-pay').value === 'Transferencia';
-
             const updatedData = {
                 client: $('oe-client').value,
                 phone: $('oe-phone').value,
-                payment: $('oe-pay').value,
+                payment: payMethod,
                 status: $('oe-status').value,
                 address: $('oe-address').value,
                 notes: $('oe-notes').value,
@@ -2942,8 +3129,12 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 discount: discountVal,
                 discount_reason: discountReasonVal,
                 total: calculatedTotal,
-                // Explicitly send null/empty if not transfer to trigger cleanup in backend if supported
-                proof: isTransfer ? undefined : "",
+                proof: isTransferOrMixed ? undefined : "",
+                account_id: accId,
+                cash_amount: cashAmt,
+                transfer_amount: transAmt,
+                cash_account_id: cashAccId,
+                transfer_account_id: transAccId,
                 // Include user fields to prevent null after update
                 waiterId: currentEditingOrder.waiterId || null,
                 waiterName: currentEditingOrder.waiterName || null,
@@ -2965,12 +3156,16 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 arr[idx].discount = discountVal;
                 arr[idx].discount_reason = discountReasonVal;
                 arr[idx].status = $('oe-status').value;
-                arr[idx].payment = $('oe-pay').value;
+                arr[idx].payment = payMethod;
                 arr[idx].client = $('oe-client').value;
                 arr[idx].type = $('oe-type').value;
                 arr[idx].table = $('oe-table').value;
-                // other minor text fields
                 arr[idx].notes = $('oe-notes').value;
+                arr[idx].account_id = accId;
+                arr[idx].cash_amount = cashAmt;
+                arr[idx].transfer_amount = transAmt;
+                arr[idx].cash_account_id = cashAccId;
+                arr[idx].transfer_account_id = transAccId;
             }
         };
         updateInArray(state.orders);
@@ -3126,26 +3321,202 @@ $('btn-next-archived')?.addEventListener('click', () => {
     loadArchivedOrders();
 });
 
+// Render transfer bank accounts in checkout
+export function renderTransferBankDetails() {
+    const details = $('transfer-details');
+    if (!details) return;
+
+    const banks = Array.isArray(state.bankAccounts) && state.bankAccounts.length > 0 
+        ? state.bankAccounts.filter(b => b.bank || b.number) 
+        : (state.accountData && (state.accountData.typeAcount || state.accountData.number) 
+            ? [{ bank: state.accountData.typeAcount, holder: state.accountData.name, number: state.accountData.number, type: 'Ahorros' }] 
+            : []);
+
+    if (banks.length === 0) {
+        details.innerHTML = `<p class="text-sky-700 italic text-[11px]">No hay cuentas bancarias configuradas actualmente.</p>`;
+        return;
+    }
+
+    details.innerHTML = banks.map((b, idx) => `
+        <div class="bg-white p-2.5 rounded-xl border border-sky-200/90 shadow-2xs space-y-1">
+            <div class="flex items-center justify-between">
+                <span class="font-black text-sky-950 text-xs flex items-center gap-1.5">
+                    <i class="fas fa-university text-sky-600"></i> ${b.bank || 'Banco'}
+                </span>
+                <span class="text-[9px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md uppercase">
+                    ${b.type || 'Cuenta'}
+                </span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-gray-700 pt-0.5">
+                <div>
+                    <span class="text-gray-400 text-[9px] block leading-tight">Titular</span>
+                    <span class="font-bold">${b.holder || 'Restaurante'}</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-gray-400 text-[9px] block leading-tight">Número</span>
+                    <div class="flex items-center gap-1 justify-end">
+                        <span class="font-black font-mono text-gray-900 text-xs">${b.number || 'N/A'}</span>
+                        ${b.number ? `
+                            <button type="button" onclick="navigator.clipboard?.writeText('${b.number}'); toast('Número copiado al portapapeles', 'info')" class="text-sky-600 hover:text-sky-800 p-0.5 text-[11px] cursor-pointer" title="Copiar número">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getClientCartTotal() {
+    const cartSubtotal = (state.cart || []).reduce((a, b) => a + (b.price * b.qty), 0);
+    const orderType = $('c-type')?.value;
+    let deliveryFee = 0;
+    if (orderType === 'Domicilio') {
+        const zoneId = $('c-zone')?.value;
+        const selectedZone = (state.deliveryZones || []).find(z => z.id === zoneId);
+        if (selectedZone) deliveryFee = parseFloat(selectedZone.fee) || 0;
+    }
+    return cartSubtotal + deliveryFee;
+}
+
+export function renderClientMixedRows() {
+    const container = $('client-mixed-rows');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const total = getClientCartTotal();
+
+    if (!Array.isArray(state.clientSplits) || state.clientSplits.length === 0) {
+        const half = Math.round(total / 2);
+        state.clientSplits = [
+            { method: 'Efectivo', amount: half },
+            { method: 'Transferencia', amount: Math.max(0, total - half) }
+        ];
+    }
+
+    state.clientSplits.forEach((split, index) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-2xs';
+
+        const canDelete = state.clientSplits.length > 1;
+
+        row.innerHTML = `
+            <div class="w-1/2">
+                <select class="client-split-method w-full p-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 outline-none" data-index="${index}">
+                    <option value="Efectivo" ${split.method === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
+                    <option value="Transferencia" ${split.method === 'Transferencia' ? 'selected' : ''}>Transferencia</option>
+                </select>
+            </div>
+            <div class="w-1/2 flex items-center gap-1">
+                <input type="number" min="0" step="any" class="client-split-amount w-full p-1.5 text-right font-black text-xs text-gray-900 border border-gray-200 rounded-lg outline-none focus:border-amber-500" placeholder="$0" value="${split.amount > 0 ? split.amount : ''}" data-index="${index}">
+                ${canDelete ? `
+                    <button type="button" class="btn-delete-client-split p-1.5 text-red-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer" data-index="${index}" title="Eliminar fila">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        container.appendChild(row);
+    });
+
+    container.querySelectorAll('.client-split-method').forEach(sel => {
+        sel.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.index, 10);
+            state.clientSplits[idx].method = e.target.value;
+            updateClientMixedBalance();
+        });
+    });
+
+    container.querySelectorAll('.client-split-amount').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+            const idx = parseInt(e.target.dataset.index, 10);
+            let val = parseFloat(e.target.value);
+            if (isNaN(val) || val < 0) val = 0;
+            state.clientSplits[idx].amount = val;
+            updateClientMixedBalance();
+        });
+    });
+
+    container.querySelectorAll('.btn-delete-client-split').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.currentTarget.dataset.index, 10);
+            if (state.clientSplits.length > 1) {
+                state.clientSplits.splice(idx, 1);
+                renderClientMixedRows();
+                updateClientMixedBalance();
+            }
+        });
+    });
+
+    updateClientMixedBalance();
+}
+
+export function updateClientMixedBalance() {
+    const total = getClientCartTotal();
+    const assigned = (state.clientSplits || []).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+    const remaining = total - assigned;
+
+    const totalBadge = $('client-mixed-total-badge');
+    if (totalBadge) totalBadge.textContent = formatMoney(total);
+
+    const statusBadge = $('client-mixed-balance-status');
+    if (statusBadge) {
+        if (Math.abs(remaining) < 1) {
+            statusBadge.textContent = '✓ Cuadrado';
+            statusBadge.className = 'text-[10px] font-bold text-emerald-700 bg-emerald-100 mb-1 px-2 py-0.5 rounded-full';
+        } else if (remaining > 0) {
+            statusBadge.textContent = `Falta: ${formatMoney(remaining)}`;
+            statusBadge.className = 'text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full';
+        } else {
+            statusBadge.textContent = `Sobra: ${formatMoney(Math.abs(remaining))}`;
+            statusBadge.className = 'text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full';
+        }
+    }
+
+    // Check if any split is Transferencia
+    const hasTransfer = (state.clientSplits || []).some(s => s.method === 'Transferencia');
+    if (hasTransfer) {
+        $('transfer-info')?.classList.remove('hidden');
+        $('proof-container')?.classList.remove('hidden');
+        renderTransferBankDetails();
+    } else {
+        $('transfer-info')?.classList.add('hidden');
+        $('proof-container')?.classList.add('hidden');
+    }
+}
+window.updateClientMixedBalance = updateClientMixedBalance;
+
+$('btn-client-add-split')?.addEventListener('click', () => {
+    const total = getClientCartTotal();
+    const assigned = (state.clientSplits || []).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+    const rem = Math.max(0, total - assigned);
+
+    const existing = (state.clientSplits || []).map(s => s.method);
+    const nextMethod = existing.includes('Transferencia') ? 'Efectivo' : 'Transferencia';
+
+    if (!state.clientSplits) state.clientSplits = [];
+    state.clientSplits.push({ method: nextMethod, amount: rem });
+
+    renderClientMixedRows();
+    updateClientMixedBalance();
+});
+
 // Checkout Listeners
 $('c-pay')?.addEventListener('change', (e) => {
     const val = e.target.value;
     if (val === 'Transferencia') {
-        $('transfer-info').classList.remove('hidden');
-        $('proof-container').classList.remove('hidden');
-
-        // Populate transfer details
-        const acc = state.accountData || {};
-        const details = $('transfer-details');
-        if (details) {
-            details.innerHTML = `
-                <p><strong>Banco:</strong> ${acc.typeAcount || 'N/A'}</p>
-                <p><strong>Titular:</strong> ${acc.name || 'N/A'}</p>
-                <p><strong>Cuenta:</strong> ${acc.number || 'N/A'}</p>
-            `;
-        }
+        $('client-mixed-container')?.classList.add('hidden');
+        $('transfer-info')?.classList.remove('hidden');
+        $('proof-container')?.classList.remove('hidden');
+        renderTransferBankDetails();
+    } else if (val === 'Mixto') {
+        $('client-mixed-container')?.classList.remove('hidden');
+        renderClientMixedRows();
     } else {
-        $('transfer-info').classList.add('hidden');
-        $('proof-container').classList.add('hidden');
+        $('client-mixed-container')?.classList.add('hidden');
+        $('transfer-info')?.classList.add('hidden');
+        $('proof-container')?.classList.add('hidden');
 
         // Reset proof if switching away from Transferencia
         $('c-proof').value = '';
@@ -3402,4 +3773,7 @@ window.addEventListener('DOMContentLoaded', () => {
             reader.readAsDataURL(file);
         }
     });
+
+    // Initialize Payment Modal
+    if (window.initPaymentModal) window.initPaymentModal();
 });

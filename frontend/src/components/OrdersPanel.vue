@@ -78,6 +78,13 @@ function openNotes(id) { if (window.openViewNotesModal) window.openViewNotesModa
 function showDetails(id) { if (window.showOrderDetails) window.showOrderDetails(id); }
 function viewProof(src) { if (window.showImageModal) window.showImageModal(src); }
 function print(o, isWaiter) { printOrder(isWaiter ? { ...o, isWaiterOrder: true } : o); }
+function cobrar(o) {
+    if (window.openPaymentModal) {
+        window.openPaymentModal(o, () => {
+            if (window.reloadAdminData) window.reloadAdminData();
+        });
+    }
+}
 function editOrder(id, isWaiter) { if (window.openOrderEditModal) window.openOrderEditModal(id, isWaiter); }
 function editOffline(id) { if (window.openOfflineOrderEditModal) window.openOfflineOrderEditModal(id); }
 function deleteOrder(id) { if (window.promptCancelOrder) window.promptCancelOrder(id); }
@@ -211,6 +218,7 @@ function cancelOffline(id) {
                                         <i class="fas fa-ellipsis-v text-xs"></i>
                                     </button>
                                     <div class="table-action-menu hidden absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 text-xs font-medium text-left">
+                                        <button v-if="o.status !== 'Cobrado' && o.status !== 'Anulado'" type="button" @click="cobrar(o)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-teal-600 hover:bg-teal-50 transition-colors font-bold"><i class="fas fa-cash-register w-4 text-center"></i> <span>Cobrar Pedido</span></button>
                                         <button type="button" @click="showDetails(o.id)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-blue-600 hover:bg-blue-50 transition-colors"><i class="fas fa-eye w-4 text-center"></i> <span>Ver Detalles</span></button>
                                         <button type="button" @click="print(o, false)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors"><i class="fas fa-file-invoice w-4 text-center"></i> <span>Imprimir Ticket</span></button>
                                         <template v-if="o._offline">
@@ -315,6 +323,7 @@ function cancelOffline(id) {
                                             <i class="fas fa-ellipsis-v text-xs"></i>
                                         </button>
                                         <div class="table-action-menu hidden absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 text-xs font-medium text-left">
+                                            <button v-if="o.status !== 'Cobrado' && o.status !== 'Anulado'" type="button" @click="cobrar(o)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-teal-600 hover:bg-teal-50 transition-colors font-bold"><i class="fas fa-cash-register w-4 text-center"></i> <span>Cobrar Pedido</span></button>
                                             <button type="button" @click="showDetails(o.id)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-blue-600 hover:bg-blue-50 transition-colors"><i class="fas fa-eye w-4 text-center"></i> <span>Ver Detalles</span></button>
                                             <button type="button" @click="print(o, true)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors"><i class="fas fa-file-invoice w-4 text-center"></i> <span>Imprimir Ticket</span></button>
                                             <button type="button" @click="editOrder(o.id, true)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-blue-600 hover:bg-blue-50 transition-colors"><i class="fas fa-edit w-4 text-center"></i> <span>Editar Pedido</span></button>

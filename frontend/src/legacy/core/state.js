@@ -16,6 +16,8 @@ export const state = reactive({
     confirmId: null,
     restaurantData: {},
     accountData: {},
+    bankAccounts: [],
+    clientSplits: [],
     archivedPage: 1,
     lastVisible: null,
     firstVisible: null,

@@ -34,10 +34,10 @@
     <script src="js/libs/chart.umd.min.js" defer></script>
     <!-- Socket.io -->
     <script src="/socket.io/socket.io.js" defer></script>
-    <link rel="stylesheet" href="style.css?v=2.7">
+    <link rel="stylesheet" href="style.css?v=2.9">
     <link rel="stylesheet" href="css/sidebar.css">
-  <script type="module" crossorigin src="/assets/index-CSIBoJ1G.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-D4kcD-77.css">
+  <script type="module" crossorigin src="/assets/index-Hnp6VKOh.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DbPbAFHs.css">
 </head>
 
 <body class="text-[#333333] h-[100dvh] flex flex-col overflow-hidden bg-[#f1f1f1]">
@@ -1420,37 +1420,29 @@
                                                     class="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500 transition-colors text-xs">
                                             </div>
                                         </div>
-
-                                        <div>
-                                            <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Mensaje de Bienvenida (Opcional)</label>
-                                            <textarea id="conf-welcome"
-                                                class="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500 transition-colors h-16 text-xs resize-none"></textarea>
-                                        </div>
                                     </div>
 
-                                    <!-- Bank Details -->
+                                    <!-- Bank Details (Multiple Accounts) -->
                                     <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                                        <h4 class="font-bold text-gray-800 text-sm flex items-center gap-2 pb-2 border-b border-gray-100">
-                                            <i class="fas fa-university text-gray-400 text-xs"></i>
-                                            Datos Bancarios (Para Transferencias)
-                                        </h4>
-                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            <div>
-                                                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Banco</label>
-                                                <input type="text" id="conf-bank-name" placeholder="Ej. Banco General"
-                                                    class="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500 transition-colors text-xs">
+                                        <div class="flex items-center justify-between pb-2 border-b border-gray-100">
+                                            <div class="flex items-center gap-2">
+                                                <i class="fas fa-university text-gray-400 text-xs"></i>
+                                                <div>
+                                                    <h4 class="font-bold text-gray-800 text-sm">Cuentas Bancarias (Para Transferencias)</h4>
+                                                    <p class="text-[10px] text-gray-400">Agrega las cuentas bancarias donde los clientes puedan transferir</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Titular</label>
-                                                <input type="text" id="conf-bank-holder" placeholder="Nombre del titular"
-                                                    class="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500 transition-colors text-xs">
-                                            </div>
-                                            <div>
-                                                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Número de Cuenta</label>
-                                                <input type="text" id="conf-bank-number" placeholder="00-0000-0000"
-                                                    class="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500 transition-colors text-xs">
-                                            </div>
+                                            <button type="button" id="btn-add-conf-bank" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer">
+                                                <i class="fas fa-plus text-[10px]"></i> Agregar Banco
+                                            </button>
                                         </div>
+                                        <div id="conf-banks-container" class="space-y-3">
+                                            <!-- Dynamically rendered bank account cards -->
+                                        </div>
+                                        <!-- Hidden fallback inputs for legacy compatibility -->
+                                        <input type="hidden" id="conf-bank-name">
+                                        <input type="hidden" id="conf-bank-holder">
+                                        <input type="hidden" id="conf-bank-number">
                                     </div>
                                 </div>
 
@@ -2072,18 +2064,41 @@
                             <option value="" disabled selected>Selecciona...</option>
                             <option value="Efectivo">Efectivo</option>
                             <option value="Transferencia">Transferencia</option>
+                            <option value="Mixto">Pago Mixto</option>
                         </select>
                     </div>
+
+                    <!-- Client Mixed Payment Container -->
+                    <div id="client-mixed-container" class="hidden space-y-2.5 bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                                <i class="fas fa-layer-group text-amber-600"></i> Divide tu Pago
+                            </span>
+                            <span id="client-mixed-balance-status" class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                                Falta: $0
+                            </span>
+                        </div>
+                        <div id="client-mixed-rows" class="space-y-2">
+                            <!-- Dynamic client split rows (method + amount only, NO internal destination accounts) -->
+                        </div>
+                        <div class="flex items-center justify-between pt-1">
+                            <button type="button" id="btn-client-add-split" class="text-[11px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer">
+                                <i class="fas fa-plus text-[9px]"></i> Añadir otro método
+                            </button>
+                            <span class="text-[10px] text-gray-500 font-semibold">Total: <strong id="client-mixed-total-badge" class="text-gray-800">$0</strong></span>
+                        </div>
+                    </div>
+
                     <!-- Transfer Info Container -->
                     <div id="transfer-info"
                         class="hidden bg-sky-50 border border-sky-200 rounded-lg p-3 text-xs text-sky-800">
-                        <p class="font-bold mb-1"><i class="fas fa-info-circle mr-1"></i> Datos para Transferencia:</p>
-                        <div id="transfer-details" class="space-y-1 text-[10px]">
+                        <p class="font-bold mb-1"><i class="fas fa-university mr-1"></i> Cuentas Disponibles para Transferencia:</p>
+                        <div id="transfer-details" class="space-y-2 text-[10px]">
                             <!-- Details injected via JS -->
                         </div>
                         <div class="mt-2 text-red-600 font-bold bg-white p-2 text-center rounded">
-                            <i class="fas fa-exclamation-triangle"></i>  Obligatorio subir el comprobante
-                            para envíar el pedido.
+                            <i class="fas fa-exclamation-triangle"></i> Obligatorio subir el comprobante
+                            para enviar el pedido.
                         </div>
                     </div>
                     <div id="proof-container" class="hidden">
@@ -2256,7 +2271,7 @@
     <!-- Product Modal -->
     <div id="product-modal"
         class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
-        <div class="glass-panel p-3 sm:p-5 rounded-2xl w-full max-w-xl lg:max-w-2xl h-[85vh] flex flex-col m-1 sm:m-2 relative scale-in bg-white shadow-2xl overflow-hidden">
+        <div class="glass-panel p-3 sm:p-5 rounded-2xl max-w-xl lg:max-w-2xl max-h-[85vh] flex flex-col m-1 sm:m-2 relative scale-in bg-white shadow-2xl">
             <!-- Header Fijo -->
             <div class="flex items-center justify-between border-b border-gray-100 pb-2 mb-2 shrink-0">
                 <div>
@@ -2402,11 +2417,11 @@
                 </div>
 
                 <!-- Footer Fijo: Siempre visible en pantalla -->
-                <div class="flex gap-2 pt-2 sm:pt-2.5 border-t border-gray-100 mt-2 shrink-0">
+                <div class="flex gap-2 p-2 sm:pt-2.5 border-t border-gray-100 mt-2 shrink-0">
                     <button type="button" id="btn-cancel-prod"
                         class="flex-1 bg-gray-100 text-gray-700 py-2 sm:py-2.5 rounded-xl font-bold hover:bg-gray-200 text-xs cursor-pointer transition-colors">Cancelar</button>
                     <button type="submit" id="btn-save-prod"
-                        class="flex-1 btn-system-primary py-2 sm:py-2.5 rounded-xl font-bold shadow-md transition-all text-xs cursor-pointer">Guardar</button>
+                        class="flex-1 btn-system-primary py-2 sm:py-2.5 rounded-xl font-bold transition-all text-xs cursor-pointer">Guardar</button>
                 </div>
             </form>
         </div>
@@ -3370,36 +3385,207 @@
         </div>
     </div>
 
-    <!-- Payment Method Modal -->
+    <!-- Modal de Cobro / Método de Pago Mixto y Cuentas Destino -->
     <div id="payment-method-modal"
-        class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-4 backdrop-blur-sm">
-        <div
-            class="glass-panel w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col slide-up relative p-6">
-            <h3 class="font-bold text-xl text-gray-800 mb-4 text-center">Método de Pago</h3>
-            <p class="text-gray-500 text-center mb-6">Selecciona cómo pagó el cliente</p>
-
-            <div class="space-y-3">
-                <button onclick="confirmPayment('Efectivo')"
-                    class="w-full bg-green-100 hover:bg-green-200 text-green-800 p-4 rounded-xl font-bold flex items-center justify-between transition-all">
-                    <span><i class="fas fa-money-bill-wave mr-2"></i> Efectivo</span>
-                    <i class="fas fa-chevron-right opacity-50"></i>
-                </button>
-                <button onclick="confirmPayment('Tarjeta')"
-                    class="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 p-4 rounded-xl font-bold flex items-center justify-between transition-all">
-                    <span><i class="fas fa-credit-card mr-2"></i> Tarjeta</span>
-                    <i class="fas fa-chevron-right opacity-50"></i>
-                </button>
-                <button onclick="confirmPayment('Transferencia')"
-                    class="w-full bg-purple-100 hover:bg-purple-200 text-purple-800 p-4 rounded-xl font-bold flex items-center justify-between transition-all">
-                    <span><i class="fas fa-mobile-alt mr-2"></i> Transferencia</span>
-                    <i class="fas fa-chevron-right opacity-50"></i>
+        class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-3 sm:p-4 backdrop-blur-sm">
+        <div class="glass-panel w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col scale-in relative bg-white border border-gray-100 max-h-[90vh]">
+            
+            <!-- Header -->
+            <div class="p-4 sm:p-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-lg font-bold shadow-xs">
+                        <i class="fas fa-cash-register"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-extrabold text-gray-800 text-lg sm:text-xl">Cobrar Pedido</h3>
+                            <span id="pm-order-id-badge" class="px-2 py-0.5 rounded-full text-xs font-black bg-orange-100 text-orange-700">#---</span>
+                        </div>
+                        <p id="pm-order-subtitle" class="text-xs text-gray-500 font-medium">Cliente / Mesa</p>
+                    </div>
+                </div>
+                <button type="button" id="btn-close-pm-modal" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                    <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
 
-            <button onclick="$('payment-method-modal').classList.add('hidden')"
-                class="mt-6 w-full py-3 rounded-xl border border-gray-200 text-gray-500 font-bold hover:bg-gray-50 transition-colors">
-                Cancelar
-            </button>
+            <div class="p-4 sm:p-6 overflow-y-auto subtle-scrollbar space-y-4">
+                <!-- Total a Cobrar Highlight -->
+                <div class="bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-transparent p-4 rounded-2xl border border-teal-100/80 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-teal-700 block">Total a Cobrar</span>
+                        <span id="pm-order-total-display" class="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">$0</span>
+                    </div>
+                    <div id="pm-order-type-badge" class="px-3 py-1 rounded-xl text-xs font-bold bg-white text-gray-700 shadow-xs border border-gray-100">
+                        Local
+                    </div>
+                </div>
+
+                <!-- Selector de Tipo de Pago (Tabs) -->
+                <div>
+                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2 block">
+                        Selecciona el Método de Pago
+                    </label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="pm-method-tabs">
+                        <button type="button" data-method="Efectivo" class="pm-method-btn active py-2.5 px-2 rounded-xl text-xs font-bold border flex flex-col items-center gap-1 transition-all cursor-pointer">
+                            <i class="fas fa-money-bill-wave text-base text-emerald-600"></i>
+                            <span>Efectivo</span>
+                        </button>
+                        <button type="button" data-method="Transferencia" class="pm-method-btn py-2.5 px-2 rounded-xl text-xs font-bold border flex flex-col items-center gap-1 transition-all cursor-pointer">
+                            <i class="fas fa-mobile-alt text-base text-purple-600"></i>
+                            <span>Transferencia</span>
+                        </button>
+                        <button type="button" data-method="Datáfono" class="pm-method-btn py-2.5 px-2 rounded-xl text-xs font-bold border flex flex-col items-center gap-1 transition-all cursor-pointer">
+                            <i class="fas fa-credit-card text-base text-blue-600"></i>
+                            <span>Datáfono</span>
+                        </button>
+                        <button type="button" data-method="Mixto" class="pm-method-btn py-2.5 px-2 rounded-xl text-xs font-bold border flex flex-col items-center gap-1 transition-all cursor-pointer">
+                            <i class="fas fa-layer-group text-base text-amber-600"></i>
+                            <span>Pago Mixto</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CONTENIDO: Efectivo -->
+                <div id="pm-section-efectivo" class="space-y-3 pm-method-section">
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-600 block mb-1">
+                            <i class="fas fa-wallet text-emerald-600 mr-1"></i> Cuenta Destino (Caja)
+                        </label>
+                        <select id="pm-cash-account" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:bg-white outline-none">
+                            <!-- Populated with active cash accounts -->
+                        </select>
+                    </div>
+                    <!-- Calculadora de Cambio / Devuelta opcional -->
+                    <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center gap-3">
+                        <div class="flex-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-0.5">Recibido del Cliente</label>
+                            <input type="number" id="pm-cash-received" placeholder="$ Monto..." class="w-full p-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold outline-none">
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase block">Cambio / Vueltos</span>
+                            <span id="pm-cash-change" class="text-sm font-black text-emerald-600">$0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONTENIDO: Transferencia -->
+                <div id="pm-section-transferencia" class="space-y-3 pm-method-section hidden">
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-600 block mb-1">
+                            <i class="fas fa-university text-purple-600 mr-1"></i> Cuenta Destino
+                        </label>
+                        <select id="pm-transfer-account" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:bg-white outline-none">
+                            <!-- Populated with active transfer/bank accounts -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-600 block mb-1">
+                            <i class="fas fa-image text-purple-600 mr-1"></i> Comprobante de Transferencia
+                        </label>
+                        <div id="pm-transfer-proof-preview-container" class="hidden mb-2">
+                            <div class="relative w-full h-32 rounded-xl overflow-hidden border border-gray-200 group">
+                                <img id="pm-transfer-proof-img" src="" alt="Comprobante" class="w-full h-full object-cover">
+                                <button type="button" id="btn-remove-transfer-proof" class="absolute top-2 right-2 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors">
+                                    <i class="fas fa-times text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <input type="file" id="pm-transfer-proof-file" accept="image/*" class="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- CONTENIDO: Datáfono -->
+                <div id="pm-section-datafono" class="space-y-3 pm-method-section hidden">
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-600 block mb-1">
+                            <i class="fas fa-credit-card text-blue-600 mr-1"></i> Cuenta Destino (Datáfono)
+                        </label>
+                        <select id="pm-card-account" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:bg-white outline-none">
+                            <!-- Populated with active card/datafono accounts -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- CONTENIDO: Pago Mixto Dinámico -->
+                <div id="pm-section-mixto" class="space-y-3 pm-method-section hidden">
+                    <div class="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200/70 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-amber-200/50">
+                            <div>
+                                <span class="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                                    <i class="fas fa-layer-group text-amber-600"></i> Desglose de Pago Mixto
+                                </span>
+                                <p class="text-[10px] text-amber-700">Añade los métodos de pago y asigna su cuenta destino</p>
+                            </div>
+                            <span id="pm-mixed-balance-status" class="text-[10px] font-bold text-emerald-700 bg-emerald-100 mb-1 px-2.5 py-1 rounded-full">
+                                ✓ Cuadrado
+                            </span>
+                        </div>
+
+                        <!-- Mini Resumen: Total, Asignado, Pendiente -->
+                        <div class="grid grid-cols-3 gap-2 bg-white/90 p-2.5 rounded-xl border border-amber-200/60 text-center">
+                            <div>
+                                <span class="text-[9px] font-bold text-gray-400 uppercase block">Total Pedido</span>
+                                <span id="pm-mixed-total-val" class="text-xs font-black text-gray-800">$0</span>
+                            </div>
+                            <div>
+                                <span class="text-[9px] font-bold text-gray-400 uppercase block">Total Asignado</span>
+                                <span id="pm-mixed-assigned-val" class="text-xs font-black text-blue-600">$0</span>
+                            </div>
+                            <div>
+                                <span class="text-[9px] font-bold text-gray-400 uppercase block">Saldo Pendiente</span>
+                                <span id="pm-mixed-remaining-val" class="text-xs font-black text-amber-600">$0</span>
+                            </div>
+                        </div>
+
+                        <!-- Contenedor Dinámico de Filas de Pago Mixto -->
+                        <div id="pm-mixed-rows-container" class="space-y-2.5">
+                            <!-- Filas generadas dinámicamente con método, valor y cuenta destino -->
+                        </div>
+
+                        <!-- Botón para añadir nuevo método de pago -->
+                        <div class="flex items-center justify-between pt-1">
+                            <button type="button" id="btn-pm-add-row" class="text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                                <i class="fas fa-plus text-[10px]"></i> Añadir Método de Pago
+                            </button>
+                            <span class="text-[10px] text-gray-500 font-medium">Asigna cuentas para cada método</span>
+                        </div>
+
+                        <!-- Comprobante para cuando hay transferencia en pago mixto -->
+                        <div id="pm-mixed-proof-section" class="bg-white p-3 rounded-xl border border-amber-200/60 shadow-2xs space-y-1.5">
+                            <label class="text-[11px] font-bold text-gray-700 flex items-center gap-1">
+                                <i class="fas fa-camera text-purple-600"></i> Captura / Comprobante de Transferencia:
+                            </label>
+                            <div id="pm-mixed-proof-preview-container" class="hidden mb-1">
+                                <div class="relative w-full h-28 rounded-lg overflow-hidden border border-gray-200 group">
+                                    <img id="pm-mixed-proof-img" src="" alt="Comprobante" class="w-full h-full object-cover">
+                                    <button type="button" id="btn-remove-mixed-proof" class="absolute top-1.5 right-1.5 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600 transition-colors">
+                                        <i class="fas fa-times text-[10px]"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="file" id="pm-mixed-proof-file" accept="image/*" class="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notas opcionales de cobro -->
+                <div>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase block mb-1">Nota de Cobro (Opcional)</label>
+                    <input type="text" id="pm-payment-notes" placeholder="Ej: Recibió cajero turno tarde, ref #12345" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white">
+                </div>
+            </div>
+
+            <!-- Footer con Botones -->
+            <div class="p-4 sm:p-5 border-t border-gray-100 bg-gray-50/50 flex gap-2 shrink-0">
+                <button type="button" id="btn-cancel-pm" class="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 text-xs transition-colors cursor-pointer">
+                    Cancelar
+                </button>
+                <button type="button" id="btn-confirm-pm" class="flex-[2] py-3 px-4 rounded-xl font-black text-xs text-white bg-teal-600 hover:bg-teal-700 transition-all shadow-md active:scale-98 flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="btn-confirm-pm-text">Confirmar Cobro ($0)</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -3442,7 +3628,39 @@
                             class="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none text-xs">
                             <option value="Efectivo">Efectivo</option>
                             <option value="Transferencia">Transferencia</option>
+                            <option value="Datáfono">Datáfono</option>
+                            <option value="Mixto">Pago Mixto (Efectivo + Transferencia)</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Contenedor opcional para cuenta destino en pago simple -->
+                <div id="oe-account-container" class="hidden">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Cuenta Destino</label>
+                    <select id="oe-account" class="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none text-xs"></select>
+                </div>
+
+                <!-- Contenedor opcional para desglose en Pago Mixto -->
+                <div id="oe-mixed-container" class="p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2 hidden">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Efectivo ($)</label>
+                            <input type="number" id="oe-mixed-cash" class="w-full p-1.5 border border-gray-200 rounded-lg bg-white text-xs font-bold" placeholder="$0">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Cuenta Efectivo</label>
+                            <select id="oe-mixed-cash-account" class="w-full p-1.5 border border-gray-200 rounded-lg bg-white text-xs"></select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Transferencia ($)</label>
+                            <input type="number" id="oe-mixed-transfer" class="w-full p-1.5 border border-gray-200 rounded-lg bg-white text-xs font-bold" placeholder="$0">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Cuenta Transferencia</label>
+                            <select id="oe-mixed-transfer-account" class="w-full p-1.5 border border-gray-200 rounded-lg bg-white text-xs"></select>
+                        </div>
                     </div>
                 </div>
 

@@ -103,10 +103,17 @@ module.exports = (io) => {
             }
 
 
-            const sql = `INSERT INTO orders (id, client, phone, address, notes, type, payment, status, total, tip, discount, discount_reason, items, waiterId, waiterName, tableNum, proof, delivery_zone, delivery_fee) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            const account_id = req.body.account_id ? parseInt(req.body.account_id, 10) : null;
+            const cash_amount = parseFloat(req.body.cash_amount) || 0;
+            const transfer_amount = parseFloat(req.body.transfer_amount) || 0;
+            const cash_account_id = req.body.cash_account_id ? parseInt(req.body.cash_account_id, 10) : null;
+            const transfer_account_id = req.body.transfer_account_id ? parseInt(req.body.transfer_account_id, 10) : null;
+            const payment_details = req.body.payment_details ? (typeof req.body.payment_details === 'object' ? JSON.stringify(req.body.payment_details) : req.body.payment_details) : null;
 
-            db.run(sql, [newId, client, phone, address, notes, type, payment, finalStatus, total, tip, discount, discount_reason, itemsJson, waiterId, waiterName, table, proof, delivery_zone, delivery_fee], function (err) {
+            const sql = `INSERT INTO orders (id, client, phone, address, notes, type, payment, status, total, tip, discount, discount_reason, items, waiterId, waiterName, tableNum, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+            db.run(sql, [newId, client, phone, address, notes, type, payment, finalStatus, total, tip, discount, discount_reason, itemsJson, waiterId, waiterName, table, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details], function (err) {
                 if (err) return res.status(500).json({ error: err.message });
 
                 // Parse items back for response
@@ -121,6 +128,7 @@ module.exports = (io) => {
                     items: parsedItems,
                     waiterId, waiterName, table, proof,
                     delivery_zone, delivery_fee,
+                    account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details,
                     // Send ISO string directly. Client handles TZ.
                     timestamp: new Date().toISOString()
                 };
@@ -393,6 +401,46 @@ module.exports = (io) => {
                 values.push(req.body.cancelReason);
             }
 
+            if (req.body.payment !== undefined) {
+                updates.push('payment = ?');
+                values.push(req.body.payment);
+            }
+
+            if (req.body.account_id !== undefined) {
+                updates.push('account_id = ?');
+                values.push(req.body.account_id ? parseInt(req.body.account_id, 10) : null);
+            }
+
+            if (req.body.cash_amount !== undefined) {
+                updates.push('cash_amount = ?');
+                values.push(parseFloat(req.body.cash_amount) || 0);
+            }
+
+            if (req.body.transfer_amount !== undefined) {
+                updates.push('transfer_amount = ?');
+                values.push(parseFloat(req.body.transfer_amount) || 0);
+            }
+
+            if (req.body.cash_account_id !== undefined) {
+                updates.push('cash_account_id = ?');
+                values.push(req.body.cash_account_id ? parseInt(req.body.cash_account_id, 10) : null);
+            }
+
+            if (req.body.transfer_account_id !== undefined) {
+                updates.push('transfer_account_id = ?');
+                values.push(req.body.transfer_account_id ? parseInt(req.body.transfer_account_id, 10) : null);
+            }
+
+            if (req.body.payment_details !== undefined) {
+                updates.push('payment_details = ?');
+                values.push(typeof req.body.payment_details === 'object' ? JSON.stringify(req.body.payment_details) : req.body.payment_details);
+            }
+
+            if (req.body.proof !== undefined) {
+                updates.push('proof = ?');
+                values.push(req.body.proof);
+            }
+
             values.push(id); // WHERE clause
 
             const sql = `UPDATE orders SET ${updates.join(', ')} WHERE id = ?`;
@@ -400,7 +448,20 @@ module.exports = (io) => {
             db.run(sql, values, function (err) {
                 if (err) return res.status(500).json({ error: err.message });
 
-                const updateData = { id, status, chefName, deliveryDriverName, cancelReason: req.body.cancelReason };
+                const updateData = {
+                    id,
+                    status,
+                    chefName,
+                    deliveryDriverName,
+                    cancelReason: req.body.cancelReason,
+                    payment: req.body.payment,
+                    account_id: req.body.account_id,
+                    cash_amount: req.body.cash_amount,
+                    transfer_amount: req.body.transfer_amount,
+                    cash_account_id: req.body.cash_account_id,
+                    transfer_account_id: req.body.transfer_account_id,
+                    proof: req.body.proof
+                };
 
                 // Notify relevant rooms via Socket.IO
                 io.to('admin').emit('order_status_update', updateData);
@@ -416,6 +477,11 @@ module.exports = (io) => {
                     io.to('delivery').emit('order_status_update', updateData);
                 }
 
+                if (status === 'Cobrado') {
+                    io.to('admin').emit('cashflow_updated', { type: 'order_collected', orderId: id });
+                    io.to('cajero').emit('cashflow_updated', { type: 'order_collected', orderId: id });
+                }
+
                 // INVENTARIO AUTOMÁTICO: Descuento al pasar a cocina / Reintegro al anular
                 if (status === 'Recibido' || status === 'En Preparación' || status === 'En Cocina') {
                     deductStockForOrder(id, null, req.user?.name || 'Admin', io);
@@ -426,6 +492,146 @@ module.exports = (io) => {
                 res.json(updateData);
             });
         }
+    });
+
+    // POST /orders/:id/cobrar — Cobrar pedido con método de pago (Efectivo, Transferencia, Datáfono, Pago Mixto), cuentas y comprobante
+    router.post('/orders/:id/cobrar', verifyToken, upload.single('proof'), async (req, res) => {
+        const { id } = req.params;
+        const {
+            payment = 'Efectivo',
+            account_id,
+            cash_amount,
+            transfer_amount,
+            cash_account_id,
+            transfer_account_id,
+            payment_details,
+            notes
+        } = req.body;
+
+        // Process proof file if uploaded
+        let proofPath = null;
+        if (req.file) {
+            try {
+                const optimized = await processProof(req.file.path);
+                proofPath = '/uploads/' + path.basename(optimized);
+            } catch (e) {
+                console.error('Error optimizing proof on cobrar:', e.message);
+                proofPath = `/uploads/${req.file.filename}`;
+            }
+        }
+
+        db.get('SELECT * FROM orders WHERE id = ?', [id], (err, order) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
+
+            const finalProof = proofPath || (req.body.proof !== undefined ? req.body.proof : order.proof);
+            let finalPaymentDetails = null;
+            if (payment_details) {
+                finalPaymentDetails = typeof payment_details === 'object' ? JSON.stringify(payment_details) : payment_details;
+            }
+
+            let calcCash = parseFloat(cash_amount) || 0;
+            let calcTransfer = parseFloat(transfer_amount) || 0;
+            let calcCashAcc = cash_account_id ? parseInt(cash_account_id, 10) : null;
+            let calcTransferAcc = transfer_account_id ? parseInt(transfer_account_id, 10) : null;
+
+            if (finalPaymentDetails) {
+                try {
+                    const parsed = JSON.parse(finalPaymentDetails);
+                    if (parsed && Array.isArray(parsed.splits) && parsed.splits.length > 0) {
+                        let sumCash = 0;
+                        let sumTrans = 0;
+                        parsed.splits.forEach(s => {
+                            const amt = parseFloat(s.amount) || 0;
+                            const m = (s.method || '').toLowerCase();
+                            if (m.includes('efectivo') || m === 'cash') {
+                                sumCash += amt;
+                                if (!calcCashAcc && s.account_id) calcCashAcc = parseInt(s.account_id, 10);
+                            } else if (m.includes('trans') || m.includes('nequi') || m.includes('davi') || m.includes('banco')) {
+                                sumTrans += amt;
+                                if (!calcTransferAcc && s.account_id) calcTransferAcc = parseInt(s.account_id, 10);
+                            }
+                        });
+                        if (calcCash === 0 && sumCash > 0) calcCash = sumCash;
+                        if (calcTransfer === 0 && sumTrans > 0) calcTransfer = sumTrans;
+                    }
+                } catch (_) {}
+            }
+
+            const finalCashAmt = calcCash;
+            const finalTransferAmt = calcTransfer;
+            const finalAccId = account_id ? parseInt(account_id, 10) : null;
+            const finalCashAccId = calcCashAcc;
+            const finalTransferAccId = calcTransferAcc;
+
+            let finalNotes = order.notes || '';
+            if (notes && typeof notes === 'string' && notes.trim()) {
+                finalNotes = finalNotes ? `${finalNotes} | Pago: ${notes.trim()}` : notes.trim();
+            }
+
+            const sql = `
+                UPDATE orders SET
+                    status = 'Cobrado',
+                    payment = ?,
+                    account_id = ?,
+                    cash_amount = ?,
+                    transfer_amount = ?,
+                    cash_account_id = ?,
+                    transfer_account_id = ?,
+                    payment_details = ?,
+                    proof = ?,
+                    notes = ?
+                WHERE id = ?
+            `;
+
+            db.run(sql, [
+                payment,
+                finalAccId,
+                finalCashAmt,
+                finalTransferAmt,
+                finalCashAccId,
+                finalTransferAccId,
+                payment_details || null,
+                finalProof,
+                finalNotes,
+                id
+            ], function (uErr) {
+                if (uErr) return res.status(500).json({ error: uErr.message });
+
+                const updateData = {
+                    id,
+                    status: 'Cobrado',
+                    payment,
+                    account_id: finalAccId,
+                    cash_amount: finalCashAmt,
+                    transfer_amount: finalTransferAmt,
+                    cash_account_id: finalCashAccId,
+                    transfer_account_id: finalTransferAccId,
+                    payment_details,
+                    proof: finalProof,
+                    notes: finalNotes,
+                    total: order.total
+                };
+
+                // Notify all panels
+                io.to('admin').emit('order_status_update', updateData);
+                io.to('cajero').emit('order_status_update', updateData);
+                io.to('admin').emit('order_updated', updateData);
+                io.to('cajero').emit('order_updated', updateData);
+                io.to('chef').emit('order_status_update', updateData);
+                io.to('cocinero').emit('order_status_update', updateData);
+                io.to('tracker').emit('order_status_update', updateData);
+                io.to('mesero').emit('order_status_update', updateData);
+                io.to('waiter').emit('order_status_update', updateData);
+                io.to('delivery').emit('order_status_update', updateData);
+
+                // Notify cashflow to refresh
+                io.to('admin').emit('cashflow_updated', { type: 'order_collected', orderId: id });
+                io.to('cajero').emit('cashflow_updated', { type: 'order_collected', orderId: id });
+
+                res.json({ success: true, message: 'Pedido cobrado exitosamente', order: updateData });
+            });
+        });
     });
 
     return router;

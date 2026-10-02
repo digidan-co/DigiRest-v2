@@ -51,6 +51,8 @@ export async function createOrder(orderData) {
                 formData.append('items', JSON.stringify(orderData.items));
             } else if (key === 'proof') {
                 formData.append('proof', orderData.proof);
+            } else if (typeof orderData[key] === 'object' && orderData[key] !== null) {
+                formData.append(key, JSON.stringify(orderData[key]));
             } else {
                 formData.append(key, orderData[key]);
             }

@@ -107,7 +107,13 @@ function initSchema() {
         cancel_reason TEXT,
         displayDate TEXT,
         delivery_zone TEXT,
-        delivery_fee REAL DEFAULT 0
+        delivery_fee REAL DEFAULT 0,
+        account_id INTEGER,
+        cash_amount REAL DEFAULT 0,
+        transfer_amount REAL DEFAULT 0,
+        cash_account_id INTEGER,
+        transfer_account_id INTEGER,
+        payment_details TEXT
     );
 
     CREATE TABLE IF NOT EXISTS config (
@@ -446,6 +452,14 @@ function initSchema() {
             // Migration: Add delivery_zone and delivery_fee to orders
             db.run("ALTER TABLE orders ADD COLUMN delivery_zone TEXT", (err) => { });
             db.run("ALTER TABLE orders ADD COLUMN delivery_fee REAL DEFAULT 0", (err) => { });
+
+            // Migration: Add payment destination accounts and mixed payment breakdown to orders
+            db.run("ALTER TABLE orders ADD COLUMN account_id INTEGER", (err) => { });
+            db.run("ALTER TABLE orders ADD COLUMN cash_amount REAL DEFAULT 0", (err) => { });
+            db.run("ALTER TABLE orders ADD COLUMN transfer_amount REAL DEFAULT 0", (err) => { });
+            db.run("ALTER TABLE orders ADD COLUMN cash_account_id INTEGER", (err) => { });
+            db.run("ALTER TABLE orders ADD COLUMN transfer_account_id INTEGER", (err) => { });
+            db.run("ALTER TABLE orders ADD COLUMN payment_details TEXT", (err) => { });
 
             // Migration: Add Option C columns to toppings (direct stock or linked kitchen supply)
             db.run("ALTER TABLE toppings ADD COLUMN inventory_mode TEXT DEFAULT 'direct'", (err) => { });

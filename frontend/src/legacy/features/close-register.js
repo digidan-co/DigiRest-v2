@@ -274,23 +274,30 @@ function calculateDailyStats() {
 
         // Payment Method Check (Case Insensitive just in case)
         const payment = (order.payment || 'Efectivo').toLowerCase();
+        const isMixed = payment === 'mixto';
         const isTransfer = payment.includes('transferencia') || payment.includes('banco') || payment.includes('nequi') || payment.includes('daviplata');
         
-        if (isTransfer) {
-            totalTransfer += order.total;
+        let cashAmt = 0;
+        let transferAmt = 0;
+
+        if (isMixed) {
+            cashAmt = parseFloat(order.cash_amount) || 0;
+            transferAmt = parseFloat(order.transfer_amount) || Math.max(0, order.total - cashAmt);
+        } else if (isTransfer) {
+            transferAmt = order.total;
         } else {
-            totalCash += order.total;
+            cashAmt = order.total;
         }
+
+        totalCash += cashAmt;
+        totalTransfer += transferAmt;
 
         // Breakdown by type
         const typeGroup = order.type === 'Local' ? 'local' : 'general';
         breakdown[typeGroup].count += 1;
         breakdown[typeGroup].total += order.total;
-        if (isTransfer) {
-            breakdown[typeGroup].transfer += order.total;
-        } else {
-            breakdown[typeGroup].cash += order.total;
-        }
+        breakdown[typeGroup].cash += cashAmt;
+        breakdown[typeGroup].transfer += transferAmt;
 
         // Parse items
         let items = [];

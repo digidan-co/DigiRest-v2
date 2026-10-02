@@ -48,7 +48,7 @@ module.exports = (io) => {
             manualParams.push(endDate);
         }
 
-        // 1. Entradas automáticas por pedidos (Cobrado, Entregado, Terminado)
+        // 1. Entradas automáticas por pedidos (Cobrado)
         let orderSql = `
             SELECT 
                 id, 
@@ -57,14 +57,25 @@ module.exports = (io) => {
                 COALESCE(payment, 'Efectivo') as payment_method,
                 total as amount,
                 timestamp,
-                displayDate
+                displayDate,
+                account_id,
+                cash_amount,
+                transfer_amount,
+                cash_account_id,
+                transfer_account_id,
+                payment_details
             FROM orders
-            WHERE status IN ('Cobrado', 'Entregado', 'Terminado') ${orderDateFilter}
+            WHERE status = 'Cobrado' ${orderDateFilter}
         `;
 
         if (paymentMethod && paymentMethod !== 'Todos' && paymentMethod !== 'all') {
-            orderSql += " AND payment = ?";
+            orderSql += " AND (payment = ? OR payment = 'Mixto')";
             orderParams.push(paymentMethod);
+        }
+
+        if (accountId && accountId !== 'all') {
+            orderSql += " AND (account_id = ? OR cash_account_id = ? OR transfer_account_id = ?)";
+            orderParams.push(parseInt(accountId, 10), parseInt(accountId, 10), parseInt(accountId, 10));
         }
 
         orderSql += " ORDER BY timestamp DESC";
@@ -135,6 +146,33 @@ module.exports = (io) => {
 
                     // Agrupar pedidos del día por método de pago para unificar ingresos
                     const ordersByDayAndMethod = new Map();
+
+                    const addToGroup = (dayStr, pm, amt, orderId, timestamp, displayDate) => {
+                        if (paymentMethod && paymentMethod !== 'Todos' && paymentMethod !== 'all' && pm !== paymentMethod) {
+                            return;
+                        }
+                        const key = `${dayStr}___${pm}`;
+                        if (!ordersByDayAndMethod.has(key)) {
+                            ordersByDayAndMethod.set(key, {
+                                day: dayStr,
+                                payment_method: pm,
+                                totalAmount: 0,
+                                orderCount: 0,
+                                latestTimestamp: timestamp,
+                                latestDisplayDate: displayDate,
+                                orderIds: []
+                            });
+                        }
+                        const grp = ordersByDayAndMethod.get(key);
+                        grp.totalAmount += (Number(amt) || 0);
+                        grp.orderCount += 1;
+                        if (!grp.orderIds.includes(orderId)) grp.orderIds.push(orderId);
+                        if (new Date(timestamp) > new Date(grp.latestTimestamp)) {
+                            grp.latestTimestamp = timestamp;
+                            grp.latestDisplayDate = displayDate;
+                        }
+                    };
+
                     orderRows.forEach(o => {
                         let dayStr = '';
                         try {
@@ -147,27 +185,31 @@ module.exports = (io) => {
                         }
 
                         const pm = o.payment_method || 'Efectivo';
-                        const key = `${dayStr}___${pm}`;
+                        const tot = parseFloat(o.amount) || 0;
 
-                        if (!ordersByDayAndMethod.has(key)) {
-                            ordersByDayAndMethod.set(key, {
-                                day: dayStr,
-                                payment_method: pm,
-                                totalAmount: 0,
-                                orderCount: 0,
-                                latestTimestamp: o.timestamp,
-                                latestDisplayDate: o.displayDate,
-                                orderIds: []
-                            });
+                        let splits = null;
+                        if (o.payment_details) {
+                            try {
+                                const pd = typeof o.payment_details === 'string' ? JSON.parse(o.payment_details) : o.payment_details;
+                                if (pd && Array.isArray(pd.splits) && pd.splits.length > 0) {
+                                    splits = pd.splits;
+                                }
+                            } catch (_) {}
                         }
 
-                        const grp = ordersByDayAndMethod.get(key);
-                        grp.totalAmount += (Number(o.amount) || 0);
-                        grp.orderCount += 1;
-                        grp.orderIds.push(o.id);
-                        if (new Date(o.timestamp) > new Date(grp.latestTimestamp)) {
-                            grp.latestTimestamp = o.timestamp;
-                            grp.latestDisplayDate = o.displayDate;
+                        if (splits) {
+                            splits.forEach(s => {
+                                const sAmt = parseFloat(s.amount) || 0;
+                                const sMethod = s.method || 'Efectivo';
+                                if (sAmt > 0) addToGroup(dayStr, sMethod, sAmt, o.id, o.timestamp, o.displayDate);
+                            });
+                        } else if (pm === 'Mixto') {
+                            const cAmt = parseFloat(o.cash_amount) || 0;
+                            const tAmt = parseFloat(o.transfer_amount) || Math.max(0, tot - cAmt);
+                            if (cAmt > 0) addToGroup(dayStr, 'Efectivo', cAmt, o.id, o.timestamp, o.displayDate);
+                            if (tAmt > 0) addToGroup(dayStr, 'Transferencia', tAmt, o.id, o.timestamp, o.displayDate);
+                        } else {
+                            addToGroup(dayStr, pm, tot, o.id, o.timestamp, o.displayDate);
                         }
                     });
 
@@ -466,11 +508,11 @@ module.exports = (io) => {
             if (!accounts || accounts.length === 0) return res.json([]);
 
             // Calcular saldo real acumulado considerando:
-            // 1. Pedidos en estado 'Cobrado' por método de pago
+            // 1. Pedidos en estado 'Cobrado' por método de pago y cuentas destino
             // 2. Gastos registrados directos
             // 3. Movimientos manuales de flujo de caja
             // 4. Abonos y pagos de CxP / CxC
-            db.all("SELECT id, total, payment, status FROM orders WHERE status IN ('Cobrado', 'Entregado', 'Terminado')", [], (oErr, orders) => {
+            db.all("SELECT id, total, payment, status, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details FROM orders WHERE status = 'Cobrado'", [], (oErr, orders) => {
                 db.all("SELECT account_id, type, amount FROM cash_movements", [], (mErr, movements) => {
                     db.all("SELECT account_id, type, amount FROM finance_payments", [], (pErr, payments) => {
                         db.all("SELECT valor as amount, 'Efectivo' as payment_method FROM gastos_dia", [], (gErr, gastos) => {
@@ -488,21 +530,83 @@ module.exports = (io) => {
                             const enriched = accounts.map(acc => {
                                 let bal = parseFloat(acc.initial_balance) || 0;
 
-                                // 1. Sumar ventas cobradas
+                                // 1. Sumar ventas cobradas dirigiendo a las cuentas seleccionadas
                                 safeOrders.forEach(o => {
                                     const pm = (o.payment || 'Efectivo').toLowerCase();
-                                    const amt = parseFloat(o.total) || 0;
+                                    const tot = parseFloat(o.total) || 0;
+                                    const isMixed = o.payment === 'Mixto' || pm === 'mixto';
 
-                                    if (pm === 'efectivo') {
-                                        if (efectivoAcc && acc.id === efectivoAcc.id) bal += amt;
-                                    } else if (pm.includes('dat') || pm.includes('tarjeta') || pm.includes('bold') || pm.includes('redeban')) {
-                                        if (datafonoAcc && acc.id === datafonoAcc.id) bal += amt;
-                                    } else if (pm.includes('nequi') || pm.includes('daviplata')) {
-                                        if (nequiAcc && acc.id === nequiAcc.id) bal += amt;
-                                        else if (transferAcc && acc.id === transferAcc.id) bal += amt;
+                                    let splits = null;
+                                    if (o.payment_details) {
+                                        try {
+                                            const pd = typeof o.payment_details === 'string' ? JSON.parse(o.payment_details) : o.payment_details;
+                                            if (pd && Array.isArray(pd.splits) && pd.splits.length > 0) {
+                                                splits = pd.splits;
+                                            }
+                                        } catch (_) {}
+                                    }
+
+                                    if (splits) {
+                                        splits.forEach(s => {
+                                            const sAmt = parseFloat(s.amount) || 0;
+                                            if (sAmt <= 0) return;
+                                            const sMethod = (s.method || 'Efectivo').toLowerCase();
+                                            const sAccId = s.account_id ? parseInt(s.account_id, 10) : null;
+                                            if (sAccId && acc.id === sAccId) {
+                                                bal += sAmt;
+                                            } else if (!sAccId) {
+                                                if (sMethod.includes('efectivo') && efectivoAcc && acc.id === efectivoAcc.id) {
+                                                    bal += sAmt;
+                                                } else if ((sMethod.includes('dat') || sMethod.includes('tarjeta') || sMethod.includes('bold') || sMethod.includes('redeban')) && datafonoAcc && acc.id === datafonoAcc.id) {
+                                                    bal += sAmt;
+                                                } else if ((sMethod.includes('nequi') || sMethod.includes('daviplata')) && nequiAcc && acc.id === nequiAcc.id) {
+                                                    bal += sAmt;
+                                                } else if (transferAcc && acc.id === transferAcc.id) {
+                                                    bal += sAmt;
+                                                } else if (efectivoAcc && acc.id === efectivoAcc.id) {
+                                                    bal += sAmt;
+                                                }
+                                            }
+                                        });
+                                    } else if (isMixed) {
+                                        const cashPart = parseFloat(o.cash_amount) || 0;
+                                        const transferPart = parseFloat(o.transfer_amount) || Math.max(0, tot - cashPart);
+
+                                        // Parte Efectivo -> cuenta seleccionada o caja activa
+                                        if (cashPart > 0) {
+                                            if (o.cash_account_id && acc.id === o.cash_account_id) {
+                                                bal += cashPart;
+                                            } else if (!o.cash_account_id && efectivoAcc && acc.id === efectivoAcc.id) {
+                                                bal += cashPart;
+                                            }
+                                        }
+
+                                        // Parte Transferencia -> cuenta seleccionada o banco activo
+                                        if (transferPart > 0) {
+                                            if (o.transfer_account_id && acc.id === o.transfer_account_id) {
+                                                bal += transferPart;
+                                            } else if (!o.transfer_account_id && transferAcc && acc.id === transferAcc.id) {
+                                                bal += transferPart;
+                                            }
+                                        }
                                     } else {
-                                        if (transferAcc && acc.id === transferAcc.id) bal += amt;
-                                        else if (efectivoAcc && acc.id === efectivoAcc.id) bal += amt;
+                                        // Pago Simple: Si el usuario seleccionó una cuenta destino específica, va directo a esa cuenta
+                                        if (o.account_id && acc.id === o.account_id) {
+                                            bal += tot;
+                                        } else if (!o.account_id) {
+                                            // Fallback por tipo de método
+                                            if (pm === 'efectivo') {
+                                                if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
+                                            } else if (pm.includes('dat') || pm.includes('tarjeta') || pm.includes('bold') || pm.includes('redeban')) {
+                                                if (datafonoAcc && acc.id === datafonoAcc.id) bal += tot;
+                                            } else if (pm.includes('nequi') || pm.includes('daviplata')) {
+                                                if (nequiAcc && acc.id === nequiAcc.id) bal += tot;
+                                                else if (transferAcc && acc.id === transferAcc.id) bal += tot;
+                                            } else {
+                                                if (transferAcc && acc.id === transferAcc.id) bal += tot;
+                                                else if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
+                                            }
+                                        }
                                     }
                                 });
 

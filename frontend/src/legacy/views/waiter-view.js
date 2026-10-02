@@ -146,6 +146,16 @@ export function addToWaiterCart(productId) {
     const product = state.products.find(p => p.id === productId);
     if (!product) return;
 
+    // Reset search so all categories are displayed again
+    const searchInput = $('waiter-product-search');
+    if (searchInput && (searchInput.value || _waiterSearchQuery)) {
+        searchInput.value = '';
+        _waiterSearchQuery = '';
+        const clearBtn = $('btn-clear-waiter-search');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        renderWaiterProducts();
+    }
+
     if (product.has_toppings) {
         openClientToppingsModal(product, {
             onConfirm: (customizedItem) => {
@@ -537,23 +547,37 @@ export function handleWaiterProofUpload(orderId) {
     input.click();
 }
 
-export async function openWaiterModal() {
-    console.log('🔵 openWaiterModal called');
-
+export function resetWaiterOrderForm() {
     waiterCart = [];
     updateFloatingCartButton();
 
     const tableInput = $('w-table-num');
     if (tableInput) tableInput.value = '';
 
+    const tableInputReview = $('w-table-num-review');
+    if (tableInputReview) tableInputReview.value = '';
+
     const notesInput = $('w-order-notes');
     if (notesInput) notesInput.value = '';
+
+    const notesInputReview = $('w-order-notes-review');
+    if (notesInputReview) notesInputReview.value = '';
 
     const searchInput = $('waiter-product-search');
     if (searchInput) searchInput.value = '';
     _waiterSearchQuery = '';
+
     const clearBtn = $('btn-clear-waiter-search');
     if (clearBtn) clearBtn.classList.add('hidden');
+
+    renderWaiterProducts();
+}
+window.resetWaiterOrderForm = resetWaiterOrderForm;
+
+export async function openWaiterModal() {
+    console.log('🔵 openWaiterModal called');
+
+    resetWaiterOrderForm();
 
     const modal = $('waiter-order-modal');
 
@@ -687,8 +711,7 @@ export async function handleSendWaiterOrder() {
 
         $('waiter-review-modal').classList.add('hidden');
         $('waiter-order-modal').classList.add('hidden');
-        waiterCart = [];
-        updateFloatingCartButton();
+        resetWaiterOrderForm();
 
         toast(`Pedido #${newId || ''} creado con éxito`, "success");
 
@@ -1057,6 +1080,13 @@ function renderWaiProducts(searchTerm = '') {
 function addToWaiCart(productId) {
     const product = state.products.find(p => p.id === productId);
     if (!product) return;
+
+    // Reset search so all categories are displayed again
+    const searchInput = $('wai-search');
+    if (searchInput && searchInput.value) {
+        searchInput.value = '';
+        renderWaiProducts('');
+    }
 
     if (product.has_toppings) {
         openClientToppingsModal(product, {

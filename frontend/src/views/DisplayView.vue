@@ -101,7 +101,10 @@ const groupedProducts = computed(() => {
 
 function setCat(cat) { activeCat.value = cat; }
 function openGps() { if (window.openGpsModal) window.openGpsModal(); }
-function openDetail(id) { openDisplayDetail(id); }
+function openDetail(id) {
+    searchTerm.value = '';
+    openDisplayDetail(id);
+}
 
 onMounted(async () => {
     if (!state.topDishes7d || state.topDishes7d.length === 0) {
@@ -148,7 +151,7 @@ onMounted(async () => {
         </div>
     </div>
 
-    <div v-show="isDefaultAll" class="space-y-8 mb-8">
+    <div v-show="isDefaultAll && (promoDishes.length > 0 || recDishes.length > 0 || topDishes.length > 0)" class="space-y-8 mb-8">
         <div v-if="promoDishes.length > 0">
             <div class="flex items-center justify-between mb-4 px-1">
                 <div class="flex items-center gap-3">

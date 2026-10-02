@@ -110,6 +110,16 @@ function toggleLogin() {
     }
 }
 
+function handleSelectProduct(id) {
+    searchTerm.value = '';
+    openDisplayDetail(id);
+}
+
+function handleAddProduct(id) {
+    searchTerm.value = '';
+    addToCart(id);
+}
+
 onMounted(async () => {
     setupClientToppingsModalListeners();
     if (!state.topDishes7d || state.topDishes7d.length === 0) {
@@ -206,7 +216,7 @@ onMounted(async () => {
     </div>
 
     <!-- Featured Sections -->
-    <div v-show="!searchTerm.trim()" class="space-y-6 mb-8">
+    <div v-show="!searchTerm.trim() && (promoDishes.length > 0 || recDishes.length > 0 || topDishes.length > 0)" class="space-y-6 mb-8">
         <div v-if="promoDishes.length > 0" id="sec-promos" class="carousel-container-promos rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #fefce8; border: 1px solid #fef08a;">
             <div class="flex items-center justify-between mb-3 px-1">
                 <div class="flex items-center gap-2.5">
@@ -230,7 +240,7 @@ onMounted(async () => {
             <div id="promos-carousel" class="flex gap-2.5 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
                 <div v-for="p in promoDishes" :key="p.id"
                     class="client-product-card carousel-product-card snap-start bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group cursor-pointer"
-                    @click="openDisplayDetail(p.id)">
+                    @click="handleSelectProduct(p.id)">
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
@@ -252,7 +262,7 @@ onMounted(async () => {
                                 </div>
                                 <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
-                            <button type="button" @click.stop="addToCart(p.id)"
+                            <button type="button" @click.stop="handleAddProduct(p.id)"
                                 class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
                                 :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
@@ -287,7 +297,7 @@ onMounted(async () => {
             <div id="recommended-carousel" class="flex gap-2.5 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
                 <div v-for="p in recDishes" :key="p.id"
                     class="client-product-card carousel-product-card snap-start bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group cursor-pointer"
-                    @click="openDisplayDetail(p.id)">
+                    @click="handleSelectProduct(p.id)">
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
@@ -312,7 +322,7 @@ onMounted(async () => {
                                 </div>
                                 <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
-                            <button type="button" @click.stop="addToCart(p.id)"
+                            <button type="button" @click.stop="handleAddProduct(p.id)"
                                 class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
                                 :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
@@ -347,7 +357,7 @@ onMounted(async () => {
             <div id="top-carousel" class="flex gap-2.5 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
                 <div v-for="(p, idx) in topDishes" :key="p.id"
                     class="client-product-card carousel-product-card snap-start bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group cursor-pointer"
-                    @click="openDisplayDetail(p.id)">
+                    @click="handleSelectProduct(p.id)">
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
@@ -370,7 +380,7 @@ onMounted(async () => {
                                 </div>
                                 <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
-                            <button type="button" @click.stop="addToCart(p.id)"
+                            <button type="button" @click.stop="handleAddProduct(p.id)"
                                 class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
                                 :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
@@ -400,10 +410,10 @@ onMounted(async () => {
                 </div>
             </button>
             <div v-show="expandedCats.has(group.name)" class="px-3 pb-3.5">
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                <div class="grid grid-cols-2 py-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                     <div v-for="p in group.products" :key="p.id"
                         class="client-product-card cursor-pointer bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group flex flex-col justify-between"
-                        @click="openDisplayDetail(p.id)">
+                        @click="handleSelectProduct(p.id)">
                         <div class="aspect-square w-full bg-gray-50 relative overflow-hidden shrink-0">
                             <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy"
                                 class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
@@ -425,7 +435,7 @@ onMounted(async () => {
                                     </div>
                                     <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                                 </div>
-                                <button type="button" @click.stop="addToCart(p.id)"
+                                <button type="button" @click.stop="handleAddProduct(p.id)"
                                     class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
                                     :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                     <i class="fas fa-plus text-xs pointer-events-none"></i>

@@ -127,8 +127,14 @@ function validateOrderInput(req, res, next) {
     }
 
     // Validate payment method
-    if (req.body.payment_method !== undefined) {
-        if (!['Efectivo', 'Tarjeta', 'Transferencia', 'Pendiente'].includes(req.body.payment_method)) {
+    const validPayments = ['Efectivo', 'Tarjeta', 'Transferencia', 'Pendiente', 'Mixto', 'Datáfono', 'Nequi', 'Daviplata'];
+    if (req.body.payment_method !== undefined && req.body.payment_method !== '') {
+        if (!validPayments.includes(req.body.payment_method)) {
+            errors.push('Método de pago inválido');
+        }
+    }
+    if (req.body.payment !== undefined && req.body.payment !== '') {
+        if (!validPayments.includes(req.body.payment)) {
             errors.push('Método de pago inválido');
         }
     }

@@ -45,8 +45,14 @@ function productCount(c) {
 function onToggleRec(p, checked) { if (window.toggleProductRecommended) window.toggleProductRecommended(p.id, checked); }
 function onTogglePromo(p, checked) { if (window.toggleProductPromo) window.toggleProductPromo(p.id, checked); }
 function onToggleAvail(p, checked) { if (window.toggleProductAvailability) window.toggleProductAvailability(p.id, checked); }
-function editProduct(p) { if (window.openEditProductModal) window.openEditProductModal(p.id); }
-function duplicateProduct(p) { if (window.openDuplicateProductModal) window.openDuplicateProductModal(p.id); }
+function editProduct(p) {
+    prodSearch.value = '';
+    if (window.openEditProductModal) window.openEditProductModal(p.id);
+}
+function duplicateProduct(p) {
+    prodSearch.value = '';
+    if (window.openDuplicateProductModal) window.openDuplicateProductModal(p.id);
+}
 function deleteProduct(p) { if (window.deleteProductRow) window.deleteProductRow(p.id); }
 function editCategory(c) { if (window.openEditCategoryModal) window.openEditCategoryModal(c.id, c.name); }
 function deleteCategory(c) { if (window.deleteCategoryRow) window.deleteCategoryRow(c.id); }

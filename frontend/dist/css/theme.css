@@ -314,7 +314,7 @@ a.bg-\[\#f5b55f\]:hover,
     border-color: var(--system-primary, #f5b55f) !important;
 }
 .focus\:border-\[var\(--system-primary\)\]:focus {
-    border-color: var(--system-primary, #f5b55f) !important;
+    border-color: var(--system-bg-aside, #052244) !important;
 }
 .hover\:bg-\[var\(--system-primary\)\]:hover {
     background-color: var(--system-primary, #f5b55f) !important;
@@ -460,24 +460,142 @@ input:checked ~ div.w-9.h-5::after {
 }
 
 /* ==========================================================================
-   Bordes de selección, activo y foco: Único borde limpio de 1px (--system-primary)
+   Bordes de selección, activo y foco: Único borde sólido de 1px con el color del Aside (--system-bg-aside)
    ========================================================================== */
 
-/* Eliminar outlines y aros dobles en botones y enlaces */
-button,
-button:focus,
-button:focus-visible,
-button:active,
-[role="button"],
-[role="button"]:focus,
-[role="button"]:focus-visible,
-a:focus,
-a:focus-visible {
-    outline: none !important;
-    outline-offset: 0 !important;
+/* Reset global de aros y halos difusos (elimina aros celestes/azules del navegador y Tailwind) */
+*,
+*::before,
+*::after {
     --tw-ring-width: 0px !important;
     --tw-ring-offset-width: 0px !important;
     --tw-ring-color: transparent !important;
+    --tw-ring-shadow: none !important;
+    --tw-ring-offset-shadow: none !important;
+}
+
+/* Suprimir destello/borde grueso al hacer clic con mouse en botones, módulos e interactivos */
+button:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+.admin-tab-btn:focus:not(:focus-visible),
+.admin-tab-btn:active,
+.admin-section-toggle:focus:not(:focus-visible),
+.admin-section-toggle:active,
+.tab-order-btn:focus:not(:focus-visible),
+.tab-order-btn:active,
+.filter-btn:focus:not(:focus-visible),
+.filter-chip:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+a:active,
+input[type="button"]:focus:not(:focus-visible),
+input[type="button"]:active,
+input[type="submit"]:focus:not(:focus-visible),
+input[type="submit"]:active,
+input[type="reset"]:focus:not(:focus-visible),
+input[type="reset"]:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+#admin-sidebar .admin-tab-btn:focus:not(:focus-visible),
+#admin-sidebar .admin-tab-btn:active,
+#admin-sidebar .admin-section-toggle:focus:not(:focus-visible),
+#admin-sidebar .admin-section-toggle:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Campos de texto, selección y área de texto en foco: borde sólido de 1px con el color del aside configurado */
+input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="date"]):not([type="time"]):not([type="datetime-local"]):not([type="month"]):focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="date"]):not([type="time"]):not([type="datetime-local"]):not([type="month"]):focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+[class*="focus:border-"]:focus,
+[class*="focus:border-"]:focus-visible {
+    border-color: var(--system-bg-aside, #052244) !important;
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: -1px !important;
+    box-shadow: none !important;
+}
+
+/* Inputs tipo fecha y hora en foco (soporta navegación por subcampos internos del navegador) */
+input[type="date"]:focus,
+input[type="date"]:focus-within,
+input[type="date"]:focus-visible,
+input[type="time"]:focus,
+input[type="time"]:focus-within,
+input[type="time"]:focus-visible,
+input[type="datetime-local"]:focus,
+input[type="datetime-local"]:focus-within,
+input[type="datetime-local"]:focus-visible,
+input[type="month"]:focus,
+input[type="month"]:focus-within,
+input[type="month"]:focus-visible {
+    border-color: var(--system-bg-aside, #052244) !important;
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 1px !important;
+    box-shadow: none !important;
+}
+
+/* Inputs tipo file y su selector de archivo */
+input[type="file"]:focus,
+input[type="file"]:focus-visible {
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 2px !important;
+    border-color: var(--system-bg-aside, #052244) !important;
+    border-radius: 0.5rem !important;
+}
+
+input[type="file"]::file-selector-button:focus,
+input[type="file"]::file-selector-button:focus-visible {
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 1px !important;
+}
+
+label:has(input[type="file"]:focus),
+label:has(input[type="file"]:focus-visible) {
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 2px !important;
+}
+
+/* Checkboxes y Radios tradicionales en foco */
+input[type="checkbox"]:not(.sr-only):focus,
+input[type="checkbox"]:not(.sr-only):focus-visible,
+input[type="radio"]:focus,
+input[type="radio"]:focus-visible {
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 2px !important;
+    border-color: var(--system-bg-aside, #052244) !important;
+    box-shadow: none !important;
+}
+
+/* Toggles / Switches (checkboxes sr-only con elemento visual adyacente) */
+.peer:focus ~ div,
+.peer:focus-visible ~ div,
+.peer:focus ~ span,
+.peer:focus-visible ~ span,
+label:has(.peer:focus) > div,
+label:has(.peer:focus-visible) > div,
+label:has(input[type="checkbox"]:focus) > div,
+label:has(input[type="checkbox"]:focus-visible) > div {
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 2px !important;
+}
+
+/* Botones, módulos y elementos interactivos en foco con teclado (TAB): borde sólido de 1px con el color del aside */
+button:focus-visible,
+[role="button"]:focus-visible,
+.admin-tab-btn:focus-visible,
+.admin-section-toggle:focus-visible,
+input[type="button"]:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="reset"]:focus-visible,
+a:focus-visible {
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 1px !important;
+    box-shadow: none !important;
 }
 
 /* Botones de Temas Predefinidos: exactamente un único borde de 1px */
@@ -489,9 +607,10 @@ a:focus-visible {
 
 .theme-preset-btn:focus,
 .theme-preset-btn:focus-visible {
-    outline: none !important;
+    outline: 1px solid var(--system-bg-aside, #052244) !important;
+    outline-offset: 1px !important;
     box-shadow: none !important;
-    border-color: var(--system-primary) !important;
+    border-color: var(--system-bg-aside, #052244) !important;
 }
 
 .theme-preset-btn.theme-preset-active,
@@ -501,18 +620,6 @@ a:focus-visible {
     box-shadow: none !important;
     border-color: var(--system-primary) !important;
     background-color: #ffffff !important;
-}
-
-/* Entradas de formulario, selecciones y áreas de texto en foco: único borde de 1px */
-input:focus,
-select:focus,
-textarea:focus {
-    border-color: var(--system-primary) !important;
-    outline: none !important;
-    box-shadow: none !important;
-    --tw-ring-width: 0px !important;
-    --tw-ring-offset-width: 0px !important;
-    --tw-ring-color: transparent !important;
 }
 
 

@@ -37,6 +37,13 @@ module.exports = (io) => {
         const shouldRemoveProof = (proof === "" || proof === "null" || proof === null) && !newProofPath;
         const shouldReplaceProof = !!newProofPath;
 
+        const account_id = req.body.account_id ? parseInt(req.body.account_id, 10) : null;
+        const cash_amount = parseFloat(req.body.cash_amount) || 0;
+        const transfer_amount = parseFloat(req.body.transfer_amount) || 0;
+        const cash_account_id = req.body.cash_account_id ? parseInt(req.body.cash_account_id, 10) : null;
+        const transfer_account_id = req.body.transfer_account_id ? parseInt(req.body.transfer_account_id, 10) : null;
+        const payment_details = typeof req.body.payment_details === 'object' ? JSON.stringify(req.body.payment_details) : (req.body.payment_details || null);
+
         // First, get current order to see if there is an old file to delete
         db.get('SELECT proof, type, waiterId, waiterName FROM orders WHERE id = ?', [id], (err, currentOrder) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -61,23 +68,26 @@ module.exports = (io) => {
                 // UPDATE with new file
                 sql = `UPDATE orders SET 
                          client = ?, phone = ?, address = ?, notes = ?, 
-                         type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?, proof = ?
+                         type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?,
+                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?, proof = ?
                          WHERE id = ?`;
-                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, newProofPath, id];
+                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, newProofPath, id];
             } else if (shouldRemoveProof) {
                 // UPDATE setting proof to NULL
                 sql = `UPDATE orders SET 
                          client = ?, phone = ?, address = ?, notes = ?, 
-                         type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?, proof = NULL
+                         type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?,
+                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?, proof = NULL
                          WHERE id = ?`;
-                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, id];
+                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, id];
             } else {
                 // UPDATE without changing proof
                 sql = `UPDATE orders SET 
                          client = ?, phone = ?, address = ?, notes = ?, 
-                         type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?
+                         type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?,
+                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?
                          WHERE id = ?`;
-                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, id];
+                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, id];
             }
 
             db.run(sql, params, function (err) {

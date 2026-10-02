@@ -30,20 +30,22 @@
           </span>
         </div>
 
-        <!-- Fila inferior: Saldo de documentos y Vencimiento -->
+        <!-- Fila inferior: Vencimiento (Facturación / Docs oculto temporalmente) -->
         <p class="text-[10px] text-gray-400 mt-0.5 leading-tight flex items-center gap-1.5">
-          <span
-            class="font-semibold text-gray-600 flex items-center gap-0.5"
-            :class="{ 'text-amber-600 font-bold': status.saldo_documentos <= 10 && status.saldo_documentos > 0, 'text-rose-600 font-bold': status.saldo_documentos === 0 }"
-            :title="`${status.saldo_documentos} documentos disponibles para facturación`"
-          >
-            <svg class="w-2.5 h-2.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-            {{ status.saldo_documentos ?? 0 }} docs
-          </span>
-          <span class="text-gray-300">•</span>
+          <template v-if="showDocumentos">
+            <span
+              class="font-semibold text-gray-600 flex items-center gap-0.5"
+              :class="{ 'text-amber-600 font-bold': status.saldo_documentos <= 10 && status.saldo_documentos > 0, 'text-rose-600 font-bold': status.saldo_documentos === 0 }"
+              :title="`${status.saldo_documentos} documentos disponibles para facturación`"
+            >
+              <svg class="w-2.5 h-2.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              {{ status.saldo_documentos ?? 0 }} docs
+            </span>
+            <span class="text-gray-300">•</span>
+          </template>
           <span
             :class="daysClass"
             :title="status.vencimiento ? `Fecha límite: ${formatDate(status.vencimiento)}` : 'Sin fecha registrada'"
@@ -79,6 +81,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+
+// Ocultado temporalmente hasta implementar facturación electrónica
+const showDocumentos = ref(false);
 
 const status = ref({
   configured: true,
