@@ -21,6 +21,7 @@ import ReservationsList from './components/ReservationsList.vue';
 import SaasStatusPanel from './components/SaasStatusPanel.vue';
 import SaasWarningModal from './components/SaasWarningModal.vue';
 import NovedadesModal from './components/NovedadesModal.vue';
+import StaffHeader from './components/StaffHeader.vue';
 
 
 // Bootstrap the original application logic. This module is loaded as a deferred
@@ -47,6 +48,14 @@ const root = document.createElement('div');
 root.id = 'app';
 document.body.appendChild(root);
 app.mount(root);
+
+// --- Staff Header (Header with user role & logout for waiter, chef, delivery) ---
+const staffHeaderMount = document.getElementById('staff-header-mount');
+if (staffHeaderMount) {
+    const staffHeaderApp = createApp(StaffHeader);
+    staffHeaderApp.use(pinia);
+    staffHeaderApp.mount(staffHeaderMount);
+}
 
 // --- Migrated views (Vue components mounted onto their original containers) ---
 // Delivery view: full Vue SFC port. It owns its own order subscription.

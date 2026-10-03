@@ -245,7 +245,7 @@ watch([generalOrders, waiterOrders], async () => {
                 </div>
 
                 <div class="p-2 bg-gray-50 border-t border-gray-100">
-                    <div class="slider-container h-8" :class="sliderClass(o)"
+                    <div class="slider-container h-8" :class="sliderClass(o)" :key="'waiter-slider-' + o.id + '-' + o.status"
                         :id="'slider-' + o.id" :data-id="o.id" :data-action="nextStatus(o)" data-callback="updateWaiterOrderStatus">
                         <div class="slider-text text-xs text-white font-bold uppercase tracking-wider">{{ sliderText(o) }} <i class="fas fa-chevron-right ml-1 opacity-50"></i></div>
                         <div class="slider-thumb w-8 h-8" :class="sliderThumbClass(o)">
@@ -323,7 +323,7 @@ watch([generalOrders, waiterOrders], async () => {
                 </div>
 
                 <div class="p-2 bg-gray-50 border-t border-gray-100">
-                    <div class="slider-container h-8" :class="sliderClass(o)"
+                    <div class="slider-container h-8" :class="sliderClass(o)" :key="'general-slider-' + o.id + '-' + o.status"
                         :id="'slider-' + o.id" :data-id="o.id" :data-action="nextStatus(o)" data-callback="updateChefStatus">
                         <div class="slider-text text-xs text-white font-bold uppercase tracking-wider">{{ sliderText(o) }} <i class="fas fa-chevron-right ml-1 opacity-50"></i></div>
                         <div class="slider-thumb w-8 h-8" :class="sliderThumbClass(o)">

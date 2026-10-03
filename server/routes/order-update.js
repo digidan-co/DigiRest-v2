@@ -236,10 +236,11 @@ module.exports = (io) => {
                         io.to('cocinero').emit('order_updated', orderData);
                         io.to('tracker').emit('order_updated', orderData);
 
-                        // If it has a waiter, notify them too
+                        // Always notify waiters room and specific waiter if assigned
+                        io.to('waiter').emit('order_updated', orderData);
+                        io.to('mesero').emit('order_updated', orderData);
                         if (orderData.waiterId) {
                             io.to(`user_${orderData.waiterId}`).emit('order_updated', orderData);
-                            io.to('mesero').emit('order_updated', orderData); // Broadcast to all waiters just in case (e.g. general list)
                         }
                     }
                 });

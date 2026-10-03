@@ -246,7 +246,7 @@ module.exports = (io) => {
             params.push(from);
         } else if (req.query.all !== 'true') {
             const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            sql += " AND datetime(timestamp) > datetime(?)";
+            sql += " AND (status NOT IN ('Cobrado', 'Anulado') OR datetime(timestamp) > datetime(?))";
             params.push(yesterday);
         }
 
@@ -270,7 +270,7 @@ module.exports = (io) => {
         // Count total for pagination metadata
         // For count, we don't need the subqueries, but easier to just wrap or replace
         const countSql = `SELECT COUNT(*) as total FROM orders o WHERE 1=1 ` +
-            (from ? "AND datetime(timestamp) >= datetime(?) " : (req.query.all !== 'true' ? "AND datetime(timestamp) > datetime(?) " : "")) +
+            (from ? "AND datetime(timestamp) >= datetime(?) " : (req.query.all !== 'true' ? "AND (status NOT IN ('Cobrado', 'Anulado') OR datetime(timestamp) > datetime(?)) " : "")) +
             (to ? "AND datetime(timestamp) <= datetime(?) " : "") +
             (status ? "AND status = ? " : "") +
             (type ? "AND type = ? " : "");
@@ -518,6 +518,7 @@ module.exports = (io) => {
                 // Emit to delivery room when status is delivery-related OR when deliveryDriverId changes (including unlock)
                 if (status === 'Terminado' || status === 'En ruta' || status === 'En Reparto' || status === 'Entregado' || req.body.deliveryDriverId !== undefined) {
                     io.to('delivery').emit('order_status_update', updateData);
+                    io.to('repartidor').emit('order_status_update', updateData);
                 }
 
                 if (status === 'Cobrado') {

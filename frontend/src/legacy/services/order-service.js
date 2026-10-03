@@ -2,7 +2,42 @@ import { ApiClient } from './api-client.js';
 import { OfflineDB } from './offline-db.js';
 import { state } from '../core/state.js';
 
-// Use the shared authenticated socket singleton
+// Shared authenticated socket singleton & room synchronizer
+export function authenticateSocket() {
+    const sock = window.socket || (typeof io === 'function' ? io() : null);
+    if (!sock) return;
+
+    const token = (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_token') : null) || (window.ApiClient && ApiClient.getToken ? ApiClient.getToken() : null);
+    let user = state.user;
+    if (!user && typeof localStorage !== 'undefined') {
+        try {
+            const raw = localStorage.getItem('pos_user');
+            if (raw) user = JSON.parse(raw);
+        } catch (_) {}
+    }
+
+    if (user && user.role) {
+        sock.emit('authenticate', {
+            token: token,
+            role: user.role,
+            userId: user.id
+        });
+        // Explicitly join role room and bidirectional aliases
+        sock.emit('join_room', user.role);
+        if (user.role === 'chef') sock.emit('join_room', 'cocinero');
+        if (user.role === 'cocinero') sock.emit('join_room', 'chef');
+        if (user.role === 'waiter') sock.emit('join_room', 'mesero');
+        if (user.role === 'mesero') sock.emit('join_room', 'waiter');
+        if (user.role === 'delivery') sock.emit('join_room', 'repartidor');
+        if (user.role === 'repartidor') sock.emit('join_room', 'delivery');
+        if (user.id) sock.emit('join_room', `user_${user.id}`);
+    }
+
+    // Tracker room is publicly accessible
+    sock.emit('join_room', 'tracker');
+}
+window.authenticateSocket = authenticateSocket;
+
 const getSocket = () => {
     if (!window.socket && typeof io === 'function') {
         window.socket = io({
@@ -16,8 +51,14 @@ const getSocket = () => {
             upgrade: true
         });
         window.socket.on('connect', () => {
-            if (window.authenticateSocket) window.authenticateSocket();
+            authenticateSocket();
         });
+        window.socket.on('reconnect', () => {
+            authenticateSocket();
+        });
+    }
+    if (window.socket && window.socket.connected) {
+        authenticateSocket();
     }
     return window.socket || (typeof io === 'function' ? io() : null);
 };
@@ -262,23 +303,8 @@ export async function deleteOrder(id) {
  * Fetches initial state via API, then listens for socket events.
  */
 export function listenToOrders(viewMode, callback) {
-    // 1. Load initial data
-    // For tracker mode, include ALL orders. For other modes, exclude Local orders.
-    // For tracker mode, include ALL orders. For other modes, exclude Local orders.
-    const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-    // Use forceNetwork=true for admin to bypass service worker cache (critical for cajero role)
-    const forceNetwork = viewMode === 'admin';
-    ApiClient.get(endpoint, forceNetwork).then(orders => {
-        let filteredByType = orders;
-        if (viewMode !== 'tracker' && viewMode !== 'admin') {
-            // Exclude Local orders for chef/delivery views (they use listenToWaiterOrders)
-            filteredByType = orders.filter(o => o.type !== 'Local');
-        }
-        const filtered = filterOrders(filteredByType, viewMode);
-        callback(filtered);
-    }).catch(err => console.error("Error loading orders:", err));
+    let currentOrders = [];
 
-    // 2. Listen for Socket.io events
     // Helper to filter by type based on viewMode
     const applyTypeFilter = (orders) => {
         if (viewMode !== 'tracker' && viewMode !== 'admin') {
@@ -287,40 +313,76 @@ export function listenToOrders(viewMode, callback) {
         return orders;
     };
 
+    const pushUpdate = () => {
+        callback(filterOrders(applyTypeFilter(currentOrders), viewMode));
+    };
+
+    // 1. Load initial data
+    const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+    const forceNetwork = viewMode === 'admin';
+    ApiClient.get(endpoint, forceNetwork).then(orders => {
+        currentOrders = Array.isArray(orders) ? orders : (orders?.orders || []);
+        pushUpdate();
+    }).catch(err => console.error("Error loading orders:", err));
+
+    // 2. Socket.io listeners with instant in-memory sync + background HTTP validation
     const onNewOrder = (order) => {
-        // For tracker/admin, always refresh. For others, only if not Local.
+        if (!order || !order.id) return;
         if (viewMode === 'tracker' || viewMode === 'admin' || order.type !== 'Local') {
-            const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-            ApiClient.get(endpoint, true).then(orders => {
-                callback(filterOrders(applyTypeFilter(orders), viewMode));
-            });
+            const exists = currentOrders.some(o => o.id == order.id);
+            if (!exists) {
+                currentOrders.unshift(order);
+                pushUpdate();
+            }
+            const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+            ApiClient.get(fetchEndpoint, true).then(orders => {
+                currentOrders = Array.isArray(orders) ? orders : (orders?.orders || []);
+                pushUpdate();
+            }).catch(e => console.warn('Background sync warning:', e));
         }
     };
 
-    const onUpdate = ({ id, status }) => {
-        // Re-fetch all to update
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            callback(filterOrders(applyTypeFilter(orders), viewMode));
-        });
+    const onUpdate = (updateData) => {
+        if (!updateData || !updateData.id) return;
+        const idx = currentOrders.findIndex(o => o.id == updateData.id);
+        if (idx !== -1) {
+            currentOrders[idx] = { ...currentOrders[idx], ...updateData };
+            pushUpdate();
+        }
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            currentOrders = Array.isArray(orders) ? orders : (orders?.orders || []);
+            pushUpdate();
+        }).catch(e => console.warn('Background sync warning:', e));
     };
 
-    // Listen for order_updated event (for full order edits)
     const onOrderUpdated = (updatedOrder) => {
-        // Re-fetch to get latest state
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            callback(filterOrders(applyTypeFilter(orders), viewMode));
-        });
+        if (!updatedOrder || !updatedOrder.id) return;
+        const idx = currentOrders.findIndex(o => o.id == updatedOrder.id);
+        if (idx !== -1) {
+            currentOrders[idx] = { ...currentOrders[idx], ...updatedOrder };
+        } else if (viewMode === 'tracker' || viewMode === 'admin' || updatedOrder.type !== 'Local') {
+            currentOrders.unshift(updatedOrder);
+        }
+        pushUpdate();
+
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            currentOrders = Array.isArray(orders) ? orders : (orders?.orders || []);
+            pushUpdate();
+        }).catch(e => console.warn('Background sync warning:', e));
     };
 
-    // Listen for order_deleted event
     const onOrderDeleted = ({ id }) => {
-        // Re-fetch to get latest state
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            callback(filterOrders(applyTypeFilter(orders), viewMode));
-        });
+        if (id) {
+            currentOrders = currentOrders.filter(o => o.id != id);
+            pushUpdate();
+        }
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            currentOrders = Array.isArray(orders) ? orders : (orders?.orders || []);
+            pushUpdate();
+        }).catch(e => console.warn('Background sync warning:', e));
     };
 
     const sock = getSocket();
@@ -328,14 +390,15 @@ export function listenToOrders(viewMode, callback) {
     sock.on('order_status_update', onUpdate);
     sock.on('order_updated', onOrderUpdated);
     sock.on('order_deleted', onOrderDeleted);
-    sock.on('orders_cleaned', onOrderDeleted); // Re-fetch on bulk cleanup
+    sock.on('orders_cleaned', onOrderDeleted);
 
     // Note events (trigger refresh to update counts)
     const onNoteEvent = () => {
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            callback(filterOrders(applyTypeFilter(orders), viewMode));
-        });
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            currentOrders = Array.isArray(orders) ? orders : (orders?.orders || []);
+            pushUpdate();
+        }).catch(e => console.warn('Background note sync warning:', e));
     };
 
     sock.on('new_order_note', onNoteEvent);
@@ -343,26 +406,24 @@ export function listenToOrders(viewMode, callback) {
     sock.on('order_note_deleted', onNoteEvent);
 
     const onSyncComplete = () => {
-        // Reload both server and offline orders (works even when offline)
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
         Promise.all([
-            ApiClient.get(endpoint, true).catch(err => {
+            ApiClient.get(fetchEndpoint, true).catch(err => {
                 console.error("Error fetching orders on sync:", err);
-                    // Fallback: preserve previously loaded server orders from state
-                    const prevOrders = (state.orders || []);
-                return prevOrders.filter(o => !o._offline);
+                return (state.orders || []).filter(o => !o._offline);
             }),
             getOfflineOrders()
         ]).then(([serverOrders, offlineOrders]) => {
-            let merged = [...offlineOrders, ...serverOrders];
-            // Deduplicate by ID (server version wins)
+            const rawServer = Array.isArray(serverOrders) ? serverOrders : (serverOrders?.orders || []);
+            let merged = [...(offlineOrders || []), ...rawServer];
             const seen = new Set();
             merged = merged.filter(order => {
                 if (seen.has(order.id)) return false;
                 seen.add(order.id);
                 return true;
             });
-            callback(filterOrders(applyTypeFilter(merged), viewMode));
+            currentOrders = merged;
+            pushUpdate();
         });
     };
     window.addEventListener('offline_sync_complete', onSyncComplete);
@@ -374,7 +435,7 @@ export function listenToOrders(viewMode, callback) {
         sock.off('order_status_update', onUpdate);
         sock.off('order_updated', onOrderUpdated);
         sock.off('order_deleted', onOrderDeleted);
-        sock.off('orders_cleaned', onOrderDeleted); // Unsubscribe
+        sock.off('orders_cleaned', onOrderDeleted);
         sock.off('new_order_note', onNoteEvent);
         sock.off('order_note_updated', onNoteEvent);
         sock.off('order_note_deleted', onNoteEvent);
@@ -402,69 +463,101 @@ function filterOrders(orders, viewMode) {
 
 // Listen to Waiter Orders (Local type only)
 export function listenToWaiterOrders(viewMode, callback) {
+    let currentWaiterOrders = [];
+
+    const pushUpdate = () => {
+        callback(filterOrders(currentWaiterOrders.filter(o => o.type === 'Local'), viewMode));
+    };
+
     // 1. Load initial data - only Local orders (including offline orders)
     const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-    // Use forceNetwork=true for admin to bypass service worker cache
     const forceNetwork = viewMode === 'admin';
-    // Load both server orders and offline orders in parallel
     Promise.all([
         ApiClient.get(endpoint, forceNetwork).catch(err => {
             console.error("Error loading waiter orders from server:", err);
-            // Fallback: preserve previously loaded server orders from state
             const prevOrders = (state.waiterOrders || state.orders || []);
             return prevOrders.filter(o => !o._offline);
         }),
         getOfflineOrders()
     ]).then(([serverOrders, offlineOrders]) => {
-        const localServerOrders = serverOrders.filter(o => o.type === 'Local');
-        const localOfflineOrders = offlineOrders.filter(o => o.type === 'Local');
-        // Merge: offline orders first, then server orders (server has authoritative version).
-        // Deduplicate by ID (server version wins since it appears later).
+        const rawServer = Array.isArray(serverOrders) ? serverOrders : (serverOrders?.orders || []);
+        const localServerOrders = rawServer.filter(o => o.type === 'Local');
+        const localOfflineOrders = (offlineOrders || []).filter(o => o.type === 'Local');
         const seen = new Set();
         const merged = [];
-        for (const order of [...localOfflineOrders, ...localServerOrders]) {
+        // Server orders first (authoritative), followed by any pending offline orders
+        for (const order of [...localServerOrders, ...localOfflineOrders]) {
             if (!seen.has(order.id)) {
                 seen.add(order.id);
                 merged.push(order);
             }
         }
-        const filtered = filterOrders(merged, viewMode);
-        callback(filtered);
+        currentWaiterOrders = merged;
+        pushUpdate();
     }).catch(err => console.error("Error loading waiter orders:", err));
 
-    // 2. Listen for Socket.io events
+    // 2. Listen for Socket.io events with instant in-memory sync + background HTTP validation
     const onNewOrder = (order) => {
+        if (!order || !order.id) return;
         if (order.type === 'Local') {
-            const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-            ApiClient.get(endpoint, true).then(orders => {
-                const localOrders = orders.filter(o => o.type === 'Local');
-                callback(filterOrders(localOrders, viewMode));
-            });
+            const exists = currentWaiterOrders.some(o => o.id == order.id);
+            if (!exists) {
+                currentWaiterOrders.unshift(order);
+                pushUpdate();
+            }
+            const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+            ApiClient.get(fetchEndpoint, true).then(orders => {
+                const raw = Array.isArray(orders) ? orders : (orders?.orders || []);
+                currentWaiterOrders = raw.filter(o => o.type === 'Local');
+                pushUpdate();
+            }).catch(e => console.warn('Background sync warning:', e));
         }
     };
 
-    const onUpdate = ({ id, status }) => {
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            const localOrders = orders.filter(o => o.type === 'Local');
-            callback(filterOrders(localOrders, viewMode));
-        });
+    const onUpdate = (updateData) => {
+        if (!updateData || !updateData.id) return;
+        const idx = currentWaiterOrders.findIndex(o => o.id == updateData.id);
+        if (idx !== -1) {
+            currentWaiterOrders[idx] = { ...currentWaiterOrders[idx], ...updateData };
+            pushUpdate();
+        }
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            const raw = Array.isArray(orders) ? orders : (orders?.orders || []);
+            currentWaiterOrders = raw.filter(o => o.type === 'Local');
+            pushUpdate();
+        }).catch(e => console.warn('Background sync warning:', e));
     };
 
     const onOrderUpdated = (updatedOrder) => {
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            const localOrders = orders.filter(o => o.type === 'Local');
-            callback(filterOrders(localOrders, viewMode));
-        });
+        if (!updatedOrder || !updatedOrder.id) return;
+        const idx = currentWaiterOrders.findIndex(o => o.id == updatedOrder.id);
+        if (idx !== -1) {
+            currentWaiterOrders[idx] = { ...currentWaiterOrders[idx], ...updatedOrder };
+            pushUpdate();
+        } else if (updatedOrder.type === 'Local') {
+            currentWaiterOrders.unshift(updatedOrder);
+            pushUpdate();
+        }
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            const raw = Array.isArray(orders) ? orders : (orders?.orders || []);
+            currentWaiterOrders = raw.filter(o => o.type === 'Local');
+            pushUpdate();
+        }).catch(e => console.warn('Background sync warning:', e));
     };
 
     const onOrderDeleted = ({ id }) => {
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            const localOrders = orders.filter(o => o.type === 'Local');
-            callback(filterOrders(localOrders, viewMode));
-        });
+        if (id) {
+            currentWaiterOrders = currentWaiterOrders.filter(o => o.id != id);
+            pushUpdate();
+        }
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            const raw = Array.isArray(orders) ? orders : (orders?.orders || []);
+            currentWaiterOrders = raw.filter(o => o.type === 'Local');
+            pushUpdate();
+        }).catch(e => console.warn('Background sync warning:', e));
     };
 
     const sock = getSocket();
@@ -476,11 +569,12 @@ export function listenToWaiterOrders(viewMode, callback) {
 
     // Note events for waiter orders
     const onNoteEvent = () => {
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
-        ApiClient.get(endpoint, true).then(orders => {
-            const localOrders = orders.filter(o => o.type === 'Local');
-            callback(filterOrders(localOrders, viewMode));
-        });
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        ApiClient.get(fetchEndpoint, true).then(orders => {
+            const raw = Array.isArray(orders) ? orders : (orders?.orders || []);
+            currentWaiterOrders = raw.filter(o => o.type === 'Local');
+            pushUpdate();
+        }).catch(e => console.warn('Background sync warning:', e));
     };
 
     sock.on('new_order_note', onNoteEvent);
@@ -488,28 +582,27 @@ export function listenToWaiterOrders(viewMode, callback) {
     sock.on('order_note_deleted', onNoteEvent);
 
     const onSyncComplete = () => {
-        // Reload both server and offline orders (works even when offline)
-        const endpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
+        const fetchEndpoint = viewMode === 'admin' ? '/orders?all=true' : '/orders';
         Promise.all([
-            ApiClient.get(endpoint, true).catch(err => {
+            ApiClient.get(fetchEndpoint, true).catch(err => {
                 console.error("Error fetching waiter orders on sync:", err);
-                    // Fallback: preserve previously loaded server orders from state
-                    const prevOrders = (state.waiterOrders || state.orders || []);
-                return prevOrders.filter(o => !o._offline);
+                return (state.waiterOrders || state.orders || []).filter(o => !o._offline);
             }),
             getOfflineOrders()
         ]).then(([serverOrders, offlineOrders]) => {
-            const localServerOrders = serverOrders.filter(o => o.type === 'Local');
-            const localOfflineOrders = offlineOrders.filter(o => o.type === 'Local');
+            const rawServer = Array.isArray(serverOrders) ? serverOrders : (serverOrders?.orders || []);
+            const localServerOrders = rawServer.filter(o => o.type === 'Local');
+            const localOfflineOrders = (offlineOrders || []).filter(o => o.type === 'Local');
             const seen = new Set();
             const merged = [];
-            for (const order of [...localOfflineOrders, ...localServerOrders]) {
+            for (const order of [...localServerOrders, ...localOfflineOrders]) {
                 if (!seen.has(order.id)) {
                     seen.add(order.id);
                     merged.push(order);
                 }
             }
-            callback(filterOrders(merged, viewMode));
+            currentWaiterOrders = merged;
+            pushUpdate();
         });
     };
     window.addEventListener('offline_sync_complete', onSyncComplete);
@@ -521,7 +614,7 @@ export function listenToWaiterOrders(viewMode, callback) {
         sock.off('order_status_update', onUpdate);
         sock.off('order_updated', onOrderUpdated);
         sock.off('order_deleted', onOrderDeleted);
-        sock.off('orders_cleaned', onOrderDeleted); // Unsubscribe
+        sock.off('orders_cleaned', onOrderDeleted);
         sock.off('new_order_note', onNoteEvent);
         sock.off('order_note_updated', onNoteEvent);
         sock.off('order_note_deleted', onNoteEvent);

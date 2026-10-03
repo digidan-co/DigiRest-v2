@@ -117,11 +117,13 @@ watch(orders, async () => {
                 <i class="fas fa-ban mr-2"></i> No disponible
             </div>
             <div v-else-if="o.status === 'Terminado'"
+                :key="'deliv-' + o.id + '-Terminado'"
                 class="slider-container bg-blue-600 h-8" :id="'slider-' + o.id" :data-id="o.id" data-action="En Reparto" data-callback="updateOrderStatus">
                 <div class="slider-text text-xs">Iniciar Ruta <i class="fas fa-chevron-right ml-1 opacity-50"></i></div>
                 <div class="slider-thumb w-8 h-8 border-blue-600"><i class="fas fa-motorcycle text-xs"></i></div>
             </div>
             <div v-else
+                :key="'deliv-' + o.id + '-EnReparto'"
                 class="slider-container bg-green-600 h-8" :id="'slider-' + o.id" :data-id="o.id" data-action="Entregado" data-callback="updateOrderStatus">
                 <div class="slider-text text-xs">Entregado <i class="fas fa-chevron-right ml-1 opacity-50"></i></div>
                 <div class="slider-thumb w-8 h-8 border-green-600"><i class="fas fa-check text-xs"></i></div>

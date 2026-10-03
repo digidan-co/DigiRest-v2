@@ -32,20 +32,38 @@ export const getSafeDate = (date) => {
 
 export function initSlideButtons() {
     document.querySelectorAll('.slider-container').forEach(slider => {
-        // Prevent double initialization
-        if (slider.dataset.initialized === 'true') return;
-        slider.dataset.initialized = 'true';
-
         const thumb = slider.querySelector('.slider-thumb');
         const text = slider.querySelector('.slider-text');
+        if (!thumb) return;
+
+        // If already initialized, make sure position is reset and return
+        if (slider.dataset.initialized === 'true') {
+            thumb.style.transform = 'translateX(0)';
+            if (text) text.style.opacity = '1';
+            return;
+        }
+        slider.dataset.initialized = 'true';
+
         let isDragging = false;
-        let startX;
-        let currentX;
+        let startX = 0;
+        let currentX = 0;
+
+        const resetSlider = () => {
+            thumb.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            thumb.style.transform = 'translateX(0)';
+            if (text) {
+                text.style.transition = 'opacity 0.3s ease';
+                text.style.opacity = '1';
+            }
+            currentX = 0;
+            isDragging = false;
+        };
 
         const startDrag = (e) => {
             isDragging = true;
             startX = (e.touches ? e.touches[0].clientX : e.clientX);
             thumb.style.transition = 'none';
+            if (text) text.style.transition = 'none';
         };
 
         const moveDrag = (e) => {
@@ -57,18 +75,22 @@ export function initSlideButtons() {
             currentX = Math.max(0, Math.min(deltaX, maxDrag));
             thumb.style.transform = `translateX(${currentX}px)`;
 
-            const opacity = 1 - (currentX / maxDrag);
-            text.style.opacity = opacity;
+            if (text && maxDrag > 0) {
+                const opacity = 1 - (currentX / maxDrag);
+                text.style.opacity = Math.max(0, Math.min(1, opacity));
+            }
         };
 
         const endDrag = () => {
             if (!isDragging) return;
             isDragging = false;
-            thumb.style.transition = 'transform 0.3s ease';
 
             const maxDrag = slider.offsetWidth - thumb.offsetWidth - 8;
             if (currentX > maxDrag * 0.9) {
+                thumb.style.transition = 'transform 0.2s ease';
                 thumb.style.transform = `translateX(${maxDrag}px)`;
+                if (text) text.style.opacity = '0';
+
                 const id = slider.dataset.id;
                 const action = slider.dataset.action;
                 const callbackName = slider.dataset.callback;
@@ -77,9 +99,10 @@ export function initSlideButtons() {
                 if (callbackName === 'updateOrderStatus' && window.updateOrderStatus) window.updateOrderStatus(id, action);
                 if (callbackName === 'updateWaiterOrderStatus' && window.updateWaiterOrderStatus) window.updateWaiterOrderStatus(id, action);
 
+                // Auto-reset position after triggering callback so the slider never remains stuck
+                setTimeout(resetSlider, 250);
             } else {
-                thumb.style.transform = 'translateX(0)';
-                text.style.opacity = 1;
+                resetSlider();
             }
         };
 

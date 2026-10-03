@@ -769,7 +769,15 @@ export async function openWaiterHistory() {
         */
 
         // Filter orders for this waiter only and only 'Cobrado' items
-        const filteredOrders = orders.filter(o => o.waiterId === state.user.id && o.status === 'Cobrado');
+        const curUser = state.user || (typeof localStorage !== 'undefined' && localStorage.getItem('pos_user') ? JSON.parse(localStorage.getItem('pos_user')) : null);
+        const curUserId = curUser?.id !== undefined && curUser?.id !== null ? String(curUser.id) : null;
+        const curUserName = curUser?.name ? String(curUser.name).trim().toLowerCase() : '';
+
+        const filteredOrders = orders.filter(o => {
+            const matchesId = curUserId && o.waiterId !== undefined && o.waiterId !== null && String(o.waiterId) === curUserId;
+            const matchesName = curUserName && o.waiterName && String(o.waiterName).trim().toLowerCase() === curUserName;
+            return (matchesId || matchesName) && o.status === 'Cobrado';
+        });
 
         if (filteredOrders.length === 0) {
             list.innerHTML = '<div class="text-center py-10 text-gray-400">No tienes pedidos hoy.</div>';

@@ -102,7 +102,9 @@
 
     <!-- Main Container -->
     <main id="main-container" class="flex-1 overflow-y-auto relative scroll-hide pb-24">
-        <!-- Comentario para hacer pruebas -->
+        <!-- STAFF HEADER (Vue component mounts here for waiter, chef, delivery) -->
+        <div id="staff-header-mount"></div>
+
         <!-- CLIENT VIEW (Menu) -->
         <!-- CLIENT VIEW (Vue component mounts here) -->
         <div id="client-view" class="p-3 sm:p-5 w-full max-w-7xl 2xl:max-w-[96rem] mx-auto"></div>
@@ -3705,7 +3707,7 @@
                 <button type="button" id="btn-cancel-pm" class="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 text-xs transition-colors cursor-pointer">
                     Cancelar
                 </button>
-                <button type="button" id="btn-confirm-pm" class="flex-[2] py-3 px-4 rounded-xl font-black text-xs text-white bg-teal-600 hover:bg-teal-700 transition-all shadow-md active:scale-98 flex items-center justify-center gap-2 cursor-pointer">
+                <button type="button" id="btn-confirm-pm" class="btn-system-primary flex-[2] py-3 px-4 rounded-xl font-black text-xs transition-all shadow-md active:scale-98 flex items-center justify-center gap-2 cursor-pointer">
                     <i class="fas fa-check-circle"></i>
                     <span id="btn-confirm-pm-text">Confirmar Cobro ($0)</span>
                 </button>

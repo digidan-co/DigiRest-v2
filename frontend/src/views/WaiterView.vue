@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { listenToWaiterOrders } from '@/legacy/services/order-service.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
@@ -12,9 +12,19 @@ import {
     getStatusColor
 } from '@/legacy/views/waiter-view.js';
 
+const allWaiterOrders = ref([]);
 const myOrders = ref([]);
 
-const userName = computed(() => state.user?.name || 'Mesero');
+const userName = computed(() => {
+    if (state.user?.name) return state.user.name;
+    if (typeof localStorage !== 'undefined') {
+        try {
+            const raw = localStorage.getItem('pos_user');
+            if (raw) return JSON.parse(raw)?.name || 'Mesero';
+        } catch (_) {}
+    }
+    return 'Mesero';
+});
 
 const activeOrders = computed(() =>
     myOrders.value.filter(o => o.status !== 'Cobrado' && o.status !== 'Anulado')
@@ -41,15 +51,38 @@ function showProof(o) {
     if (window.showImageModal) window.showImageModal(o.proof);
 }
 
+function updateMyOrders() {
+    let user = state.user;
+    if (!user && typeof localStorage !== 'undefined') {
+        try {
+            const raw = localStorage.getItem('pos_user');
+            if (raw) user = JSON.parse(raw);
+        } catch (_) {}
+    }
+    if (!user) {
+        myOrders.value = [];
+        return;
+    }
+    const userIdStr = user.id !== undefined && user.id !== null ? String(user.id) : null;
+    const userNameStr = user.name ? String(user.name).trim().toLowerCase() : '';
+
+    myOrders.value = allWaiterOrders.value.filter(o => {
+        const matchesId = userIdStr && o.waiterId !== undefined && o.waiterId !== null && String(o.waiterId) === userIdStr;
+        const matchesName = userNameStr && o.waiterName && String(o.waiterName).trim().toLowerCase() === userNameStr;
+        return matchesId || matchesName;
+    });
+    state.waiterOrders = myOrders.value;
+}
+
+watch(() => state.user, () => {
+    updateMyOrders();
+}, { deep: true, immediate: true });
+
 let unsub = null;
 onMounted(() => {
     unsub = listenToWaiterOrders('waiter', (orders) => {
-        const mine = orders.filter(o =>
-            o.waiterId == state.user?.id ||
-            (state.user?.name && o.waiterName === state.user?.name)
-        );
-        myOrders.value = mine;
-        state.waiterOrders = mine;
+        allWaiterOrders.value = orders || [];
+        updateMyOrders();
     });
 });
 onUnmounted(() => { if (unsub) unsub(); });

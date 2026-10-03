@@ -1,5 +1,13 @@
 import { reactive } from 'vue';
 
+let initialUser = null;
+if (typeof localStorage !== 'undefined') {
+    try {
+        const raw = localStorage.getItem('pos_user');
+        if (raw) initialUser = JSON.parse(raw);
+    } catch (_) {}
+}
+
 export const state = reactive({
     config: {},
     categories: [],
@@ -10,7 +18,7 @@ export const state = reactive({
     customerStats: {},
     topDishes7d: [],
     cart: [],
-    user: null,
+    user: initialUser,
     orders: [],
     unsubscribes: [],
     confirmId: null,
