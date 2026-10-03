@@ -111,12 +111,19 @@ module.exports = (io) => {
                     itemsAdded: items // Optional: flag what was added for localized toast?
                 };
 
-                // Emit events
+                // Broadcast immediately to ALL connected clients so kitchen, waiters and cashier update in real time
+                io.emit('order_updated', updatedOrder);
+                if (statusChanged) {
+                    io.emit('order_status_update', updatedOrder);
+                }
+
+                // Emit events to specific rooms
                 io.to('admin').emit('order_updated', updatedOrder);
                 io.to('cajero').emit('order_updated', updatedOrder);
                 io.to('chef').emit('order_updated', updatedOrder);
                 io.to('tracker').emit('order_updated', updatedOrder);
                 io.to('mesero').emit('order_updated', updatedOrder);
+                io.to('waiter').emit('order_updated', updatedOrder);
 
                 if (order.waiterId) {
                     io.to(`user_${order.waiterId}`).emit('order_updated', updatedOrder);

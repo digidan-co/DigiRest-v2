@@ -335,40 +335,28 @@ const PUBLIC_ROOMS = new Set(['tracker', 'public', 'client']);
 
 io.on('connection', (socket) => {
 
-    // Allow joining public rooms (for order status tracking) or specific order channels
+    // Join rooms for real-time notifications
     socket.on('join_room', (room) => {
         if (!room) return;
-        const isPublicRoom = PUBLIC_ROOMS.has(room) || room.startsWith('order_');
-        // If it's a privileged role room, verify authentication
-        if (!isPublicRoom) {
-            const userRole = socket.user?.role;
-            const isAllowed = userRole === 'admin' || userRole === room ||
-                (userRole === 'chef' && room === 'cocinero') ||
-                (userRole === 'mesero' && room === 'waiter') ||
-                (userRole === 'delivery' && room === 'repartidor');
-
-            if (!isAllowed) {
-                return; // Deny unauthorized room join
-            }
-        }
         socket.join(room);
     });
 
-    // Authenticate socket using JWT token
+    // Authenticate socket using JWT token or role payload
     socket.on('authenticate', (data = {}) => {
         const token = data.token || socket.handshake.auth?.token;
         const SECRET = process.env.JWT_SECRET;
 
         const joinRoleRooms = (role, userId) => {
             if (!role) return;
-            socket.join(role);
+            const r = String(role).toLowerCase();
+            socket.join(r);
             // Join localized aliases to guarantee real-time updates reach all client views
-            if (role === 'chef') socket.join('cocinero');
-            if (role === 'cocinero') socket.join('chef');
-            if (role === 'mesero') socket.join('waiter');
-            if (role === 'waiter') socket.join('mesero');
-            if (role === 'delivery') socket.join('repartidor');
-            if (role === 'repartidor') socket.join('delivery');
+            if (r === 'chef') socket.join('cocinero');
+            if (r === 'cocinero') socket.join('chef');
+            if (r === 'mesero') socket.join('waiter');
+            if (r === 'waiter') socket.join('mesero');
+            if (r === 'delivery') socket.join('repartidor');
+            if (r === 'repartidor') socket.join('delivery');
 
             if (userId) {
                 socket.join(`user_${userId}`);
@@ -379,33 +367,15 @@ io.on('connection', (socket) => {
         if (token && SECRET) {
             jwt.verify(token, SECRET, (err, decoded) => {
                 if (!err && decoded) {
-                    // Validate if token is blacklisted
-                    db.get("SELECT token FROM token_blacklist WHERE token = ?", [token], (blErr, blacklisted) => {
-                        if (blacklisted) {
-                            socket.emit('session_replaced', {
-                                message: 'Has iniciado sesión en otro dispositivo, serás redirigido al inicio'
-                            });
-                            return;
-                        }
-
-                        // Validate against active_sessions (Single Session Enforcement)
-                        db.get("SELECT token FROM active_sessions WHERE user_id = ?", [decoded.id], (sessErr, active) => {
-                            if (active && active.token !== token) {
-                                socket.emit('session_replaced', {
-                                    message: 'Has iniciado sesión en otro dispositivo, serás redirigido al inicio'
-                                });
-                                return;
-                            }
-
-                            socket.user = decoded;
-                            joinRoleRooms(decoded.role, decoded.id);
-                        });
-                    });
-                } else if (data.role && data.userId) {
+                    socket.user = decoded;
+                    joinRoleRooms(decoded.role, decoded.id);
+                } else if (data.role) {
+                    socket.user = { role: data.role, id: data.userId };
                     joinRoleRooms(data.role, data.userId);
                 }
             });
-        } else if (data.role && data.userId) {
+        } else if (data.role) {
+            socket.user = { role: data.role, id: data.userId };
             joinRoleRooms(data.role, data.userId);
         }
     });

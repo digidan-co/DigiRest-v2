@@ -132,15 +132,19 @@ module.exports = (io) => {
                     status: finalStatus, total,
                     tip, discount, discount_reason, 
                     items: parsedItems,
-                    waiterId, waiterName, table, proof,
+                    waiterId, waiterName, table,
+                    tableNum: table,
+                    proof,
                     delivery_zone, delivery_fee,
                     account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details,
                     // Send ISO string directly. Client handles TZ.
                     timestamp: new Date().toISOString()
                 };
 
+                // Broadcast immediately to ALL connected clients so kitchen, waiters and cashier update in real time
+                io.emit('new_order', newOrder);
+
                 // Notify Kitchen & Admin via Socket.IO rooms
-                // Broadcast to chef and admin rooms instead of all clients
                 io.to('chef').emit('new_order', newOrder);
                 io.to('cocinero').emit('new_order', newOrder); // Support localized role aliases
                 io.to('admin').emit('new_order', newOrder);

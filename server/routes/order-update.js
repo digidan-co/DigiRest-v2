@@ -106,6 +106,10 @@ module.exports = (io) => {
                     waiterName: currentOrder.waiterName
                 };
 
+                // Broadcast to all connected clients for instant real-time sync across staff views
+                io.emit('order_updated', updateData);
+                io.emit('order_status_update', updateData);
+
                 // Emit Socket.io event for real-time update to relevant rooms
                 io.to('admin').emit('order_updated', updateData);
                 io.to('cajero').emit('order_updated', updateData);
@@ -229,6 +233,11 @@ module.exports = (io) => {
                             displayDate: fullOrder.displayDate || new Date(fullOrder.timestamp).toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
                             table: fullOrder.tableNum // Compatibility
                         };
+
+                        // Broadcast to all connected clients (chef, waiter, admin, etc.) so dish progress updates with 0ms latency
+                        io.emit('order_updated', orderData);
+                        io.emit('order_status_update', orderData);
+                        io.emit('order_item_toggled', orderData);
 
                         io.to('admin').emit('order_updated', orderData);
                         io.to('cajero').emit('order_updated', orderData);

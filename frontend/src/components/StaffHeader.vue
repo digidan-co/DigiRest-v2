@@ -56,11 +56,7 @@ const roleBadge = computed(() => {
             cls: 'bg-blue-50 text-blue-700 border-blue-200'
         };
     }
-    return {
-        label: `Mesero: ${name}`,
-        icon: 'fas fa-user-tie',
-        cls: 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    };
+    return null;
 });
 
 function handleLogout() {
@@ -81,11 +77,11 @@ function handleLogout() {
                 <img v-if="restaurantLogo" :src="restaurantLogo" alt="Logo" class="w-full h-full object-cover" />
                 <i v-else class="fas fa-utensils text-sm"></i>
             </div>
-            <div class="min-w-0 flex flex-col">
+            <div class="min-w-0 flex flex-col justify-center">
                 <h1 class="text-sm sm:text-base font-extrabold text-gray-900 leading-tight truncate tracking-tight">
                     {{ restaurantName }}
                 </h1>
-                <div class="flex items-center gap-2 mt-0.5">
+                <div v-if="roleBadge" class="flex items-center gap-2 mt-0.5">
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border" :class="roleBadge.cls">
                         <i :class="roleBadge.icon" class="text-[9px]"></i>
                         <span>{{ roleBadge.label }}</span>

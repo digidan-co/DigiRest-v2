@@ -389,6 +389,7 @@ export function listenToOrders(viewMode, callback) {
     sock.on('new_order', onNewOrder);
     sock.on('order_status_update', onUpdate);
     sock.on('order_updated', onOrderUpdated);
+    sock.on('order_item_toggled', onOrderUpdated);
     sock.on('order_deleted', onOrderDeleted);
     sock.on('orders_cleaned', onOrderDeleted);
 
@@ -434,6 +435,7 @@ export function listenToOrders(viewMode, callback) {
         sock.off('new_order', onNewOrder);
         sock.off('order_status_update', onUpdate);
         sock.off('order_updated', onOrderUpdated);
+        sock.off('order_item_toggled', onOrderUpdated);
         sock.off('order_deleted', onOrderDeleted);
         sock.off('orders_cleaned', onOrderDeleted);
         sock.off('new_order_note', onNoteEvent);
@@ -564,6 +566,7 @@ export function listenToWaiterOrders(viewMode, callback) {
     sock.on('new_order', onNewOrder);
     sock.on('order_status_update', onUpdate);
     sock.on('order_updated', onOrderUpdated);
+    sock.on('order_item_toggled', onOrderUpdated);
     sock.on('order_deleted', onOrderDeleted);
     sock.on('orders_cleaned', onOrderDeleted);
 
@@ -613,6 +616,7 @@ export function listenToWaiterOrders(viewMode, callback) {
         sock.off('new_order', onNewOrder);
         sock.off('order_status_update', onUpdate);
         sock.off('order_updated', onOrderUpdated);
+        sock.off('order_item_toggled', onOrderUpdated);
         sock.off('order_deleted', onOrderDeleted);
         sock.off('orders_cleaned', onOrderDeleted);
         sock.off('new_order_note', onNoteEvent);
