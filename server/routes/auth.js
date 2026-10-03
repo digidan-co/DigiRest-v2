@@ -575,9 +575,16 @@ router.get('/verify-session', verifyToken, (req, res) => {
     res.json({ valid: true, user: req.user });
 });
 
-// POST /auth/change-password - Change current user password (especially digidanMasterAdmin)
+// POST /auth/change-password - Change current user password (admin only)
 router.post('/change-password', verifyToken, async (req, res) => {
     try {
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Acceso restringido: solo administradores pueden cambiar la contraseña.' });
+        }
+        if (req.user.id === 'master') {
+            return res.status(400).json({ error: 'El usuario maestro se configura mediante variable de entorno MASTER_KEY.' });
+        }
+
         const { currentPassword, newPassword } = req.body;
         if (!currentPassword || !newPassword) {
             return res.status(400).json({ error: 'La contraseña actual y la nueva contraseña son requeridas.' });
@@ -595,7 +602,16 @@ router.post('/change-password', verifyToken, async (req, res) => {
                 return res.status(404).json({ error: 'Usuario no encontrado.' });
             }
 
-            const match = await bcrypt.compare(String(currentPassword), user.code);
+            let match = false;
+            try {
+                match = await bcrypt.compare(String(currentPassword), user.code);
+            } catch (e) {
+                match = false;
+            }
+            if (!match && String(user.code) === String(currentPassword)) {
+                match = true;
+            }
+
             if (!match) {
                 return res.status(400).json({ error: 'La contraseña actual es incorrecta.' });
             }
@@ -606,7 +622,7 @@ router.post('/change-password', verifyToken, async (req, res) => {
                     console.error('[AUTH] Error updating password:', updErr);
                     return res.status(500).json({ error: 'Error al actualizar la contraseña.' });
                 }
-                console.log(`[AUTH] Contraseña actualizada exitosamente para el usuario ${user.username || user.name} (${user.id})`);
+                console.log(`[AUTH] Contraseña actualizada exitosamente para el administrador ${user.username || user.name} (${user.id})`);
                 res.json({ success: true, message: 'Contraseña actualizada exitosamente.' });
             });
         });

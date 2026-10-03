@@ -63,3 +63,8 @@ export async function saveUser(data, id = null) {
 export async function deleteUser(id) {
     return await ApiClient.delete(`/users/${id}`);
 }
+
+export async function changePassword(currentPassword, newPassword) {
+    return await ApiClient.post('/auth/change-password', { currentPassword, newPassword });
+}
+

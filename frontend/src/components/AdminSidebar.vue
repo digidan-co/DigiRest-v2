@@ -1,6 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { state } from '@/legacy/core/state.js';
+import { changePassword } from '@/legacy/services/auth-service.js';
+import { toast } from '@/legacy/components/ui.js';
 
 const activeTab = ref('dashboard');
 const collapsedSections = ref(new Set());
@@ -105,10 +107,107 @@ function closeSidebar() {
     }
 }
 
+// ── Admin Change Password Logic ──
+const isAdmin = computed(() => {
+    const u = state.user || JSON.parse(localStorage.getItem('pos_user') || 'null');
+    return u?.role === 'admin';
+});
+
+const isPasswordModalOpen = ref(false);
+const currentPwd = ref('');
+const newPwd = ref('');
+const confirmPwd = ref('');
+const showCurrentPwd = ref(false);
+const showNewPwd = ref(false);
+const showConfirmPwd = ref(false);
+const passwordError = ref('');
+const isSubmitting = ref(false);
+
+function openPasswordModal() {
+    if (!isAdmin.value) return;
+    currentPwd.value = '';
+    newPwd.value = '';
+    confirmPwd.value = '';
+    showCurrentPwd.value = false;
+    showNewPwd.value = false;
+    showConfirmPwd.value = false;
+    passwordError.value = '';
+    isPasswordModalOpen.value = true;
+    nextTick(() => {
+        const input = document.getElementById('admin-modal-current-pwd');
+        input?.focus();
+    });
+}
+
+function closePasswordModal() {
+    isPasswordModalOpen.value = false;
+    currentPwd.value = '';
+    newPwd.value = '';
+    confirmPwd.value = '';
+    passwordError.value = '';
+}
+
+async function submitPasswordChange() {
+    passwordError.value = '';
+
+    const current = (currentPwd.value || '').trim();
+    const next = (newPwd.value || '').trim();
+    const confirm = (confirmPwd.value || '').trim();
+
+    if (!current || !next || !confirm) {
+        passwordError.value = 'Por favor completa todos los campos requeridos.';
+        return;
+    }
+    if (next.length < 4) {
+        passwordError.value = 'La nueva contraseña debe tener al menos 4 caracteres.';
+        return;
+    }
+    if (next !== confirm) {
+        passwordError.value = 'Las nuevas contraseñas no coinciden.';
+        return;
+    }
+    if (current === next) {
+        passwordError.value = 'La nueva contraseña debe ser diferente a la contraseña actual.';
+        return;
+    }
+
+    isSubmitting.value = true;
+    try {
+        const res = await changePassword(current, next);
+        toast(res?.message || 'Contraseña actualizada exitosamente.', 'success');
+        closePasswordModal();
+    } catch (err) {
+        console.error('Error changing password:', err);
+        let msg = 'Error al actualizar la contraseña.';
+        try {
+            const parsed = JSON.parse(err.message);
+            if (parsed.error) msg = parsed.error;
+        } catch {
+            if (err.message) msg = err.message;
+        }
+        passwordError.value = msg;
+        toast(msg, 'error');
+    } finally {
+        isSubmitting.value = false;
+    }
+}
+
+function handleKeydown(e) {
+    if (e.key === 'Escape' && isPasswordModalOpen.value) {
+        closePasswordModal();
+    }
+}
+
 onMounted(() => {
     let saved = localStorage.getItem('adminActiveTab') || 'dashboard';
     if (isForbidden(saved)) saved = 'dashboard';
     switchTab(saved);
+
+    window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleKeydown);
 });
 </script>
 
@@ -157,11 +256,418 @@ onMounted(() => {
         </div>
     </div>
 
-    <!-- Logout -->
+    <!-- Bottom Actions: Logout & Change Password (admin only) -->
     <div class="mt-auto pt-2 border-t sidebar-divider w-full shrink-0">
-        <button type="button" id="btn-sidebar-logout" @click="logout"
-            class="btn-sidebar-logout w-full text-left px-2.5 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-2 active:scale-95 shadow-sm group cursor-pointer">
-            <i class="fas fa-sign-out-alt w-4 text-center px-1 text-xs"></i> <span class="text-xs">Cerrar Sesión</span>
-        </button>
+        <div class="flex items-center gap-1.5 w-full">
+            <button type="button" id="btn-sidebar-logout" @click="logout"
+                class="btn-sidebar-logout flex-1 text-left px-2.5 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-2 active:scale-95 shadow-sm group cursor-pointer"
+                title="Cerrar Sesión">
+                <i class="fas fa-sign-out-alt w-4 text-center px-1 text-xs"></i> <span class="text-xs">Cerrar Sesión</span>
+            </button>
+            <button v-if="isAdmin" type="button" id="btn-sidebar-change-pwd" @click="openPasswordModal"
+                class="btn-sidebar-change-pwd px-2.5 py-1.5 rounded-xl font-semibold transition-all flex items-center justify-center active:scale-95 shadow-sm cursor-pointer shrink-0"
+                title="Cambiar contraseña de Administrador" aria-label="Cambiar contraseña de Administrador">
+                <i class="fas fa-key text-xs"></i>
+            </button>
+        </div>
     </div>
+
+    <!-- Modal Cambiar Contraseña (Solo Administrador) -->
+    <Teleport to="body">
+        <div v-if="isPasswordModalOpen"
+            class="pwd-modal-overlay"
+            @click.self="closePasswordModal">
+            <div class="pwd-modal-card"
+                role="dialog" aria-modal="true" aria-labelledby="change-pwd-title">
+                
+                <!-- Encabezado del Modal -->
+                <div class="pwd-modal-header">
+                    <div class="pwd-modal-header-left">
+                        <div class="pwd-header-icon">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div>
+                            <h3 id="change-pwd-title" class="pwd-modal-title">Cambiar Contraseña</h3>
+                            <p class="pwd-modal-subtitle">Actualiza tu clave de acceso de Administrador</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="closePasswordModal"
+                        class="pwd-modal-close"
+                        title="Cerrar modal" aria-label="Cerrar">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Mensaje de Error si aplica -->
+                <div v-if="passwordError" class="pwd-error-alert">
+                    <i class="fas fa-exclamation-circle pwd-error-icon"></i>
+                    <span class="pwd-error-text">{{ passwordError }}</span>
+                </div>
+
+                <!-- Formulario -->
+                <form @submit.prevent="submitPasswordChange" class="pwd-form">
+                    <!-- Contraseña Actual -->
+                    <div class="pwd-field-group">
+                        <label for="admin-modal-current-pwd" class="pwd-label">
+                            Contraseña Actual
+                        </label>
+                        <div class="pwd-input-wrap">
+                            <input id="admin-modal-current-pwd" :type="showCurrentPwd ? 'text' : 'password'" v-model="currentPwd" required
+                                placeholder="Ingresa tu contraseña actual" autocomplete="current-password"
+                                class="pwd-input">
+                            <button type="button" @click="showCurrentPwd = !showCurrentPwd"
+                                class="pwd-eye-btn"
+                                :class="{ 'active': showCurrentPwd }"
+                                :title="showCurrentPwd ? 'Ocultar contraseña' : 'Ver contraseña'"
+                                :aria-label="showCurrentPwd ? 'Ocultar contraseña actual' : 'Ver contraseña actual'" tabindex="-1">
+                                <i :class="showCurrentPwd ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Nueva Contraseña -->
+                    <div class="pwd-field-group">
+                        <label for="admin-modal-new-pwd" class="pwd-label">
+                            Nueva Contraseña
+                        </label>
+                        <div class="pwd-input-wrap">
+                            <input id="admin-modal-new-pwd" :type="showNewPwd ? 'text' : 'password'" v-model="newPwd" required minlength="4"
+                                placeholder="Mínimo 4 caracteres" autocomplete="new-password"
+                                class="pwd-input">
+                            <button type="button" @click="showNewPwd = !showNewPwd"
+                                class="pwd-eye-btn"
+                                :class="{ 'active': showNewPwd }"
+                                :title="showNewPwd ? 'Ocultar contraseña' : 'Ver contraseña'"
+                                :aria-label="showNewPwd ? 'Ocultar nueva contraseña' : 'Ver nueva contraseña'" tabindex="-1">
+                                <i :class="showNewPwd ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Confirmar Nueva Contraseña -->
+                    <div class="pwd-field-group">
+                        <label for="admin-modal-confirm-pwd" class="pwd-label">
+                            Confirmar Nueva Contraseña
+                        </label>
+                        <div class="pwd-input-wrap">
+                            <input id="admin-modal-confirm-pwd" :type="showConfirmPwd ? 'text' : 'password'" v-model="confirmPwd" required minlength="4"
+                                placeholder="Repite la nueva contraseña" autocomplete="new-password"
+                                class="pwd-input">
+                            <button type="button" @click="showConfirmPwd = !showConfirmPwd"
+                                class="pwd-eye-btn"
+                                :class="{ 'active': showConfirmPwd }"
+                                :title="showConfirmPwd ? 'Ocultar contraseña' : 'Ver contraseña'"
+                                :aria-label="showConfirmPwd ? 'Ocultar confirmación' : 'Ver confirmación'" tabindex="-1">
+                                <i :class="showConfirmPwd ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Botones de Acción -->
+                    <div class="pwd-actions">
+                        <button type="button" @click="closePasswordModal" class="pwd-btn-cancel">
+                            Cancelar
+                        </button>
+                        <button type="submit" :disabled="isSubmitting" class="pwd-btn-submit btn-system-primary">
+                            <i v-if="isSubmitting" class="fas fa-spinner fa-spin"></i>
+                            <i v-else class="fas fa-save"></i>
+                            <span>{{ isSubmitting ? 'Guardando...' : 'Guardar' }}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </Teleport>
 </template>
+
+<style scoped>
+.pwd-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    box-sizing: border-box;
+    user-select: none;
+    animation: pwdFadeIn 0.2s ease-out;
+}
+
+.pwd-modal-card {
+    background-color: #ffffff;
+    border-radius: 1.5rem;
+    width: 100%;
+    max-width: 26rem;
+    padding: 1.5rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    border: 1px solid #e2e8f0;
+    position: relative;
+    box-sizing: border-box;
+    user-select: text;
+    animation: pwdScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pwd-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 0.875rem;
+    margin-bottom: 1.25rem;
+}
+
+.pwd-modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pwd-header-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 1rem;
+    background-color: #fef3c7;
+    color: #d97706;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.pwd-modal-title {
+    margin: 0;
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: #0f172a;
+    line-height: 1.25;
+}
+
+.pwd-modal-subtitle {
+    margin: 0.15rem 0 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.pwd-modal-close {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background-color: #f1f5f9;
+    color: #64748b;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    transition: all 0.15s ease;
+}
+
+.pwd-modal-close:hover {
+    background-color: #e2e8f0;
+    color: #0f172a;
+}
+
+.pwd-error-alert {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pwd-error-icon {
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.pwd-error-text {
+    flex: 1;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.pwd-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.pwd-field-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.pwd-label {
+    display: block;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.375rem;
+}
+
+.pwd-input-wrap {
+    position: relative;
+    width: 100%;
+    display: block;
+    box-sizing: border-box;
+}
+
+.pwd-input {
+    width: 100%;
+    height: 2.75rem;
+    padding: 0 2.75rem 0 0.875rem;
+    border-radius: 0.75rem;
+    border: 1.5px solid #cbd5e1;
+    background-color: #f8fafc;
+    color: #1e293b;
+    font-size: 0.875rem;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.pwd-input:focus {
+    background-color: #ffffff;
+    border-color: var(--system-primary, #f59e0b);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.pwd-input::placeholder {
+    color: #94a3b8;
+    font-size: 0.8125rem;
+}
+
+.pwd-input:-webkit-autofill,
+.pwd-input:-webkit-autofill:hover, 
+.pwd-input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px #f8fafc inset !important;
+    -webkit-text-fill-color: #1e293b !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+.pwd-eye-btn {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    z-index: 5;
+}
+
+.pwd-eye-btn:hover {
+    color: #334155;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.pwd-eye-btn.active {
+    color: var(--system-primary, #d97706);
+}
+
+.pwd-actions {
+    display: flex;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+}
+
+.pwd-btn-cancel {
+    flex: 1;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    background-color: #f1f5f9;
+    color: #475569;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pwd-btn-cancel:hover {
+    background-color: #e2e8f0;
+    color: #0f172a;
+}
+
+.pwd-btn-submit {
+    flex: 1;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    background-color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-secondary, #1e2122) !important;
+    font-weight: 800 !important;
+    font-size: 0.8125rem !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.pwd-btn-submit:hover:not(:disabled) {
+    filter: brightness(1.08) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22) !important;
+}
+
+.pwd-btn-submit:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.pwd-btn-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.pwd-btn-submit i,
+.pwd-btn-submit span {
+    color: var(--system-secondary, #1e2122) !important;
+}
+
+@keyframes pwdFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes pwdScaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+</style>

@@ -171,9 +171,11 @@ a.bg-\[\#f5b55f\]:hover,
     font-weight: 700 !important;
 }
 
-/* Botón Cerrar Sesión */
+/* Botón Cerrar Sesión y Cambiar Contraseña */
 #admin-sidebar #btn-sidebar-logout,
-#admin-sidebar .btn-sidebar-logout {
+#admin-sidebar .btn-sidebar-logout,
+#admin-sidebar #btn-sidebar-change-pwd,
+#admin-sidebar .btn-sidebar-change-pwd {
     background-color: var(--sidebar-inactive-bg, rgba(255, 255, 255, 0.05)) !important;
     color: var(--sidebar-inactive-text, #cbd5e1) !important;
     border: 1px solid var(--sidebar-inactive-border, rgba(255, 255, 255, 0.06)) !important;
@@ -182,13 +184,17 @@ a.bg-\[\#f5b55f\]:hover,
 #admin-sidebar #btn-sidebar-logout i,
 #admin-sidebar #btn-sidebar-logout span,
 #admin-sidebar .btn-sidebar-logout i,
-#admin-sidebar .btn-sidebar-logout span {
+#admin-sidebar .btn-sidebar-logout span,
+#admin-sidebar #btn-sidebar-change-pwd i,
+#admin-sidebar .btn-sidebar-change-pwd i {
     color: var(--sidebar-inactive-text, #cbd5e1) !important;
     transition: color 0.2s ease;
 }
 
 #admin-sidebar #btn-sidebar-logout:hover,
-#admin-sidebar .btn-sidebar-logout:hover {
+#admin-sidebar .btn-sidebar-logout:hover,
+#admin-sidebar #btn-sidebar-change-pwd:hover,
+#admin-sidebar .btn-sidebar-change-pwd:hover {
     background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.12)) !important;
     color: var(--system-primary, #f5b55f) !important;
 }
@@ -196,7 +202,9 @@ a.bg-\[\#f5b55f\]:hover,
 #admin-sidebar #btn-sidebar-logout:hover i,
 #admin-sidebar #btn-sidebar-logout:hover span,
 #admin-sidebar .btn-sidebar-logout:hover i,
-#admin-sidebar .btn-sidebar-logout:hover span {
+#admin-sidebar .btn-sidebar-logout:hover span,
+#admin-sidebar #btn-sidebar-change-pwd:hover i,
+#admin-sidebar .btn-sidebar-change-pwd:hover i {
     color: var(--system-primary, #f5b55f) !important;
 }
 
