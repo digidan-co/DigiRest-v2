@@ -3,7 +3,8 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import {
-    getInventorySummary, getSupplies, getRecipes, getInventoryMovements, deleteSupply, deleteRecipe
+    getInventorySummary, getSupplies, getRecipes, getInventoryMovements, deleteSupply, deleteRecipe,
+    importSuppliesCSV, importRecipesCSV
 } from '@/legacy/services/inventory-service.js';
 import { toast, showConfirmModal, showModalAlert } from '@/legacy/components/ui.js';
 
@@ -158,6 +159,59 @@ function newSupply() {
 }
 function newRecipe() { if (window.openEditRecipeModal) window.openEditRecipeModal(); }
 
+const importingSupplies = ref(false);
+const importingRecipes = ref(false);
+
+function exportSupplies() {
+    window.open('/api/inventory/supplies/export', '_blank');
+}
+
+async function onImportSupplies(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+        toast('Por favor selecciona un archivo CSV', 'error');
+        return;
+    }
+    importingSupplies.value = true;
+    try {
+        const res = await importSuppliesCSV(file);
+        toast(res.message || 'Insumos importados correctamente', 'success');
+        await loadSupplies();
+    } catch (err) {
+        console.error(err);
+        toast('Error al importar insumos: ' + (err.message || ''), 'error');
+    } finally {
+        importingSupplies.value = false;
+        e.target.value = '';
+    }
+}
+
+function exportRecipes() {
+    window.open('/api/inventory/recipes/export', '_blank');
+}
+
+async function onImportRecipes(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+        toast('Por favor selecciona un archivo CSV', 'error');
+        return;
+    }
+    importingRecipes.value = true;
+    try {
+        const res = await importRecipesCSV(file);
+        toast(res.message || 'Recetas importadas correctamente', 'success');
+        await loadRecipes();
+    } catch (err) {
+        console.error(err);
+        toast('Error al importar recetas: ' + (err.message || ''), 'error');
+    } finally {
+        importingRecipes.value = false;
+        e.target.value = '';
+    }
+}
+
 onMounted(() => {
     if (localStorage.getItem('pos_token')) {
         loadSupplies();
@@ -179,7 +233,14 @@ watch(() => state.user, (u) => {
             <button type="button" @click="switchSubtab('kardex')" class="px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'kardex' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-history text-xs"></i><span>Kárdex / Movimientos</span></button>
             <button type="button" @click="switchSubtab('recipes')" class="px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'recipes' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-book-open text-xs"></i><span>Recetas de Platos</span></button>
         </div>
-        <div v-if="activeSubtab === 'stock'" class="flex items-center gap-2">
+        <div v-if="activeSubtab === 'stock'" class="flex items-center gap-2 flex-wrap">
+            <input type="file" ref="fileSuppliesRef" id="file-import-supplies" accept=".csv" class="hidden" @change="onImportSupplies">
+            <button type="button" @click="exportSupplies" class="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Exportar insumos a CSV">
+                <i class="fas fa-file-export text-gray-500"></i> Exportar
+            </button>
+            <button type="button" @click="$refs.fileSuppliesRef?.click()" :disabled="importingSupplies" class="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Importar insumos desde CSV">
+                <i class="fas" :class="importingSupplies ? 'fa-spinner fa-spin' : 'fa-file-import text-gray-500'"></i> Importar
+            </button>
             <button type="button" @click="newSupply" class="btn-system-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-xs"><i class="fas fa-plus"></i> Nuevo Insumo</button>
         </div>
     </div>
@@ -319,7 +380,16 @@ watch(() => state.user, (u) => {
                     <p class="text-xs text-gray-500">Cada vez que un pedido pase a cocina o sea recibido, sus insumos se descontarán automáticamente según la receta enlazada.</p>
                 </div>
             </div>
-            <button type="button" @click="newRecipe" class="btn-system-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-xs shrink-0"><i class="fas fa-plus"></i> Crear / Editar Receta</button>
+            <div class="flex items-center gap-2 flex-wrap shrink-0">
+                <input type="file" ref="fileRecipesRef" id="file-import-recipes" accept=".csv" class="hidden" @change="onImportRecipes">
+                <button type="button" @click="exportRecipes" class="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Exportar recetas a CSV">
+                    <i class="fas fa-file-export text-gray-500"></i> Exportar
+                </button>
+                <button type="button" @click="$refs.fileRecipesRef?.click()" :disabled="importingRecipes" class="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Importar recetas desde CSV">
+                    <i class="fas" :class="importingRecipes ? 'fa-spinner fa-spin' : 'fa-file-import text-gray-500'"></i> Importar
+                </button>
+                <button type="button" @click="newRecipe" class="btn-system-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-xs"><i class="fas fa-plus"></i> Crear / Editar Receta</button>
+            </div>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

@@ -239,6 +239,7 @@ const cashflowRouter = require('./routes/cashflow')(io);
 const toppingsRouter = require('./routes/toppings')(io);
 const deliveryZonesRouter = require('./routes/delivery-zones')(io);
 const customersRouter = require('./routes/customers')(io);
+const authorizationsRouter = require('./routes/authorizations')(io);
 
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
@@ -258,6 +259,7 @@ app.use('/api', cierreCajaRouter);
 app.use('/api', gastosDiaRouter);
 app.use('/api', inventoryRouter);
 app.use('/api', cashflowRouter);
+app.use('/api', authorizationsRouter);
 
 // SaaS Manager — estado de suscripción y anuncios desde panel.digidan.co
 const saasService = require('./saasService');
@@ -485,6 +487,10 @@ function archivePreviousDayNotes() {
 
 // Start the nightly scheduler
 scheduleNightlyNotesArchive();
+
+// Start the daily database backup scheduler
+const { scheduleDailyBackup } = require('./utils/backupService');
+scheduleDailyBackup();
 
 // --- DEBUG PERSISTENCE CHECK ---
 

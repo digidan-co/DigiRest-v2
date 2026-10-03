@@ -483,5 +483,78 @@ module.exports = (io) => {
         }
     });
 
+    // ==========================================
+    // BACKUPS & SYSTEM INTEGRITY
+    // ==========================================
+    const { createBackup, getBackupList, backupsDir } = require('../utils/backupService');
+    const { logAudit } = require('../utils/auditLogger');
+
+    router.get('/backups', verifyToken, requireRole(['admin']), (req, res) => {
+        const backups = getBackupList();
+        res.json({ success: true, backups });
+    });
+
+    router.post('/backups', verifyToken, requireRole(['admin']), async (req, res) => {
+        try {
+            const backup = await createBackup('manual');
+            logAudit('MANUAL_BACKUP_CREATED', req.user?.id, req.ip, { filename: backup.filename, size: backup.size });
+            res.json({ success: true, message: 'Copia de seguridad creada exitosamente', backup });
+        } catch (e) {
+            res.status(500).json({ error: 'Error al generar la copia de seguridad: ' + e.message });
+        }
+    });
+
+    router.get('/backups/download/:filename?', verifyToken, requireRole(['admin']), (req, res) => {
+        const reqFilename = req.params.filename;
+        let targetPath = null;
+
+        if (reqFilename) {
+            // Sanitize filename to avoid path traversal
+            const clean = path.basename(reqFilename);
+            targetPath = path.join(backupsDir, clean);
+        } else {
+            // Download the latest backup
+            const list = getBackupList();
+            if (list.length > 0) {
+                targetPath = list[0].path;
+            }
+        }
+
+        if (!targetPath || !fs.existsSync(targetPath)) {
+            return res.status(404).json({ error: 'No se encontró la copia de seguridad solicitada.' });
+        }
+
+        const downloadName = path.basename(targetPath);
+        logAudit('BACKUP_DOWNLOADED', req.user?.id, req.ip, { filename: downloadName });
+        res.download(targetPath, downloadName);
+    });
+
+    // ==========================================
+    // AUDIT LOGS (ANTIFRAUDE & CONTROL)
+    // ==========================================
+    router.get('/audit-logs', verifyToken, requireRole(['admin']), (req, res) => {
+        const limit = parseInt(req.query.limit, 10) || 100;
+        const sql = `
+            SELECT a.*, u.name as user_name, u.role as user_role
+            FROM audit_logs a
+            LEFT JOIN users u ON a.user_id = u.id
+            WHERE a.user_id NOT IN ('digidan_master_admin', 'master', 'digidanMasterAdmin')
+              AND (u.name IS NULL OR (u.name != 'digidanMasterAdmin' AND u.name != 'digidan_master_admin'))
+              AND (u.username IS NULL OR (u.username != 'digidanMasterAdmin' AND u.username != 'digidan_master_admin'))
+              AND (a.details IS NULL OR (a.details NOT LIKE '%digidanMasterAdmin%' AND a.details NOT LIKE '%digidan_master_admin%'))
+            ORDER BY a.timestamp DESC
+            LIMIT ?
+        `;
+        db.all(sql, [limit], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            const parsed = rows.map(r => {
+                let detailsObj = {};
+                try { detailsObj = JSON.parse(r.details); } catch (_) { detailsObj = { raw: r.details }; }
+                return { ...r, details: detailsObj };
+            });
+            res.json({ success: true, logs: parsed });
+        });
+    });
+
     return router;
 };

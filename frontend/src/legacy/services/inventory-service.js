@@ -43,3 +43,15 @@ export async function deleteRecipe(id) {
 export async function getInventoryMovements(limit = 100) {
     return ApiClient.get(`/inventory/movements?limit=${limit}`);
 }
+
+export async function importSuppliesCSV(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await ApiClient.post('/inventory/supplies/import', formData);
+}
+
+export async function importRecipesCSV(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await ApiClient.post('/inventory/recipes/import', formData);
+}

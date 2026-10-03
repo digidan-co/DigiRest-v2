@@ -10,15 +10,21 @@ const path = require('path');
 const { processProof } = require('../utils/imageProcessor');
 const { deductStockForOrder, revertStockForOrder } = require('../utils/inventory-helper');
 
+const { logAudit } = require('../utils/auditLogger');
+
 // Rate limiter for public order creation (customers without auth)
 const orderCreationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 30, // 30 orders per 15 min per IP
+    max: 30, // 30 orders per 15 min per IP for public clients
     message: {
         error: 'Demasiados pedidos. Por favor, intenta nuevamente en 15 minutos.'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    skip: (req) => {
+        // No limitar al personal autenticado (meseros, cajeros, administradores)
+        return Boolean(req.headers.authorization);
+    }
 });
 
 module.exports = (io) => {
@@ -353,28 +359,65 @@ module.exports = (io) => {
             console.log(`[CANCEL] Order ${id} cancelled by ${req.user.name} (role: ${req.user.role})`);
         }
 
-        // DELIVERY LOCK: Check if order is already locked by another driver
-        if (status === 'En Reparto' || status === 'En ruta') {
-            db.get('SELECT deliveryDriverId, deliveryDriverName FROM orders WHERE id = ?', [id], (err, order) => {
-                if (err) return res.status(500).json({ error: err.message });
-                if (!order) return res.status(404).json({ error: 'Order not found' });
+        const handleUpdateFlow = () => {
+            // DELIVERY LOCK: Check if order is already locked by another driver
+            if (status === 'En Reparto' || status === 'En ruta') {
+                db.get('SELECT deliveryDriverId, deliveryDriverName FROM orders WHERE id = ?', [id], (err, order) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    if (!order) return res.status(404).json({ error: 'Order not found' });
 
-                // If order already has a driver assigned and it's NOT the current user
-                if (order.deliveryDriverId && order.deliveryDriverId != req.user.id) {
-                    return res.status(409).json({
-                        error: 'ORDER_LOCKED',
-                        message: `Este pedido ya fue tomado por ${order.deliveryDriverName}`,
-                        lockedBy: order.deliveryDriverName
-                    });
+                    // If order already has a driver assigned and it's NOT the current user
+                    if (order.deliveryDriverId && order.deliveryDriverId != req.user.id) {
+                        return res.status(409).json({
+                            error: 'ORDER_LOCKED',
+                            message: `Este pedido ya fue tomado por ${order.deliveryDriverName}`,
+                            lockedBy: order.deliveryDriverName
+                        });
+                    }
+
+                    // Order is available or already locked by this user, proceed with update
+                    performStatusUpdate();
+                });
+            } else {
+                // Not a delivery status, proceed normally
+                performStatusUpdate();
+            }
+        };
+
+        // Cajero cancellation security check (Strict Mode enforcement)
+        if (status === 'Anulado' && req.user.role === 'cajero') {
+            db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], (cfgErr, cfgRow) => {
+                let cajeroCanCancel = true;
+                if (cfgRow && cfgRow.value) {
+                    try {
+                        const parsed = JSON.parse(cfgRow.value);
+                        if (parsed.cajeroCanCancel === false) cajeroCanCancel = false;
+                    } catch (e) {}
                 }
 
-                // Order is available or already locked by this user, proceed with update
-                performStatusUpdate();
+                if (!cajeroCanCancel) {
+                    const isVerified = req.headers['x-admin-verified'] === 'true' || req.body.adminVerified === true;
+                    if (!isVerified) {
+                        return db.get(
+                            "SELECT id FROM order_authorizations WHERE order_id = ? AND type = 'cancel' AND status = 'approved' LIMIT 1",
+                            [id],
+                            (authErr, authRow) => {
+                                if (authErr || !authRow) {
+                                    return res.status(403).json({
+                                        error: 'La anulación de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
+                                    });
+                                }
+                                handleUpdateFlow();
+                            }
+                        );
+                    }
+                }
+                handleUpdateFlow();
             });
-        } else {
-            // Not a delivery status, proceed normally
-            performStatusUpdate();
+            return;
         }
+
+        handleUpdateFlow();
 
         function performStatusUpdate() {
             // Build dynamic update query based on provided fields
@@ -487,6 +530,19 @@ module.exports = (io) => {
                     deductStockForOrder(id, null, req.user?.name || 'Admin', io);
                 } else if (status === 'Anulado' || status === 'Cancelado') {
                     revertStockForOrder(id, req.user?.name || 'Admin', io);
+
+                    // REGISTRO DE AUDITORÍA ANTIFRAUDE: Guarda quién anuló, monto y motivo
+                    db.get("SELECT client, total, payment FROM orders WHERE id = ?", [id], (fetchErr, ordRow) => {
+                        logAudit('ORDER_CANCELLED', req.user?.id || 'unknown', req.ip, {
+                            orderId: id,
+                            client: ordRow?.client || 'Cliente',
+                            total: ordRow?.total || 0,
+                            payment: ordRow?.payment || 'N/A',
+                            cancelReason: req.body.cancelReason || 'Sin motivo especificado',
+                            userName: req.user?.name || 'Usuario',
+                            userRole: req.user?.role || 'N/A'
+                        });
+                    });
                 }
 
                 res.json(updateData);

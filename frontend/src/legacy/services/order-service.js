@@ -40,87 +40,77 @@ export async function createOrder(orderData) {
         }));
     }
 
-    // Check if we need FormData (if proof is a File)
-    const hasFile = orderData.proof instanceof File;
-
-    if (hasFile) {
-        const formData = new FormData();
-        // Append all fields
-        for (const key in orderData) {
-            if (key === 'items') {
-                formData.append('items', JSON.stringify(orderData.items));
-            } else if (key === 'proof') {
-                formData.append('proof', orderData.proof);
-            } else if (typeof orderData[key] === 'object' && orderData[key] !== null) {
-                formData.append(key, JSON.stringify(orderData[key]));
-            } else {
-                formData.append(key, orderData[key]);
-            }
-        }
-
-        if (!navigator.onLine) {
-            // Offline with file: convert proof to data URL and save as JSON order
-            const dataUrl = await new Promise((resolve, reject) => {
+    // Helper robusto para guardar localmente en IndexedDB ante modo offline o fallo de red
+    const handleSaveOffline = async () => {
+        let proofData = orderData.proof;
+        if (orderData.proof instanceof File) {
+            proofData = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
                 reader.onerror = reject;
                 reader.readAsDataURL(orderData.proof);
             });
-            // Create a copy without the File object for JSON serialization
-            const { proof, ...rest } = orderData;
-            const tempId = generateOfflineId();
-            const offlineOrder = {
-                ...rest,
-                proof: dataUrl,
-                id: tempId,
-                _offline: true,
-                _synced: false,
-                _createdAt: Date.now(),
-                timestamp: new Date().toISOString(),
-                items: typeof orderData.items === 'string' ? orderData.items : JSON.stringify(orderData.items)
-            };
-            await OfflineDB.saveOfflineOrder(offlineOrder);
-            // Enqueue the POST with proof as data URL (JSON), include _offlineId for tracking
-            const enqueueBody = { ...rest, proof: dataUrl };
-            await OfflineDB.enqueueRequest({
-                url: '/orders',
-                method: 'POST',
-                body: enqueueBody,
-                _offlineId: tempId
-            });
-            return tempId;
         }
+        const { proof, ...rest } = orderData;
+        const tempId = generateOfflineId();
+        const offlineOrder = {
+            ...rest,
+            proof: proofData,
+            id: tempId,
+            _offline: true,
+            _synced: false,
+            _createdAt: Date.now(),
+            timestamp: new Date().toISOString(),
+            items: typeof orderData.items === 'string' ? orderData.items : JSON.stringify(orderData.items)
+        };
+        await OfflineDB.saveOfflineOrder(offlineOrder);
+        const enqueueBody = { ...rest, proof: proofData };
+        await OfflineDB.enqueueRequest({
+            url: '/orders',
+            method: 'POST',
+            body: enqueueBody,
+            _offlineId: tempId
+        });
+        console.log(`💾 [OfflineOrder] Pedido guardado localmente en IndexedDB con ID: ${tempId}`);
+        return tempId;
+    };
 
-        const res = await ApiClient.post('/orders', formData);
-        return res.id;
-    } else {
-        // JSON
-        if (!navigator.onLine) {
-            // Generate a temporary ID and save the order locally
-            const tempId = generateOfflineId();
-            const offlineOrder = {
-                ...orderData,
-                id: tempId,
-                _offline: true,
-                _synced: false,
-                _createdAt: Date.now(),
-                timestamp: new Date().toISOString(),
-                // Stringify items for consistent storage
-                items: typeof orderData.items === 'string' ? orderData.items : JSON.stringify(orderData.items)
-            };
-            await OfflineDB.saveOfflineOrder(offlineOrder);
-            // Enqueue the API request with _offlineId for tracking
-            await OfflineDB.enqueueRequest({
-                url: '/orders',
-                method: 'POST',
-                body: orderData,
-                _offlineId: tempId
-            });
-            return tempId;
+    // Si ya estamos desconectados explícitamente, guardar local sin intentar red
+    if (!navigator.onLine) {
+        return await handleSaveOffline();
+    }
+
+    const hasFile = orderData.proof instanceof File;
+    try {
+        if (hasFile) {
+            const formData = new FormData();
+            for (const key in orderData) {
+                if (key === 'items') {
+                    formData.append('items', JSON.stringify(orderData.items));
+                } else if (key === 'proof') {
+                    formData.append('proof', orderData.proof);
+                } else if (typeof orderData[key] === 'object' && orderData[key] !== null) {
+                    formData.append(key, JSON.stringify(orderData[key]));
+                } else {
+                    formData.append(key, orderData[key]);
+                }
+            }
+            const res = await ApiClient.post('/orders', formData);
+            if (res && res.offline) {
+                return await handleSaveOffline();
+            }
+            return res.id;
+        } else {
+            const res = await ApiClient.post('/orders', orderData);
+            if (res && res.offline) {
+                return await handleSaveOffline();
+            }
+            return res.id;
         }
-
-        const res = await ApiClient.post('/orders', orderData);
-        return res.id;
+    } catch (err) {
+        // Red inestable, timeout o servidor caído (Lie-Fi)
+        console.warn('⚠️ Error de red o servidor al enviar pedido. Guardando automáticamente en IndexedDB:', err);
+        return await handleSaveOffline();
     }
 }
 

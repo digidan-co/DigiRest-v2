@@ -169,13 +169,24 @@ export function deleteModalShift(shiftId) {
 /**
  * Opens user schedule configuration modal
  */
-export function openUserScheduleModal(id) {
-    const user = (_usersCache && _usersCache.length ? _usersCache : (window._adminUsersCache || [])).find(u => u.id === id);
-    if (!user) return;
+export function openUserScheduleModal(userOrId) {
+    let user = null;
+    if (userOrId && typeof userOrId === 'object') {
+        user = userOrId;
+    } else {
+        const pool = (_usersCache && _usersCache.length ? _usersCache : (window._adminUsersCache || []));
+        user = pool.find(u => String(u.id) === String(userOrId));
+    }
+
+    if (!user) {
+        console.warn('⚠️ Usuario no encontrado para modal de jornada laboral:', userOrId);
+        return;
+    }
 
     if ($('sched-user-id')) $('sched-user-id').value = user.id;
     const roleMap = {
         'admin': 'Administrador',
+        'supervisor': 'Supervisor',
         'cajero': 'Cajero',
         'chef': 'Chef / Cocinero',
         'delivery': 'Repartidor',
@@ -237,9 +248,12 @@ export function setupUserScheduleListeners(reloadUsersCallback) {
         _reloadUsersCallback = reloadUsersCallback;
     }
 
-    // Close button
+    // Close & Cancel buttons
     if ($('btn-close-schedule-modal')) {
         $('btn-close-schedule-modal').onclick = closeUserScheduleModal;
+    }
+    if ($('btn-cancel-schedule')) {
+        $('btn-cancel-schedule').onclick = closeUserScheduleModal;
     }
 
     // Toggle day pills
@@ -353,6 +367,10 @@ export function setupUserScheduleListeners(reloadUsersCallback) {
                 await ApiClient.post(`/users/${userId}/schedule`, { schedule: schedulePayload });
                 toast("Horario laboral y jornadas guardados correctamente", "success");
                 closeUserScheduleModal();
+                if (window.reloadUsersPanel) {
+                    window.reloadUsersPanel();
+                }
+                window.dispatchEvent(new CustomEvent('users-refresh'));
                 if (_reloadUsersCallback) {
                     _reloadUsersCallback();
                 }

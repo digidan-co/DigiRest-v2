@@ -82,23 +82,27 @@ window.openWhatsApp = (orderId) => {
 // Cancel function
 window.promptCancelOrder = (id, modalToHide = null) => {
     const isCajero = state.user?.role === 'cajero';
+    // Cashiers are restricted only if cajeroCanCancel is explicitly set to false (Strict Mode)
+    // Default is true (flexible mode: cashier cancels with reason, no PIN required)
+    const requireAdminAuth = isCajero && state.restaurantData?.cajeroCanCancel === false;
+
     showPromptModal(
         'Anular Pedido',
         'Por favor, ingresa el motivo de la anulación:',
         'Ej: El cliente canceló la orden...',
         async (reason) => {
             try {
-                await updateOrder(id, { status: 'Anulado', cancelReason: reason });
+                await updateOrder(id, { status: 'Anulado', cancelReason: reason, adminVerified: true });
                 toast("Pedido anulado con éxito", "success");
                 if (modalToHide) {
                     modalToHide.classList.add('hidden');
                 }
             } catch (err) {
-                console.error("Error anlando pedido:", err);
-                toast("Error al anular", "error");
+                console.error("Error anulando pedido:", err);
+                toast(err.message || "Error al anular", "error");
             }
         },
-        { requireAdminAuth: isCajero }
+        { requireAdminAuth, orderId: id, type: 'cancel' }
     );
 };
 
@@ -502,6 +506,213 @@ export function setupAdminListeners() {
                 null,
                 'Sí, continuar'
             );
+        });
+    }
+
+    // ====================================================================
+    // Database Backup Download & Antifraud Audit Logs
+    // ====================================================================
+    const btnDownloadBackup = $('btn-download-backup');
+    if (btnDownloadBackup) {
+        btnDownloadBackup.addEventListener('click', async () => {
+            const originalHtml = btnDownloadBackup.innerHTML;
+            btnDownloadBackup.disabled = true;
+            btnDownloadBackup.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>Generando copia segura...</span>`;
+            try {
+                const token = localStorage.getItem('pos_token');
+                const res = await fetch('/api/admin/backups/download', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Error al generar la copia de seguridad');
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const nowStr = new Date().toISOString().split('T')[0];
+                a.download = `respaldo_pos_${nowStr}.sqlite`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                toast('Copia de seguridad descargada exitosamente (.sqlite)', 'success');
+            } catch (err) {
+                console.error('Backup download error:', err);
+                toast(err.message || 'Error al descargar la copia de seguridad', 'error');
+            } finally {
+                btnDownloadBackup.disabled = false;
+                btnDownloadBackup.innerHTML = originalHtml;
+            }
+        });
+    }
+
+    const btnOpenAuditLogs = $('btn-open-audit-logs');
+    const btnRefreshAuditLogs = $('btn-refresh-audit-logs');
+
+    let _auditLogs = [];
+    let _auditPage = 1;
+    const AUDIT_PAGE_SIZE = 10;
+
+    function renderAuditPage() {
+        const tbody = document.getElementById('audit-logs-body');
+        const pageInfo = document.getElementById('audit-logs-page-info');
+        const btnPrev = document.getElementById('btn-audit-prev');
+        const btnNext = document.getElementById('btn-audit-next');
+        if (!tbody) return;
+
+        if (!_auditLogs || _auditLogs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="p-8 text-center text-gray-400">
+                        <i class="fas fa-shield-alt text-2xl mb-2 text-gray-300 block"></i>
+                        No hay registros de auditoría aún. Las acciones críticas aparecerán aquí automáticamente.
+                    </td>
+                </tr>
+            `;
+            if (pageInfo) pageInfo.textContent = 'Página 1 de 1 (0 registros)';
+            if (btnPrev) btnPrev.disabled = true;
+            if (btnNext) btnNext.disabled = true;
+            return;
+        }
+
+        const totalPages = Math.max(1, Math.ceil(_auditLogs.length / AUDIT_PAGE_SIZE));
+        if (_auditPage > totalPages) _auditPage = totalPages;
+        if (_auditPage < 1) _auditPage = 1;
+
+        const start = (_auditPage - 1) * AUDIT_PAGE_SIZE;
+        const pageLogs = _auditLogs.slice(start, start + AUDIT_PAGE_SIZE);
+
+        const badgeMap = {
+            'ORDER_CANCELLED': { label: 'Pedido Anulado', bg: 'bg-red-100 text-red-700 border-red-200' },
+            'ORDER_DELETED': { label: 'Pedido Eliminado', bg: 'bg-rose-100 text-rose-700 border-rose-200' },
+            'ORDERS_CLEANUP': { label: 'Depuración Masiva', bg: 'bg-purple-100 text-purple-700 border-purple-200' },
+            'CASH_CLOSING_CREATED': { label: 'Cierre de Caja', bg: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+            'CASH_CLOSINGS_DELETED': { label: 'Cierre Borrado', bg: 'bg-amber-100 text-amber-700 border-amber-200' },
+            'COUNTERS_RESET': { label: 'Contadores Reiniciados', bg: 'bg-orange-100 text-orange-700 border-orange-200' },
+            'MANUAL_BACKUP_CREATED': { label: 'Copia Creada', bg: 'bg-blue-100 text-blue-700 border-blue-200' },
+            'BACKUP_DOWNLOADED': { label: 'Copia Descargada', bg: 'bg-cyan-100 text-cyan-700 border-cyan-200' }
+        };
+
+        tbody.innerHTML = pageLogs.map(l => {
+            const badge = badgeMap[l.event_type] || { label: l.event_type, bg: 'bg-gray-100 text-gray-700 border-gray-200' };
+            const dateObj = new Date(l.timestamp);
+            const dateFmt = dateObj.toLocaleString('es-CO', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+
+            let detailText = '';
+            const d = l.details || {};
+            if (l.event_type === 'ORDER_CANCELLED') {
+                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) • Motivo: <i>"${d.cancelReason || 'N/A'}"</i>`;
+            } else if (l.event_type === 'ORDER_DELETED') {
+                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) de ${d.client || 'Cliente'}`;
+            } else if (l.event_type === 'CASH_CLOSING_CREATED') {
+                detailText = `Cierre <b>#${d.cierreId}</b> • Total: $${Number(d.totalGeneral || 0).toLocaleString('es-CO')} (Efectivo: $${Number(d.ingresoEfectivo || 0).toLocaleString('es-CO')}, Transf: $${Number(d.ingresoTransferencia || 0).toLocaleString('es-CO')})`;
+            } else if (l.event_type === 'CASH_CLOSINGS_DELETED') {
+                detailText = d.fecha ? `Cierre del <b>${d.fecha}</b> (${d.totalGeneral ? '$' + Number(d.totalGeneral).toLocaleString('es-CO') : ''}) eliminado por ${d.deletedBy || 'Admin'}` : `Eliminados ${d.deletedCount || 1} cierre(s)`;
+            } else if (l.event_type === 'ORDERS_CLEANUP') {
+                detailText = `Depuración de ${d.total} pedidos antiguos (${d.localDeleted} locales, ${d.generalDeleted} generales)`;
+            } else if (l.event_type === 'COUNTERS_RESET') {
+                detailText = `${d.message || 'Contadores restablecidos a 0'}`;
+            } else if (d.filename) {
+                detailText = `Archivo: <code>${d.filename}</code> ${d.size ? `(${d.size})` : ''}`;
+            } else {
+                detailText = typeof d === 'string' ? d : JSON.stringify(d);
+            }
+
+            const userName = l.user_name || (d.userName || d.user || d.deletedBy) || 'Sistema';
+            const userRole = l.user_role || d.role || '';
+
+            return `
+                <tr class="hover:bg-gray-50/80 transition-colors">
+                    <td class="p-3 font-mono text-[11px] text-gray-600 whitespace-nowrap">${dateFmt}</td>
+                    <td class="p-3">
+                        <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.bg}">
+                            ${badge.label}
+                        </span>
+                    </td>
+                    <td class="p-3 whitespace-nowrap">
+                        <span class="font-bold text-gray-800">${userName}</span>
+                        ${userRole ? `<span class="text-[10px] text-gray-400 block capitalize">${userRole}</span>` : ''}
+                    </td>
+                    <td class="p-3 text-[11px] text-gray-700 leading-relaxed">${detailText}</td>
+                </tr>
+            `;
+        }).join('');
+
+        if (pageInfo) {
+            pageInfo.textContent = `Página ${_auditPage} de ${totalPages} (${_auditLogs.length} registros)`;
+        }
+        if (btnPrev) btnPrev.disabled = (_auditPage <= 1);
+        if (btnNext) btnNext.disabled = (_auditPage >= totalPages);
+    }
+
+    async function loadAuditLogs() {
+        const tbody = document.getElementById('audit-logs-body');
+        if (!tbody) return;
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="p-8 text-center text-gray-400">
+                    <i class="fas fa-spinner fa-spin text-lg mb-2 block"></i> Cargando registros de auditoría...
+                </td>
+            </tr>
+        `;
+
+        try {
+            const token = localStorage.getItem('pos_token');
+            const res = await fetch('/api/admin/audit-logs?limit=150', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error('Error al cargar logs');
+            const { logs } = await res.json();
+            _auditLogs = logs || [];
+            _auditPage = 1;
+            renderAuditPage();
+        } catch (err) {
+            console.error('Audit logs load error:', err);
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="p-6 text-center text-red-500 font-bold">
+                        <i class="fas fa-exclamation-circle mr-1"></i> Error al cargar los registros de auditoría.
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    const btnAuditPrev = document.getElementById('btn-audit-prev');
+    const btnAuditNext = document.getElementById('btn-audit-next');
+    if (btnAuditPrev) {
+        btnAuditPrev.onclick = () => {
+            if (_auditPage > 1) {
+                _auditPage--;
+                renderAuditPage();
+            }
+        };
+    }
+    if (btnAuditNext) {
+        btnAuditNext.onclick = () => {
+            const totalPages = Math.max(1, Math.ceil(_auditLogs.length / AUDIT_PAGE_SIZE));
+            if (_auditPage < totalPages) {
+                _auditPage++;
+                renderAuditPage();
+            }
+        };
+    }
+
+    if (btnOpenAuditLogs) {
+        btnOpenAuditLogs.addEventListener('click', () => {
+            const modal = document.getElementById('audit-logs-modal');
+            if (modal) modal.classList.remove('hidden');
+            loadAuditLogs();
+        });
+    }
+
+    if (btnRefreshAuditLogs) {
+        btnRefreshAuditLogs.addEventListener('click', () => {
+            loadAuditLogs();
         });
     }
 

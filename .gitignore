@@ -1,39 +1,105 @@
 # ============================================================
-# DigiRest v2 — .gitignore
+# DigiRest v2 — .gitignore (Optimizado para VPS y Producción)
 # ============================================================
 
-# Dependencies
+# 1. Dependencias (Cero módulos de Node en el repo)
 node_modules/
+*/node_modules/
 frontend/node_modules/
 server/node_modules/
+.pnpm-store/
+.yarn/
 
-# Environment variables (NEVER commit production secrets)
+# 2. Variables de entorno y credenciales (NUNCA subir a GitHub)
 .env
-.env.local
+.env.*
+!.env.example
 server/.env
+server/.env.*
 frontend/.env
+frontend/.env.*
+*.pem
+*.key
+*.cert
+*.crt
 
-# Logs & temp files
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.DS_Store
-Thumbs.db
-
-# SQLite temporary journal files (the clean template pos.sqlite is committed)
+# 3. Copias de Seguridad y Base de Datos en Ejecución
+# (Evita subir gigabytes de backups a GitHub y llenar el VPS)
+server/data/backups/
+server/data/backups/*
 server/data/*.sqlite-wal
 server/data/*.sqlite-shm
 server/data/*.sqlite-journal
 server/data/*.db-wal
 server/data/*.db-shm
+server/data/*.db-journal
+server/data/backup_*.sqlite
+server/data/*_backup_*.sqlite
+*.sqlite-backup*
+*.bak
+*.backup
+*.dump
 
-# User uploads (only .gitkeep is tracked)
+# 4. Archivos temporales y de exportación de negocio (CSV, Excel, PDF)
+*.csv
+*.xlsx
+server/reports/*.pdf
+server/reports/*.xlsx
+server/reports/*.csv
+
+# 5. Archivos subidos por usuarios (Imágenes de platos, comprobantes)
+# Solo se mantiene .gitkeep para conservar la carpeta en el repo
 server/uploads/*
 !server/uploads/.gitkeep
+uploads/*
+!uploads/.gitkeep
+frontend/public/uploads/*
+frontend/dist/uploads/*
 
-# IDE / Editor files
-.vscode/
-.idea/
+# 6. Caches y archivos temporales de compilación
+.vite/
+frontend/.vite/
+dist-ssr/
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# 7. Registros y logs de ejecución
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 8. Archivos basura de sistemas operativos
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*~
 *.swp
 *.swo
+*.tmp
+
+# 9. Configuraciones locales de editores y asistentes IA
+.vscode/
+frontend/.vscode/
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+.gemini/
+.agents/
+scratch/
+temp/
+tmp/
+
+# 10. Sobrescrituras locales de Docker
+docker-compose.override.yml

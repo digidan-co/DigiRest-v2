@@ -47,3 +47,9 @@ export function listenToToppings(callback) {
         socket.off('toppings_updated', onUpdate);
     };
 }
+
+export async function importToppingsCSV(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await ApiClient.post('/toppings/import', formData);
+}

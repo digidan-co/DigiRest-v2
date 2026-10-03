@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { getUsers } from '@/legacy/services/auth-service.js';
 import { formatScheduleSummary, openUserScheduleModal, setUserScheduleUsersCache } from '@/legacy/features/user-schedule.js';
@@ -9,12 +9,13 @@ const loading = ref(false);
 
 const roleLabels = {
     admin: 'bg-purple-100 text-purple-700',
+    supervisor: 'bg-indigo-100 text-indigo-700',
     cajero: 'bg-teal-100 text-teal-700',
     chef: 'bg-orange-100 text-orange-700',
     delivery: 'bg-blue-100 text-blue-700',
     mesero: 'bg-green-100 text-green-700',
 };
-const roleUpper = { admin: 'ADMIN', cajero: 'CAJERO', chef: 'CHEF', delivery: 'REPARTIDOR', mesero: 'MESERO' };
+const roleUpper = { admin: 'ADMIN', supervisor: 'SUPERVISOR', cajero: 'CAJERO', chef: 'CHEF', delivery: 'REPARTIDOR', mesero: 'MESERO' };
 
 const visibleUsers = computed(() => users.value.filter(u => u.name !== 'digidanMasterAdmin' && u.id !== 'digidan_master_admin'));
 
@@ -35,26 +36,64 @@ async function load() {
         const list = await getUsers();
         users.value = list || [];
         setUserScheduleUsersCache(users.value);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error('Error al cargar usuarios:', e); }
     finally { loading.value = false; }
 }
 
-function editUser(u) { if (window.editUser) window.editUser(u.id, u.name || '', u.username || u.user || u.name || '', u.role); }
-function deleteUser(u) { if (window.deleteUser) window.deleteUser(u.id); }
-function openSchedule(u) { openUserScheduleModal(u.id); }
+function editUser(u) { 
+    if (window.editUser) {
+        window.editUser(u.id, u.name || '', u.username || u.user || u.name || '', u.role); 
+    }
+}
+
+function deleteUser(u) { 
+    if (window.deleteUser) {
+        window.deleteUser(u.id); 
+    }
+}
+
+function openSchedule(u) { 
+    // Pass user object directly so modal opens immediately without relying on cache search
+    openUserScheduleModal(u); 
+}
+
 function newUser() {
     const $ = (id) => document.getElementById(id);
     if ($('user-modal-title')) $('user-modal-title').textContent = 'Nuevo Usuario';
+    // Clear user-id hidden field so it creates a new user instead of overwriting a previous one
+    if ($('user-id')) $('user-id').value = '';
     if ($('u-id')) $('u-id').value = '';
     const form = $('user-form');
     if (form) form.reset();
+    if ($('user-name')) $('user-name').value = '';
+    if ($('user-username')) $('user-username').value = '';
+    if ($('user-code')) {
+        $('user-code').value = '';
+        $('user-code').required = true;
+        $('user-code').placeholder = "Contraseña (letras, números y símbolos)";
+    }
     if ($('btn-save-user')) $('btn-save-user').innerText = 'Crear Usuario';
     if ($('user-modal')) $('user-modal').classList.remove('hidden');
 }
 
 onMounted(() => {
+    window.reloadUsersPanel = load;
+    window.addEventListener('users-refresh', load);
+    if (window.socket) {
+        window.socket.on('users_updated', load);
+    }
     if (localStorage.getItem('pos_token') && canAccessUsers()) {
         load();
+    }
+});
+
+onUnmounted(() => {
+    window.removeEventListener('users-refresh', load);
+    if (window.socket) {
+        window.socket.off('users_updated', load);
+    }
+    if (window.reloadUsersPanel === load) {
+        window.reloadUsersPanel = null;
     }
 });
 

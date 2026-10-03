@@ -72,8 +72,13 @@ function handleSessionReplaced(res, bodyText) {
     return false;
 }
 
+function isOfflineQueueable(endpoint) {
+    return typeof endpoint === 'string' && endpoint.startsWith('/orders');
+}
+
 export const ApiClient = {
     token: (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_token') : null),
+    _isSyncing: false,
 
     getToken() {
         if (!this.token && typeof localStorage !== 'undefined') {
@@ -131,107 +136,218 @@ export const ApiClient = {
             return null;
         }
 
-        // GET requests follow Stale-While-Revalidate through sw.js by default
-        // If forceNetwork is true (e.g., from a Socket.io event), append a timestamp to bypass cache
+        // Endpoints cacheables para navegación sin conexión
+        const isCacheable = endpoint.startsWith('/products') ||
+            endpoint.startsWith('/categories') ||
+            endpoint.startsWith('/toppings') ||
+            endpoint.startsWith('/delivery-zones') ||
+            endpoint.startsWith('/config');
+
+        // Si estamos explícitamente offline y es cacheable, devolver de inmediato desde IndexedDB
+        if (!navigator.onLine && isCacheable) {
+            const cached = await OfflineDB.getCache(endpoint);
+            if (cached) {
+                console.log(`📦 [ApiClient] Servido desde caché local IndexedDB: ${endpoint}`);
+                return cached;
+            }
+        }
+
         let url = `${API_URL}${endpoint}`;
         if (forceNetwork) {
             const separator = url.includes('?') ? '&' : '?';
             url += `${separator}_t=${Date.now()}`;
         }
 
-        const res = await fetch(url, { headers: this.getHeaders() });
-        const data = await this.handleResponse(res, 'GET', endpoint);
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-        // Handle paginated response from /orders endpoint
-        if (endpoint.startsWith('/orders') && data.orders && Array.isArray(data.orders)) {
-            return data.orders;
+            const res = await fetch(url, {
+                headers: this.getHeaders(),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            const data = await this.handleResponse(res, 'GET', endpoint);
+
+            // Handle paginated response from /orders endpoint
+            const resultData = (endpoint.startsWith('/orders') && data.orders && Array.isArray(data.orders))
+                ? data.orders
+                : data;
+
+            // Guardar copia local en IndexedDB para disponibilidad offline
+            if (isCacheable && resultData) {
+                OfflineDB.setCache(endpoint, resultData).catch(e => console.warn('Cache write notice:', e));
+            }
+
+            return resultData;
+        } catch (fetchErr) {
+            // Si la red falló o dio timeout, verificar si tenemos datos en IndexedDB
+            if (isCacheable) {
+                const cached = await OfflineDB.getCache(endpoint);
+                if (cached) {
+                    console.warn(`⚠️ [ApiClient] Red inaccesible. Usando catálogo en caché para: ${endpoint}`);
+                    return cached;
+                }
+            }
+            throw fetchErr;
         }
-
-        return data;
     },
 
     async post(endpoint, body) {
         const isFormData = body instanceof FormData;
 
         if (!navigator.onLine) {
-            if (isFormData) throw new Error("No se pueden subir archivos sin conexión.");
-            await OfflineDB.enqueueRequest({ url: endpoint, method: 'POST', body });
-            return { offline: true, message: 'Operación guardada localmente. Se sincronizará al conectar.' };
+            if (isOfflineQueueable(endpoint)) {
+                if (isFormData) throw new Error("No se pueden subir archivos sin conexión.");
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'POST', body });
+                return { offline: true, message: 'Operación guardada localmente. Se sincronizará al conectar.' };
+            }
+            throw new Error("No hay conexión con el servidor.");
         }
 
         const headers = this.getHeaders();
         if (isFormData) delete headers['Content-Type']; // Let browser set boundary
 
-        const res = await fetch(`${API_URL}${endpoint}`, {
-            method: 'POST',
-            headers,
-            body: isFormData ? body : JSON.stringify(body)
-        });
-        if (!res.ok) {
-            const bodyText = await res.text();
-            logApiError('POST', endpoint, body, res, bodyText);
-            if (handleSessionReplaced(res, bodyText)) {
-                throw new Error("Sesión reemplazada");
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+            const res = await fetch(`${API_URL}${endpoint}`, {
+                method: 'POST',
+                headers,
+                body: isFormData ? body : JSON.stringify(body),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                const bodyText = await res.text();
+                logApiError('POST', endpoint, body, res, bodyText);
+                if (handleSessionReplaced(res, bodyText)) {
+                    throw new Error("Sesión reemplazada");
+                }
+                throw new Error(bodyText);
             }
-            throw new Error(bodyText);
+            return res.json();
+        } catch (networkErr) {
+            const isNetworkFailure = networkErr.name === 'AbortError' ||
+                networkErr.message?.includes('Failed to fetch') ||
+                networkErr.message?.includes('NetworkError') ||
+                networkErr.name === 'TypeError';
+
+            if (isNetworkFailure && !isFormData && isOfflineQueueable(endpoint)) {
+                console.warn(`⚠️ Fallo de conexión en POST ${endpoint}. Guardando en cola offline...`);
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'POST', body });
+                return { offline: true, message: 'Fallo de red: Operación guardada localmente.' };
+            }
+            throw networkErr;
         }
-        return res.json();
     },
 
     async put(endpoint, body) {
         const isFormData = body instanceof FormData;
 
         if (!navigator.onLine) {
-            if (isFormData) throw new Error("No se pueden subir archivos sin conexión.");
-            await OfflineDB.enqueueRequest({ url: endpoint, method: 'PUT', body });
-            return { offline: true, message: 'Operación guardada localmente.' };
+            if (isOfflineQueueable(endpoint)) {
+                if (isFormData) throw new Error("No se pueden subir archivos sin conexión.");
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'PUT', body });
+                return { offline: true, message: 'Operación guardada localmente.' };
+            }
+            throw new Error("No hay conexión con el servidor.");
         }
 
         const headers = this.getHeaders();
         if (isFormData) delete headers['Content-Type']; // Let browser set boundary
 
-        const res = await fetch(`${API_URL}${endpoint}`, {
-            method: 'PUT',
-            headers,
-            body: isFormData ? body : JSON.stringify(body)
-        });
-        if (!res.ok) {
-            const bodyText = await res.text();
-            logApiError('PUT', endpoint, body, res, bodyText);
-            if (handleSessionReplaced(res, bodyText)) {
-                throw new Error("Sesión reemplazada");
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+            const res = await fetch(`${API_URL}${endpoint}`, {
+                method: 'PUT',
+                headers,
+                body: isFormData ? body : JSON.stringify(body),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                const bodyText = await res.text();
+                logApiError('PUT', endpoint, body, res, bodyText);
+                if (handleSessionReplaced(res, bodyText)) {
+                    throw new Error("Sesión reemplazada");
+                }
+                throw new Error(bodyText);
             }
-            throw new Error(bodyText);
+            return res.json();
+        } catch (networkErr) {
+            const isNetworkFailure = networkErr.name === 'AbortError' ||
+                networkErr.message?.includes('Failed to fetch') ||
+                networkErr.message?.includes('NetworkError') ||
+                networkErr.name === 'TypeError';
+
+            if (isNetworkFailure && !isFormData && isOfflineQueueable(endpoint)) {
+                console.warn(`⚠️ Fallo de conexión en PUT ${endpoint}. Guardando en cola offline...`);
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'PUT', body });
+                return { offline: true, message: 'Fallo de red: Operación guardada localmente.' };
+            }
+            throw networkErr;
         }
-        return res.json();
     },
 
     async patch(endpoint, body) {
         if (!navigator.onLine) {
-            await OfflineDB.enqueueRequest({ url: endpoint, method: 'PATCH', body });
-            return { offline: true, message: 'Operación guardada localmente.' };
+            if (isOfflineQueueable(endpoint)) {
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'PATCH', body });
+                return { offline: true, message: 'Operación guardada localmente.' };
+            }
+            throw new Error("No hay conexión con el servidor.");
         }
 
-        const res = await fetch(`${API_URL}${endpoint}`, {
-            method: 'PATCH',
-            headers: this.getHeaders(),
-            body: JSON.stringify(body)
-        });
-        if (!res.ok) {
-            const bodyText = await res.text();
-            logApiError('PATCH', endpoint, body, res, bodyText);
-            if (handleSessionReplaced(res, bodyText)) {
-                throw new Error("Sesión reemplazada");
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+            const res = await fetch(`${API_URL}${endpoint}`, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+                body: JSON.stringify(body),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                const bodyText = await res.text();
+                logApiError('PATCH', endpoint, body, res, bodyText);
+                if (handleSessionReplaced(res, bodyText)) {
+                    throw new Error("Sesión reemplazada");
+                }
+                throw new Error(bodyText);
             }
-            throw new Error(bodyText);
+            return res.json();
+        } catch (networkErr) {
+            const isNetworkFailure = networkErr.name === 'AbortError' ||
+                networkErr.message?.includes('Failed to fetch') ||
+                networkErr.message?.includes('NetworkError') ||
+                networkErr.name === 'TypeError';
+
+            if (isNetworkFailure && isOfflineQueueable(endpoint)) {
+                console.warn(`⚠️ Fallo de conexión en PATCH ${endpoint}. Guardando en cola offline...`);
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'PATCH', body });
+                return { offline: true, message: 'Fallo de red: Operación guardada localmente.' };
+            }
+            throw networkErr;
         }
-        return res.json();
     },
 
     async delete(endpoint, body = undefined) {
         if (!navigator.onLine) {
-            await OfflineDB.enqueueRequest({ url: endpoint, method: 'DELETE', body });
-            return { offline: true, message: 'Operación guardada localmente.' };
+            if (isOfflineQueueable(endpoint)) {
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'DELETE', body });
+                return { offline: true, message: 'Operación guardada localmente.' };
+            }
+            throw new Error("No hay conexión con el servidor.");
         }
 
         const fetchOptions = {
@@ -242,176 +358,202 @@ export const ApiClient = {
             fetchOptions.body = JSON.stringify(body);
         }
 
-        const res = await fetch(`${API_URL}${endpoint}`, fetchOptions);
-        if (!res.ok) {
-            const bodyText = await res.text();
-            logApiError('DELETE', endpoint, body, res, bodyText);
-            if (handleSessionReplaced(res, bodyText)) {
-                throw new Error("Sesión reemplazada");
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            fetchOptions.signal = controller.signal;
+
+            const res = await fetch(`${API_URL}${endpoint}`, fetchOptions);
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                const bodyText = await res.text();
+                logApiError('DELETE', endpoint, body, res, bodyText);
+                if (handleSessionReplaced(res, bodyText)) {
+                    throw new Error("Sesión reemplazada");
+                }
+                throw new Error(bodyText);
             }
-            throw new Error(bodyText);
+            return res.json();
+        } catch (networkErr) {
+            const isNetworkFailure = networkErr.name === 'AbortError' ||
+                networkErr.message?.includes('Failed to fetch') ||
+                networkErr.message?.includes('NetworkError') ||
+                networkErr.name === 'TypeError';
+
+            if (isNetworkFailure && isOfflineQueueable(endpoint)) {
+                console.warn(`⚠️ Fallo de conexión en DELETE ${endpoint}. Guardando en cola offline...`);
+                await OfflineDB.enqueueRequest({ url: endpoint, method: 'DELETE', body });
+                return { offline: true, message: 'Fallo de red: Operación guardada localmente.' };
+            }
+            throw networkErr;
         }
-        return res.json();
     },
 
     async syncOfflineRequests() {
-        const queue = await OfflineDB.getQueue();
-        if (queue.length === 0) return 0;
+        if (this._isSyncing) {
+            console.log('🔄 Sincronización offline ya en curso. Omitiendo ejecución redundante.');
+            return 0;
+        }
+        this._isSyncing = true;
+        try {
+            const queue = await OfflineDB.getQueue();
+            if (queue.length === 0) return 0;
 
-        let syncedCount = 0;
-        for (const req of queue) {
-            try {
-                const headers = this.getHeaders();
-                let fetchOptions;
+            let syncedCount = 0;
+            for (const req of queue) {
+                try {
+                    const headers = this.getHeaders();
+                    let fetchOptions;
 
-                // Special handling: if this is a POST or PUT /orders with a data URL proof,
-                // convert to FormData so the server processes the image as a real file via multer
-                const hasDataUrlProof = req.url.startsWith('/orders') && (req.method === 'POST' || req.method === 'PUT')
-                    && req.body && typeof req.body.proof === 'string'
-                    && req.body.proof.startsWith('data:');
+                    // Special handling: if this is a POST or PUT /orders with a data URL proof,
+                    // convert to FormData so the server processes the image as a real file via multer
+                    const hasDataUrlProof = req.url.startsWith('/orders') && (req.method === 'POST' || req.method === 'PUT')
+                        && req.body && typeof req.body.proof === 'string'
+                        && req.body.proof.startsWith('data:');
 
-                if (hasDataUrlProof) {
-                    const formData = new FormData();
-                    // Convert data URL to Blob for file upload
-                    const dataUrl = req.body.proof;
-                    const [header, base64Data] = dataUrl.split(',');
-                    const mimeMatch = header.match(/data:([^;]+)/);
-                    const mime = mimeMatch ? mimeMatch[1] : 'image/webp';
-                    const byteChars = atob(base64Data);
-                    const byteArray = new Uint8Array(byteChars.length);
-                    for (let i = 0; i < byteChars.length; i++) {
-                        byteArray[i] = byteChars.charCodeAt(i);
-                    }
-                    const ext = mime.split('/')[1] || 'webp';
-                    const blob = new Blob([byteArray], { type: mime });
-                    formData.append('proof', blob, `offline_proof.${ext}`);
-
-                    // Append all other fields (except proof which is now a file)
-                    for (const [key, value] of Object.entries(req.body)) {
-                        if (key === 'proof') continue;
-                        if (value === null || value === undefined) continue;
-                        if (typeof value === 'object') {
-                            formData.append(key, JSON.stringify(value));
-                        } else {
-                            formData.append(key, value);
+                    if (hasDataUrlProof) {
+                        const formData = new FormData();
+                        // Convert data URL to Blob for file upload
+                        const dataUrl = req.body.proof;
+                        const [header, base64Data] = dataUrl.split(',');
+                        const mimeMatch = header.match(/data:([^;]+)/);
+                        const mime = mimeMatch ? mimeMatch[1] : 'image/webp';
+                        const byteChars = atob(base64Data);
+                        const byteArray = new Uint8Array(byteChars.length);
+                        for (let i = 0; i < byteChars.length; i++) {
+                            byteArray[i] = byteChars.charCodeAt(i);
                         }
+                        const ext = mime.split('/')[1] || 'webp';
+                        const blob = new Blob([byteArray], { type: mime });
+                        formData.append('proof', blob, `offline_proof.${ext}`);
+
+                        // Append all other fields (except proof which is now a file)
+                        for (const [key, value] of Object.entries(req.body)) {
+                            if (key === 'proof') continue;
+                            if (value === null || value === undefined) continue;
+                            if (typeof value === 'object') {
+                                formData.append(key, JSON.stringify(value));
+                            } else {
+                                formData.append(key, value);
+                            }
+                        }
+
+                        // For FormData, do NOT set Content-Type — browser will set multipart boundary
+                        const formHeaders = { ...headers };
+                        delete formHeaders['Content-Type'];
+                        fetchOptions = {
+                            method: req.method,
+                            headers: formHeaders,
+                            body: formData
+                        };
+                        console.log(`📸 Syncing offline order with proof as FormData file upload`);
+                    } else {
+                        fetchOptions = {
+                            method: req.method,
+                            headers
+                        };
+                        if (req.body) fetchOptions.body = JSON.stringify(req.body);
                     }
 
-                    // For FormData, do NOT set Content-Type — browser will set multipart boundary
-                    const formHeaders = { ...headers };
-                    delete formHeaders['Content-Type'];
-                    fetchOptions = {
-                        method: req.method,
-                        headers: formHeaders,
-                        body: formData
-                    };
-                    console.log(`📸 Syncing offline order with proof as FormData file upload`);
-                } else {
-                    fetchOptions = {
-                        method: req.method,
-                        headers
-                    };
-                    if (req.body) fetchOptions.body = JSON.stringify(req.body);
-                }
+                    const res = await fetch(`${API_URL}${req.url}`, fetchOptions);
+                    if (res.ok) {
+                        await OfflineDB.removeFromQueue(req.id);
+                        syncedCount++;
 
-                const res = await fetch(`${API_URL}${req.url}`, fetchOptions);
-                if (res.ok) {
-                    await OfflineDB.removeFromQueue(req.id);
-                    syncedCount++;
-
-                    // If this was a POST to /orders, clean up the synced offline order
-                    // AND rewrite any queued PUT/DELETE URLs that reference the old temp ID
-                    if (req.url === '/orders' && req.method === 'POST') {
-                        try {
-                            const { getOfflineOrders, removeOfflineOrder } = await import('./order-service.js');
-                            const offlineOrders = await getOfflineOrders();
-                            // Prefer matching by _offlineId if available
-                            let matched = null;
-                            if (req._offlineId) {
-                                matched = offlineOrders.find(o => o.id === req._offlineId);
-                            }
-                            if (!matched) {
-                                const body = req.body || {};
-                                // Fallback: match by client name + total
-                                matched = offlineOrders.find(o =>
-                                    o.client === body.client &&
-                                    Math.abs(parseFloat(o.total) - parseFloat(body.total)) < 0.01
-                                );
-                            }
-                            if (matched) {
-                                await removeOfflineOrder(matched.id);
-                            }
-
-                            // ── URL REWRITING: update any queued PUT/DELETE that reference the old temp ID ──
-                            const oldId = req._offlineId;
-                            if (oldId) {
-                                // Get the real server ID from the response
-                                const responseData = await res.clone().json();
-                                const realId = responseData && responseData.id;
-                                if (realId && realId !== oldId) {
-                                    // Get remaining queue (after removing this POST request)
-                                    const remainingQueue = await OfflineDB.getQueue();
-                                    for (const queued of remainingQueue) {
-                                        if (queued.url && queued.url.includes(oldId)) {
-                                            const oldUrl = queued.url;
-                                            queued.url = queued.url.replace(oldId, realId);
-                                            console.log(`🔄 Rewriting queued ${queued.method} URL: ${oldUrl} → ${queued.url}`);
-                                            await OfflineDB.updateQueuedRequest(queued.id, { url: queued.url });
-                                        }
-                                    }
-
-                                    // ── STATE UPDATE: replace temp ID with real ID in memory ──
-                                    // This prevents the edit modal from re-entering offline path
-                                    const updateStateArray = (arr) => {
-                                        if (!arr) return;
-                                        const idx = arr.findIndex(o => o.id == oldId);
-                                        if (idx !== -1) {
-                                            arr[idx].id = realId;
-                                            delete arr[idx]._offline;
-                                            console.log(`🔄 Updated state: replaced ${oldId} → ${realId}`);
-                                        }
-                                    };
-                                    updateStateArray(state.orders);
-                                    updateStateArray(state.waiterOrders);
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Error cleaning up offline orders after POST sync:", e);
-                        }
-                    } else if (req.method === 'PUT' && req.url && req.url.includes('/orders/')) {
-                        // ── CLEANUP for synced PUT/DELETE on orders ──
-                        // Remove stale entries from IndexedDB offline_orders store
-                        // that were created by updateOfflineOrderLocally() during offline edits.
-                        // Extract the order ID from the URL (e.g., /orders/PG-1 or /orders/PG-1/status)
-                        try {
-                            const urlParts = req.url.split('/');
-                            // URL format: /orders/:id or /orders/:id/*
-                            // Parts: ['', 'orders', ':id', ...]
-                            const orderIdx = urlParts.indexOf('orders');
-                            const orderId = orderIdx !== -1 && urlParts[orderIdx + 1] ? urlParts[orderIdx + 1] : null;
-                            if (orderId && !orderId.startsWith('OFF-')) {
+                        // If this was a POST to /orders, clean up the synced offline order
+                        // AND rewrite any queued PUT/DELETE URLs that reference the old temp ID
+                        if (req.url === '/orders' && req.method === 'POST') {
+                            try {
                                 const { getOfflineOrders, removeOfflineOrder } = await import('./order-service.js');
                                 const offlineOrders = await getOfflineOrders();
-                                const staleOrder = offlineOrders.find(o => o.id === orderId);
-                                if (staleOrder) {
-                                    await removeOfflineOrder(orderId);
-                                    console.log(`🧹 Cleaned up stale offline order after ${req.method} sync: ${orderId}`);
+                                // Prefer matching by _offlineId if available
+                                let matched = null;
+                                if (req._offlineId) {
+                                    matched = offlineOrders.find(o => o.id === req._offlineId);
                                 }
+                                if (!matched) {
+                                    const body = req.body || {};
+                                    // Fallback: match by client name + total
+                                    matched = offlineOrders.find(o =>
+                                        o.client === body.client &&
+                                        Math.abs(parseFloat(o.total) - parseFloat(body.total)) < 0.01
+                                    );
+                                }
+                                if (matched) {
+                                    await removeOfflineOrder(matched.id);
+                                }
+
+                                // ── URL REWRITING: update any queued PUT/DELETE that reference the old temp ID ──
+                                const oldId = req._offlineId;
+                                if (oldId) {
+                                    // Get the real server ID from the response
+                                    const responseData = await res.clone().json();
+                                    const realId = responseData && responseData.id;
+                                    if (realId && realId !== oldId) {
+                                        // Get remaining queue (after removing this POST request)
+                                        const remainingQueue = await OfflineDB.getQueue();
+                                        for (const queued of remainingQueue) {
+                                            if (queued.url && queued.url.includes(oldId)) {
+                                                const oldUrl = queued.url;
+                                                queued.url = queued.url.replace(oldId, realId);
+                                                console.log(`🔄 Rewriting queued ${queued.method} URL: ${oldUrl} → ${queued.url}`);
+                                                await OfflineDB.updateQueuedRequest(queued.id, { url: queued.url });
+                                            }
+                                        }
+
+                                        // ── STATE UPDATE: replace temp ID with real ID in memory ──
+                                        // This prevents the edit modal from re-entering offline path
+                                        const updateStateArray = (arr) => {
+                                            if (!arr) return;
+                                            const idx = arr.findIndex(o => o.id == oldId);
+                                            if (idx !== -1) {
+                                                arr[idx].id = realId;
+                                                delete arr[idx]._offline;
+                                                console.log(`🔄 Updated state: replaced ${oldId} → ${realId}`);
+                                            }
+                                        };
+                                        updateStateArray(state.orders);
+                                        updateStateArray(state.waiterOrders);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Error cleaning up offline orders after POST sync:", e);
                             }
-                        } catch (e) {
-                            console.error("Error cleaning up offline orders after PUT sync:", e);
+                        } else if (req.method === 'PUT' && req.url && req.url.includes('/orders/')) {
+                            // ── CLEANUP for synced PUT/DELETE on orders ──
+                            // Remove stale entries from IndexedDB offline_orders store
+                            // that were created by updateOfflineOrderLocally() during offline edits.
+                            try {
+                                const urlParts = req.url.split('/');
+                                const orderIdx = urlParts.indexOf('orders');
+                                const orderId = orderIdx !== -1 && urlParts[orderIdx + 1] ? urlParts[orderIdx + 1] : null;
+                                if (orderId && !orderId.startsWith('OFF-')) {
+                                    const { getOfflineOrders, removeOfflineOrder } = await import('./order-service.js');
+                                    const offlineOrders = await getOfflineOrders();
+                                    const staleOrder = offlineOrders.find(o => o.id === orderId);
+                                    if (staleOrder) {
+                                        await removeOfflineOrder(orderId);
+                                        console.log(`🧹 Cleaned up stale offline order after ${req.method} sync: ${orderId}`);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Error cleaning up offline orders after PUT sync:", e);
+                            }
                         }
+                    } else if (res.status === 401 || res.status === 400 || res.status === 404) {
+                        // Si el error es un bad request o no autorizado, removerlo de la cola para no bloquear
+                        console.error("Failed offline request permanently:", req);
+                        await OfflineDB.removeFromQueue(req.id);
                     }
-                } else if (res.status === 401 || res.status === 400 || res.status === 404) {
-                    // Si el error es un bad request o no autorizado, removerlo de la cola para no bloquear
-                    console.error("Failed offline request permanently:", req);
-                    await OfflineDB.removeFromQueue(req.id);
+                } catch (error) {
+                    console.error("Retrying offline request failed. Still offline?", error);
+                    break; // Stop syncing if we hit a network error again
                 }
-            } catch (error) {
-                console.error("Retrying offline request failed. Still offline?", error);
-                break; // Stop syncing if we hit a network error again
             }
+            return syncedCount;
+        } finally {
+            this._isSyncing = false;
         }
-        return syncedCount;
     }
 };

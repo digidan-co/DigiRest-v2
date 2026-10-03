@@ -2,9 +2,140 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
+const { upload } = require('../middleware/upload');
 const { v4: uuidv4 } = require('uuid');
+const csv = require('csv-parser');
+const { Parser } = require('json2csv');
+const fs = require('fs');
 
 module.exports = (io) => {
+
+    // --- EXPORT TOPPINGS TO CSV ---
+    router.get('/toppings/export', (req, res) => {
+        const sql = `
+            SELECT 
+                t.id, t.name, t.group_name, t.price, t.available, 
+                t.inventory_mode, t.stock, t.min_stock, 
+                t.supply_id, COALESCE(s.name, '') as supply_name, t.supply_quantity, t.created_at
+            FROM toppings t
+            LEFT JOIN supplies s ON s.id = t.supply_id
+            ORDER BY t.group_name ASC, t.name ASC
+        `;
+        db.all(sql, [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            try {
+                const fields = ['id', 'name', 'group_name', 'price', 'available', 'inventory_mode', 'stock', 'min_stock', 'supply_id', 'supply_name', 'supply_quantity', 'created_at'];
+                const parser = new Parser({ fields });
+                const csvData = parser.parse(rows);
+
+                res.header('Content-Type', 'text/csv; charset=utf-8');
+                res.header('Content-Disposition', 'attachment; filename=toppings_digirest.csv');
+                res.send(csvData);
+            } catch (err) {
+                console.error('Error generating toppings CSV:', err);
+                res.status(500).json({ error: 'Error generating CSV' });
+            }
+        });
+    });
+
+    // --- IMPORT TOPPINGS FROM CSV ---
+    router.post('/toppings/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: "No se subió ningún archivo" });
+        }
+
+        const filePath = req.file.path;
+        const results = [];
+
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => results.push(data))
+            .on('end', () => {
+                let processed = 0;
+                let errors = 0;
+
+                const dbRun = (sql, params) => {
+                    return new Promise((resolve, reject) => {
+                        db.run(sql, params, function (err) {
+                            if (err) reject(err);
+                            else resolve(this);
+                        });
+                    });
+                };
+
+                const processBatch = async () => {
+                    for (const row of results) {
+                        try {
+                            const name = (row.name || row.nombre || row.topping || row.adicion || '').trim();
+                            if (!name) continue;
+
+                            const group_name = (row.group_name || row.grupo || row.categoria || 'General').trim();
+                            const price = parseFloat(String(row.price ?? row.precio ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+
+                            const rawAvail = row.available !== undefined ? row.available : row.disponible;
+                            const available = (rawAvail === undefined || rawAvail === '' || rawAvail === '1' || rawAvail === 1 || rawAvail === 'true' || rawAvail === true || String(rawAvail).toLowerCase() === 'si' || String(rawAvail).toLowerCase() === 'sí') ? 1 : 0;
+
+                            const inventory_mode = (row.inventory_mode || row.modo_inventario || 'direct').trim().toLowerCase() === 'linked_supply' ? 'linked_supply' : 'direct';
+                            const stock = parseFloat(String(row.stock ?? row.stock_actual ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+                            const min_stock = parseFloat(String(row.min_stock ?? row.stock_minimo ?? 5).replace(/[^0-9.-]/g, '')) || 5;
+                            let supply_id = (row.supply_id || row.id_insumo || '').trim() || null;
+                            const supply_name = (row.supply_name || row.insumo || '').trim();
+                            const supply_quantity = parseFloat(String(row.supply_quantity ?? row.cantidad_insumo ?? 1).replace(/[^0-9.-]/g, '')) || 1;
+
+                            // If supply_id not provided but supply_name is, lookup supply
+                            if (!supply_id && supply_name) {
+                                const foundSup = await new Promise(res => db.get("SELECT id FROM supplies WHERE LOWER(name) = LOWER(?)", [supply_name], (err, s) => res(s)));
+                                if (foundSup) {
+                                    supply_id = foundSup.id;
+                                }
+                            }
+
+                            let existing = null;
+                            if (row.id) {
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM toppings WHERE id = ?", [row.id], (err, r) => resolve(r));
+                                });
+                            }
+                            if (!existing) {
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM toppings WHERE LOWER(name) = LOWER(?) AND LOWER(group_name) = LOWER(?)", [name, group_name], (err, r) => resolve(r));
+                                });
+                            }
+
+                            if (existing) {
+                                await dbRun(
+                                    `UPDATE toppings 
+                                     SET name=?, group_name=?, price=?, available=?, inventory_mode=?, stock=?, min_stock=?, supply_id=?, supply_quantity=?
+                                     WHERE id=?`,
+                                    [name, group_name, price, available, inventory_mode, stock, min_stock, supply_id, supply_quantity, existing.id]
+                                );
+                            } else {
+                                const newId = row.id || uuidv4();
+                                await dbRun(
+                                    `INSERT INTO toppings 
+                                     (id, name, group_name, price, available, inventory_mode, stock, min_stock, supply_id, supply_quantity)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    [newId, name, group_name, price, available, inventory_mode, stock, min_stock, supply_id, supply_quantity]
+                                );
+                            }
+                            processed++;
+                        } catch (e) {
+                            console.error("Import Error topping row:", row, e);
+                            errors++;
+                        }
+                    }
+
+                    fs.unlink(filePath, (err) => {
+                        if (err) console.error("Error deleting uploaded file:", err);
+                    });
+
+                    if (io) io.emit('toppings_updated');
+                    res.json({ message: `Importación completada. Toppings procesados: ${processed}, Errores: ${errors}` });
+                };
+
+                processBatch();
+            });
+    });
 
     // --- GET ALL TOPPINGS (WITH DIRECT OR LINKED INVENTORY STOCK) ---
     router.get('/toppings', (req, res) => {

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
-import { getToppings, toggleTopping, deleteTopping } from '@/legacy/services/toppings-service.js';
+import { getToppings, toggleTopping, deleteTopping, importToppingsCSV } from '@/legacy/services/toppings-service.js';
 import { openToppingModal, openToppingGroupsModal, getToppingGroups } from '@/legacy/features/toppings-manager.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
 
@@ -53,6 +53,33 @@ function deleteToppingItem(t) {
     });
 }
 
+const importingToppings = ref(false);
+
+function exportToppings() {
+    window.open('/api/toppings/export', '_blank');
+}
+
+async function onImportToppings(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+        toast('Por favor selecciona un archivo CSV', 'error');
+        return;
+    }
+    importingToppings.value = true;
+    try {
+        const res = await importToppingsCSV(file);
+        toast(res.message || 'Toppings importados correctamente', 'success');
+        await load();
+    } catch (err) {
+        console.error(err);
+        toast('Error al importar toppings: ' + (err.message || ''), 'error');
+    } finally {
+        importingToppings.value = false;
+        e.target.value = '';
+    }
+}
+
 onMounted(load);
 </script>
 
@@ -70,9 +97,18 @@ onMounted(load);
                 <option v-for="g in groups" :key="g" :value="g">{{ g }}</option>
             </select>
         </div>
-        <div class="flex gap-2 w-full sm:w-auto justify-end">
+        <div class="flex gap-2 w-full sm:w-auto justify-end flex-wrap items-center">
+            <input type="file" ref="fileToppingsRef" id="file-import-toppings" accept=".csv" class="hidden" @change="onImportToppings">
+            <button type="button" @click="exportToppings"
+                class="px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Exportar toppings a CSV">
+                <i class="fas fa-file-export text-gray-500"></i> Exportar
+            </button>
+            <button type="button" @click="$refs.fileToppingsRef?.click()" :disabled="importingToppings"
+                class="px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Importar toppings desde CSV">
+                <i class="fas" :class="importingToppings ? 'fa-spinner fa-spin' : 'fa-file-import text-gray-500'"></i> Importar
+            </button>
             <button type="button" @click="manageGroups"
-                class="px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 cursor-pointer shadow-xs">
+                class="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all active:scale-95 cursor-pointer shadow-xs">
                 <i class="fas fa-layer-group text-amber-600"></i><span>Gestionar Grupos</span>
             </button>
             <button type="button" @click="newTopping"

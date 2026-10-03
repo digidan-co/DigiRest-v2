@@ -1,7 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
+const { logAudit } = require('../utils/auditLogger');
+
+function cleanProofFile(proofPath) {
+    if (!proofPath || typeof proofPath !== 'string') return;
+    try {
+        const clean = proofPath.startsWith('/') ? proofPath.slice(1) : proofPath;
+        const fullPath = path.resolve(__dirname, '..', clean);
+        if (fs.existsSync(fullPath) && fullPath.includes('uploads')) {
+            fs.unlink(fullPath, (err) => {
+                if (err) console.warn('No se pudo borrar comprobante huérfano:', err.message);
+                else console.log('🧹 [STORAGE] Comprobante eliminado:', clean);
+            });
+        }
+    } catch (_) {}
+}
 
 module.exports = (io) => {
     // DELETE /orders/:id - Delete order (Admin, Cajero, or Waiter who created it)
@@ -11,12 +28,12 @@ module.exports = (io) => {
         const userId = req.user ? req.user.id : null;
 
         // Check if user is allowed to delete this order
-        db.get('SELECT waiterId, status FROM orders WHERE id = ?', [id], (findErr, order) => {
+        db.get('SELECT waiterId, status, proof, total, client FROM orders WHERE id = ?', [id], (findErr, order) => {
             if (findErr) return res.status(500).json({ error: findErr.message });
             if (!order) return res.status(404).json({ error: 'Order not found' });
 
-            // Admin and Cajero can delete any order. Waiters can only delete their own pending orders.
-            const isPrivileged = userRole === 'admin' || userRole === 'cajero';
+            // Admin, Supervisor, and Cajero can delete any order. Waiters can only delete their own pending orders.
+            const isPrivileged = userRole === 'admin' || userRole === 'supervisor' || userRole === 'cajero';
             const isOwnerWaiter = (userRole === 'mesero' || userRole === 'waiter') && order.waiterId === userId && order.status === 'Pendiente';
 
             if (!isPrivileged && !isOwnerWaiter) {
@@ -36,6 +53,20 @@ module.exports = (io) => {
                     if (this.changes === 0) {
                         return res.status(404).json({ error: 'Order not found' });
                     }
+
+                    // Limpiar archivo de comprobante físico en disco
+                    if (order.proof) {
+                        cleanProofFile(order.proof);
+                    }
+
+                    // Auditoría antifraude: registrar quién eliminó el pedido y de qué monto
+                    logAudit('ORDER_DELETED', req.user?.id || 'unknown', req.ip, {
+                        orderId: id,
+                        client: order.client || 'Cliente',
+                        total: order.total || 0,
+                        deletedBy: req.user?.name || 'Usuario',
+                        role: userRole
+                    });
 
                     // Emit Socket.io event for real-time update
                     io.to('admin').emit('order_deleted', { id });
@@ -178,6 +209,13 @@ module.exports = (io) => {
                             if (err) console.error('Error sweeping orphaned notes_log:', err);
                             resolve();
                         });
+                    });
+
+                    logAudit('ORDERS_CLEANUP', req.user?.id || 'admin', req.ip, {
+                        localDeleted,
+                        generalDeleted,
+                        total,
+                        user: req.user?.name || 'Administrador'
                     });
 
                     io.emit('orders_cleaned', { localDeleted, generalDeleted, total });

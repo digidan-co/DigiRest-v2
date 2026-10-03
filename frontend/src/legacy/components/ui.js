@@ -79,18 +79,35 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
             <div id="prompt-modal-inner" class="glass-panel w-full max-w-sm rounded-3xl shadow-2xl p-6 slide-up bg-white text-center">
                 <h3 id="prompt-modal-title" class="font-bold text-xl text-gray-800 mb-2"></h3>
                 <p id="prompt-modal-msg" class="text-sm text-gray-500 mb-4"></p>
-                <div class="mb-6 text-left">
+                <div class="mb-5 text-left">
                     <input type="text" id="prompt-modal-input" class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all shadow-sm" placeholder="">
                     <p id="prompt-modal-error" class="hidden text-xs text-red-500 mt-2 font-medium">¡Debes ingresar un motivo!</p>
                 </div>
                 <div id="prompt-admin-auth" class="hidden mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
-                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Autorización de Administrador</p>
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Autorización Requerida</p>
                     <input type="hidden" id="prompt-admin-user" value="">
-                    <div>
-                        <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Código de Administrador</label>
-                        <input type="password" id="prompt-admin-code" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm text-sm" placeholder="Ingresa el código del admin" autocomplete="off">
+                    <div class="text-left">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Código de Admin / Supervisor</label>
+                        <input type="password" id="prompt-admin-code" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm text-sm" placeholder="Ingresa PIN de autorización" autocomplete="off">
                     </div>
-                    <p id="prompt-admin-error" class="hidden text-xs text-red-500 mt-1 font-medium">Credenciales de administrador incorrectas</p>
+                    <p id="prompt-admin-error" class="hidden text-xs text-red-500 mt-1 font-medium">Credenciales incorrectas</p>
+
+                    <div id="prompt-admin-remote-section" class="pt-1">
+                        <div class="relative flex py-1 items-center">
+                            <div class="flex-grow border-t border-gray-200"></div>
+                            <span class="flex-shrink mx-2 text-[10px] text-gray-400 font-semibold uppercase">O en tiempo real</span>
+                            <div class="flex-grow border-t border-gray-200"></div>
+                        </div>
+                        <button type="button" id="prompt-admin-request-btn" class="w-full py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-95">
+                            <i class="fas fa-paper-plane text-amber-600"></i> Solicitar aprobación remota
+                        </button>
+                        <div id="prompt-admin-waiting" class="hidden p-3 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-1 mt-2">
+                            <div class="flex items-center justify-center gap-2 text-xs font-bold text-amber-800">
+                                <i class="fas fa-spinner fa-spin text-amber-600"></i> Solicitud enviada
+                            </div>
+                            <p class="text-[11px] text-amber-700 leading-tight">Esperando aprobación de Administrador o Supervisor. Se anulará automáticamente al ser aceptada.</p>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex gap-3 justify-center">
                     <button id="prompt-modal-cancel" class="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors">Cancelar</button>
@@ -111,6 +128,8 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
     const adminUserInput = modal.querySelector('#prompt-admin-user');
     const adminCodeInput = modal.querySelector('#prompt-admin-code');
     const adminErrorEl = modal.querySelector('#prompt-admin-error');
+    const requestBtn = modal.querySelector('#prompt-admin-request-btn');
+    const waitingEl = modal.querySelector('#prompt-admin-waiting');
 
     titleEl.innerText = title;
     msgEl.innerText = msg;
@@ -123,8 +142,10 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
         adminAuthDiv.classList.remove('hidden');
         adminCodeInput.value = '';
         adminErrorEl.classList.add('hidden');
+        if (waitingEl) waitingEl.classList.add('hidden');
+        if (requestBtn) requestBtn.classList.remove('hidden');
 
-        // Auto-fetch admin user list and populate hidden field with first admin
+        // Auto-fetch admin user list
         (async () => {
             try {
                 const token = localStorage.getItem('pos_token') || '';
@@ -136,7 +157,6 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
                 if (Array.isArray(admins) && admins.length > 0) {
                     adminUserInput.value = admins[0].name;
                 } else {
-                    // Fallback: prompt to enter manually if no admin found
                     adminUserInput.value = '';
                 }
             } catch (e) {
@@ -144,6 +164,73 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
                 adminUserInput.value = '';
             }
         })();
+
+        // Setup remote request button
+        if (requestBtn && options.orderId) {
+            requestBtn.onclick = async () => {
+                const reason = inputEl.value.trim();
+                if (!reason) {
+                    errorEl.classList.remove('hidden');
+                    inputEl.classList.add('border-red-500', 'bg-red-50');
+                    inputEl.focus();
+                    return;
+                }
+
+                requestBtn.classList.add('hidden');
+                waitingEl.classList.remove('hidden');
+
+                try {
+                    const token = localStorage.getItem('pos_token') || '';
+                    const res = await fetch('/api/authorizations/request', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({
+                            orderId: options.orderId,
+                            type: options.type || 'cancel',
+                            reason: reason
+                        })
+                    });
+                    const result = await res.json();
+
+                    if (!res.ok) {
+                        waitingEl.classList.add('hidden');
+                        requestBtn.classList.remove('hidden');
+                        adminErrorEl.textContent = result.error || 'Error al enviar solicitud';
+                        adminErrorEl.classList.remove('hidden');
+                        return;
+                    }
+
+                    // Setup listener for remote approval
+                    const sock = window.socket || (window.getSocket ? window.getSocket() : null);
+                    if (sock) {
+                        const resolveListener = (data) => {
+                            if (data.orderId === options.orderId && data.type === (options.type || 'cancel')) {
+                                sock.off('authorization:resolved', resolveListener);
+                                if (data.status === 'approved') {
+                                    modal.classList.add('hidden');
+                                    toast(`¡Anulación aprobada remotamente por ${data.approvedBy}!`, 'success');
+                                    if (onConfirm) onConfirm(reason);
+                                } else if (data.status === 'rejected') {
+                                    waitingEl.classList.add('hidden');
+                                    requestBtn.classList.remove('hidden');
+                                    adminErrorEl.textContent = `Solicitud rechazada por ${data.rejectedBy}${data.note ? ': ' + data.note : ''}`;
+                                    adminErrorEl.classList.remove('hidden');
+                                }
+                            }
+                        };
+                        sock.on('authorization:resolved', resolveListener);
+                    }
+                } catch (e) {
+                    waitingEl.classList.add('hidden');
+                    requestBtn.classList.remove('hidden');
+                    adminErrorEl.textContent = 'Error de conexión al enviar solicitud';
+                    adminErrorEl.classList.remove('hidden');
+                }
+            };
+        }
     } else {
         adminAuthDiv.classList.add('hidden');
     }
@@ -172,7 +259,7 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
             const adminCode = adminCodeInput.value.trim();
 
             if (!adminCode) {
-                adminErrorEl.textContent = 'Debes ingresar el código de administrador';
+                adminErrorEl.textContent = 'Debes ingresar el código de administrador o supervisor';
                 adminErrorEl.classList.remove('hidden');
                 return;
             }
@@ -190,7 +277,7 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
                 const data = await response.json();
 
                 if (!data.valid) {
-                    adminErrorEl.textContent = 'Credenciales de administrador incorrectas';
+                    adminErrorEl.textContent = 'Credenciales de autorización incorrectas';
                     adminErrorEl.classList.remove('hidden');
                     newOk.disabled = false;
                     newOk.innerHTML = 'Anular';
@@ -201,7 +288,7 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
 
                 adminErrorEl.classList.add('hidden');
             } catch (err) {
-                adminErrorEl.textContent = 'Error al verificar administrador. Intenta de nuevo.';
+                adminErrorEl.textContent = 'Error al verificar autorización. Intenta de nuevo.';
                 adminErrorEl.classList.remove('hidden');
                 newOk.disabled = false;
                 newOk.innerHTML = 'Anular';
@@ -235,6 +322,177 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
         }
     }, 100);
 };
+
+export const showAuthorizationModal = ({ title, msg, orderId, type = 'edit', onAuthorized }) => {
+    let authModal = document.getElementById('general-auth-modal');
+    if (!authModal) {
+        authModal = document.createElement('div');
+        authModal.id = 'general-auth-modal';
+        authModal.className = 'fixed inset-0 bg-black/60 z-[85] hidden flex justify-center items-center px-4 backdrop-blur-sm';
+        document.body.appendChild(authModal);
+    }
+
+    authModal.innerHTML = `
+        <div class="glass-panel w-full max-w-sm rounded-3xl shadow-2xl p-6 slide-up bg-white text-center">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl mb-3 shadow-sm">
+                <i class="fas fa-lock"></i>
+            </div>
+            <h3 class="font-bold text-lg text-gray-800 mb-1">${title || 'Autorización Requerida'}</h3>
+            <p class="text-xs text-gray-500 mb-4 leading-relaxed">${msg || 'Esta acción requiere autorización de un Administrador o Supervisor.'}</p>
+            
+            <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 text-left space-y-2.5 mb-4">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Código PIN (Admin / Supervisor)</label>
+                <div class="flex gap-2">
+                    <input type="password" id="gen-auth-code" class="flex-1 px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-xs" placeholder="Ingresa PIN..." autocomplete="off">
+                    <button type="button" id="btn-gen-auth-verify" class="px-3 py-2 bg-gray-900 text-white font-bold text-xs rounded-xl hover:bg-black transition-all cursor-pointer">
+                        Validar
+                    </button>
+                </div>
+                <p id="gen-auth-error" class="hidden text-xs text-red-500 font-medium"></p>
+                
+                ${orderId ? `
+                    <div class="pt-1">
+                        <div class="relative flex py-1 items-center">
+                            <div class="flex-grow border-t border-gray-200"></div>
+                            <span class="flex-shrink mx-2 text-[9px] text-gray-400 font-bold uppercase">O solicita permiso</span>
+                            <div class="flex-grow border-t border-gray-200"></div>
+                        </div>
+                        <button type="button" id="btn-gen-auth-request" class="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs">
+                            <i class="fas fa-paper-plane text-amber-600"></i> Solicitar aprobación remota
+                        </button>
+                        <div id="gen-auth-waiting" class="hidden p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-1 mt-2">
+                            <div class="flex items-center justify-center gap-2 text-xs font-bold text-amber-800">
+                                <i class="fas fa-spinner fa-spin text-amber-600"></i> Esperando respuesta...
+                            </div>
+                            <p class="text-[10px] text-amber-700 leading-tight">Notificación enviada. Se habilitará inmediatamente al ser aprobada.</p>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+
+            <div class="flex gap-3 justify-center">
+                <button type="button" id="btn-gen-auth-cancel" class="w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50 transition-colors">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    `;
+
+    authModal.classList.remove('hidden');
+
+    const codeInput = authModal.querySelector('#gen-auth-code');
+    const verifyBtn = authModal.querySelector('#btn-gen-auth-verify');
+    const errorEl = authModal.querySelector('#gen-auth-error');
+    const cancelBtn = authModal.querySelector('#btn-gen-auth-cancel');
+    const requestBtn = authModal.querySelector('#btn-gen-auth-request');
+    const waitingEl = authModal.querySelector('#gen-auth-waiting');
+
+    cancelBtn.onclick = () => {
+        authModal.classList.add('hidden');
+    };
+
+    const handleSuccess = (approverName) => {
+        authModal.classList.add('hidden');
+        if (approverName) toast(`¡Autorizado por ${approverName}!`, 'success');
+        if (onAuthorized) onAuthorized();
+    };
+
+    verifyBtn.onclick = async () => {
+        const code = codeInput.value.trim();
+        if (!code) {
+            errorEl.textContent = 'Ingresa el código PIN';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        verifyBtn.disabled = true;
+        verifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        try {
+            const res = await fetch('/api/auth/verify-admin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + (localStorage.getItem('pos_token') || '')
+                },
+                body: JSON.stringify({ code })
+            });
+            const data = await res.json();
+            if (data.valid) {
+                handleSuccess(data.admin?.name);
+            } else {
+                errorEl.textContent = data.error || 'Código incorrecto';
+                errorEl.classList.remove('hidden');
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = 'Validar';
+                codeInput.value = '';
+                codeInput.focus();
+            }
+        } catch (e) {
+            errorEl.textContent = 'Error al validar PIN';
+            errorEl.classList.remove('hidden');
+            verifyBtn.disabled = false;
+            verifyBtn.innerHTML = 'Validar';
+        }
+    };
+
+    if (requestBtn) {
+        requestBtn.onclick = async () => {
+            requestBtn.classList.add('hidden');
+            waitingEl.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/authorizations/request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + (localStorage.getItem('pos_token') || '')
+                    },
+                    body: JSON.stringify({
+                        orderId,
+                        type,
+                        reason: 'Solicitud de edición por cajero'
+                    })
+                });
+                const result = await res.json();
+                if (!res.ok) {
+                    waitingEl.classList.add('hidden');
+                    requestBtn.classList.remove('hidden');
+                    errorEl.textContent = result.error || 'Error al enviar solicitud';
+                    errorEl.classList.remove('hidden');
+                    return;
+                }
+
+                // Listen for resolution
+                const sock = window.socket || (window.getSocket ? window.getSocket() : null);
+                if (sock) {
+                    const resolveListener = (data) => {
+                        if (data.orderId === orderId && data.type === type) {
+                            sock.off('authorization:resolved', resolveListener);
+                            if (data.status === 'approved') {
+                                handleSuccess(data.approvedBy);
+                            } else if (data.status === 'rejected') {
+                                waitingEl.classList.add('hidden');
+                                requestBtn.classList.remove('hidden');
+                                errorEl.textContent = `Solicitud rechazada por ${data.rejectedBy}${data.note ? ': ' + data.note : ''}`;
+                                errorEl.classList.remove('hidden');
+                            }
+                        }
+                    };
+                    sock.on('authorization:resolved', resolveListener);
+                }
+            } catch (e) {
+                waitingEl.classList.add('hidden');
+                requestBtn.classList.remove('hidden');
+                errorEl.textContent = 'Error de conexión';
+                errorEl.classList.remove('hidden');
+            }
+        };
+    }
+};
+
+window.showAuthorizationModal = showAuthorizationModal;
+window.showPromptModal = showPromptModal;
 
 let toastTimeout; // Store timeout ID to clear it
 

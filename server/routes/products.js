@@ -71,23 +71,26 @@ module.exports = (io) => {
                 const processBatch = async () => {
                     for (const row of results) {
                         try {
-                            if (!row.name) continue;
+                            const name = (row.name || row.nombre || row.categoria || '').trim();
+                            if (!name) continue;
 
-                            let exists = false;
+                            let existing = null;
                             if (row.id) {
-                                const check = await new Promise((resolve) => {
-                                    db.get("SELECT id FROM categories WHERE id = ?", [row.id], (err, row) => {
-                                        resolve(row);
-                                    });
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM categories WHERE id = ?", [row.id], (err, r) => resolve(r));
                                 });
-                                exists = !!check;
+                            }
+                            if (!existing) {
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", [name], (err, r) => resolve(r));
+                                });
                             }
 
-                            if (exists && row.id) {
-                                await dbRun("UPDATE categories SET name = ? WHERE id = ?", [row.name, row.id]);
+                            if (existing) {
+                                await dbRun("UPDATE categories SET name = ? WHERE id = ?", [name, existing.id]);
                             } else {
                                 const newId = row.id || uuidv4();
-                                await dbRun("INSERT INTO categories (id, name) VALUES (?, ?)", [newId, row.name]);
+                                await dbRun("INSERT INTO categories (id, name) VALUES (?, ?)", [newId, name]);
                             }
                             processed++;
                         } catch (e) {
@@ -101,7 +104,7 @@ module.exports = (io) => {
                     });
 
                     io.emit('categories_updated');
-                    res.json({ message: `Import successful. Processed: ${processed}, Errors: ${errors}` });
+                    res.json({ message: `Importación completada. Procesadas: ${processed}, Errores: ${errors}` });
                 };
 
                 processBatch();
@@ -200,21 +203,24 @@ module.exports = (io) => {
     // --- CSV PRODUCTS ---
 
     router.get('/products/export', (req, res) => {
-        db.all("SELECT * FROM products ORDER BY name ASC", [], (err, rows) => {
+        db.all("SELECT * FROM products ORDER BY category ASC, name ASC", [], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
 
             try {
-                // Fields to export
-                const fields = ['id', 'name', 'desc', 'price', 'category', 'available', 'img', 'created_at'];
+                // Fields to export (includes all current v2 fields and preserves legacy fields)
+                const fields = [
+                    'id', 'name', 'desc', 'price', 'category', 'available', 'img',
+                    'has_toppings', 'toppings_config', 'is_recommended', 'is_promo', 'promo_price', 'created_at'
+                ];
                 const opts = { fields };
                 const parser = new Parser(opts);
                 const csvData = parser.parse(rows);
 
-                res.header('Content-Type', 'text/csv');
-                res.header('Content-Disposition', 'attachment; filename=products.csv');
+                res.header('Content-Type', 'text/csv; charset=utf-8');
+                res.header('Content-Disposition', 'attachment; filename=platos_digirest.csv');
                 res.send(csvData);
             } catch (err) {
-                console.error(err);
+                console.error('Error generating products CSV:', err);
                 res.status(500).json({ error: 'Error generating CSV' });
             }
         });
@@ -222,7 +228,7 @@ module.exports = (io) => {
 
     router.post('/products/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
         if (!req.file) {
-            return res.status(400).json({ error: "No file uploaded" });
+            return res.status(400).json({ error: "No se subió ningún archivo" });
         }
 
         const filePath = req.file.path;
@@ -247,42 +253,80 @@ module.exports = (io) => {
                 const processBatch = async () => {
                     for (const row of results) {
                         try {
-                            if (!row.name || !row.price || !row.category) continue;
+                            // Extract values supporting both English headers and Spanish aliases
+                            const name = (row.name || row.nombre || row.plato || row.producto || '').trim();
+                            if (!name) continue;
 
-                            // Handle specific fields conversions
-                            // Price: ensure number
-                            const price = parseFloat(row.price);
-                            // Available: ensure 1 or 0
-                            const available = (row.available === '1' || row.available === 'true' || row.available === 1) ? 1 : 0;
+                            const desc = (row.desc !== undefined ? row.desc : (row.descripcion !== undefined ? row.descripcion : (row.detalles || ''))).trim();
 
-                            // Image: use default if empty, or use provided
-                            const img = row.img || '/img/noimage.png';
+                            const rawPrice = row.price !== undefined ? row.price : (row.precio !== undefined ? row.precio : (row.valor !== undefined ? row.valor : 0));
+                            const price = parseFloat(String(rawPrice).replace(/[^0-9.-]/g, '')) || 0;
 
-                            let exists = false;
-                            if (row.id) {
-                                const check = await new Promise((resolve) => {
-                                    db.get("SELECT id FROM products WHERE id = ?", [row.id], (err, row) => {
-                                        resolve(row);
-                                    });
+                            const category = (row.category || row.categoria || 'General').trim();
+
+                            const rawAvail = row.available !== undefined ? row.available : row.disponible;
+                            const available = (rawAvail === undefined || rawAvail === '' || rawAvail === '1' || rawAvail === 1 || rawAvail === 'true' || rawAvail === true || String(rawAvail).toLowerCase() === 'si' || String(rawAvail).toLowerCase() === 'sí') ? 1 : 0;
+
+                            const img = (row.img || row.imagen || row.foto || '/img/noimage.png').trim() || '/img/noimage.png';
+
+                            // New v2 fields with safe defaults for older CSV exports
+                            const rawHasTop = row.has_toppings !== undefined ? row.has_toppings : (row.tiene_toppings !== undefined ? row.tiene_toppings : 0);
+                            const has_toppings = (rawHasTop === '1' || rawHasTop === 1 || rawHasTop === 'true' || rawHasTop === true || String(rawHasTop).toLowerCase() === 'si') ? 1 : 0;
+
+                            const toppings_config = row.toppings_config || row.configuracion_toppings || '[]';
+
+                            const rawRec = row.is_recommended !== undefined ? row.is_recommended : (row.es_recomendado !== undefined ? row.es_recomendado : (row.recomendado !== undefined ? row.recomendado : 0));
+                            const is_recommended = (rawRec === '1' || rawRec === 1 || rawRec === 'true' || rawRec === true || String(rawRec).toLowerCase() === 'si') ? 1 : 0;
+
+                            const rawPromo = row.is_promo !== undefined ? row.is_promo : (row.es_promo !== undefined ? row.es_promo : (row.promocion !== undefined ? row.promocion : 0));
+                            const is_promo = (rawPromo === '1' || rawPromo === 1 || rawPromo === 'true' || rawPromo === true || String(rawPromo).toLowerCase() === 'si') ? 1 : 0;
+
+                            const rawPromoPrice = row.promo_price !== undefined ? row.promo_price : (row.precio_promo !== undefined ? row.precio_promo : 0);
+                            const promo_price = parseFloat(String(rawPromoPrice).replace(/[^0-9.-]/g, '')) || 0;
+
+                            // Auto-create category if missing
+                            if (category) {
+                                const catExists = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM categories WHERE LOWER(name) = LOWER(?) OR id = ?", [category, category], (err, r) => resolve(r));
                                 });
-                                exists = !!check;
+                                if (!catExists) {
+                                    await dbRun("INSERT INTO categories (id, name) VALUES (?, ?)", [uuidv4(), category]);
+                                }
                             }
 
-                            if (exists && row.id) {
+                            // Check if product exists by id or by case-insensitive name
+                            let existing = null;
+                            if (row.id) {
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM products WHERE id = ?", [row.id], (err, r) => resolve(r));
+                                });
+                            }
+                            if (!existing) {
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM products WHERE LOWER(name) = LOWER(?)", [name], (err, r) => resolve(r));
+                                });
+                            }
+
+                            if (existing) {
                                 await dbRun(
-                                    "UPDATE products SET name=?, desc=?, price=?, category=?, available=?, img=? WHERE id=?",
-                                    [row.name, row.desc || '', price, row.category, available, img, row.id]
+                                    `UPDATE products 
+                                     SET name=?, desc=?, price=?, category=?, available=?, img=?, 
+                                         has_toppings=?, toppings_config=?, is_recommended=?, is_promo=?, promo_price=?
+                                     WHERE id=?`,
+                                    [name, desc, price, category, available, img, has_toppings, toppings_config, is_recommended, is_promo, promo_price, existing.id]
                                 );
                             } else {
                                 const newId = row.id || uuidv4();
                                 await dbRun(
-                                    "INSERT INTO products (id, name, desc, price, category, available, img) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                    [newId, row.name, row.desc || '', price, row.category, available, img]
+                                    `INSERT INTO products 
+                                     (id, name, desc, price, category, available, img, has_toppings, toppings_config, is_recommended, is_promo, promo_price)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    [newId, name, desc, price, category, available, img, has_toppings, toppings_config, is_recommended, is_promo, promo_price]
                                 );
                             }
                             processed++;
                         } catch (e) {
-                            console.error("Import Error row:", row, e);
+                            console.error("Import Error product row:", row, e);
                             errors++;
                         }
                     }
@@ -291,8 +335,9 @@ module.exports = (io) => {
                         if (err) console.error("Error deleting uploaded file:", err);
                     });
 
+                    io.emit('categories_updated');
                     io.emit('products_updated');
-                    res.json({ message: `Import successful. Processed: ${processed}, Errors: ${errors}` });
+                    res.json({ message: `Importación completada. Procesados: ${processed}, Errores: ${errors}` });
                 };
 
                 processBatch();
@@ -470,10 +515,26 @@ module.exports = (io) => {
     });
 
     router.delete('/products/:id', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
-        db.run("DELETE FROM products WHERE id = ?", [req.params.id], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            io.emit('products_updated');
-            res.json({ message: 'Deleted' });
+        db.get("SELECT img, name FROM products WHERE id = ?", [req.params.id], (findErr, prod) => {
+            db.run("DELETE FROM products WHERE id = ?", [req.params.id], function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+
+                // Limpiar archivo de imagen física en disco si no es la imagen por defecto
+                if (prod && prod.img && (prod.img.startsWith('/uploads/') || prod.img.startsWith('/server/uploads/'))) {
+                    try {
+                        const rel = prod.img.replace('/server/uploads/', 'uploads/').replace('/uploads/', 'uploads/');
+                        const full = path.resolve(__dirname, '..', rel);
+                        if (fs.existsSync(full)) {
+                            fs.unlink(full, (unlinkErr) => {
+                                if (!unlinkErr) console.log('🧹 [STORAGE] Imagen huérfana de producto eliminada:', rel);
+                            });
+                        }
+                    } catch (_) {}
+                }
+
+                io.emit('products_updated');
+                res.json({ message: 'Deleted' });
+            });
         });
     });
 

@@ -7,6 +7,7 @@ const { validateOrderInput } = require('../middleware/validators');
 const fs = require('fs');
 const path = require('path');
 const { processProof } = require('../utils/imageProcessor');
+const { logAudit } = require('../utils/auditLogger');
 
 module.exports = (io) => {
     // PUT /orders/:id - Update existing order (with optional proof upload)
@@ -44,10 +45,11 @@ module.exports = (io) => {
         const transfer_account_id = req.body.transfer_account_id ? parseInt(req.body.transfer_account_id, 10) : null;
         const payment_details = typeof req.body.payment_details === 'object' ? JSON.stringify(req.body.payment_details) : (req.body.payment_details || null);
 
-        // First, get current order to see if there is an old file to delete
-        db.get('SELECT proof, type, waiterId, waiterName FROM orders WHERE id = ?', [id], (err, currentOrder) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!currentOrder) return res.status(404).json({ error: 'Order not found' });
+        const proceedWithOrderUpdate = () => {
+            // First, get current order to see if there is an old file to delete
+            db.get('SELECT proof, type, waiterId, waiterName FROM orders WHERE id = ?', [id], (err, currentOrder) => {
+                if (err) return res.status(500).json({ error: err.message });
+                if (!currentOrder) return res.status(404).json({ error: 'Order not found' });
 
             // Handle file deletion
             if ((shouldRemoveProof || shouldReplaceProof) && currentOrder.proof) {
@@ -123,9 +125,54 @@ module.exports = (io) => {
                     io.to('repartidor').emit('order_updated', updateData);
                 }
 
+                // Log audit for order edit
+                logAudit('ORDER_EDITED', req.user?.id || 'unknown', req.ip, {
+                    orderId: id,
+                    userName: req.user?.name || 'Usuario',
+                    userRole: req.user?.role || 'N/A',
+                    total: total || updateData.total || 0,
+                    client: client || updateData.client || 'Cliente'
+                });
+
                 res.json({ message: 'Order updated', id });
             });
         });
+        };
+
+        // Cajero edit authorization check (Strict Mode enforcement)
+        if (req.user?.role === 'cajero') {
+            db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], (cfgErr, cfgRow) => {
+                let cajeroCanEdit = true;
+                if (cfgRow && cfgRow.value) {
+                    try {
+                        const parsed = JSON.parse(cfgRow.value);
+                        if (parsed.cajeroCanEdit === false) cajeroCanEdit = false;
+                    } catch (e) {}
+                }
+
+                if (!cajeroCanEdit) {
+                    const isVerified = req.headers['x-admin-verified'] === 'true' || req.body.adminVerified === true;
+                    if (!isVerified) {
+                        return db.get(
+                            "SELECT id FROM order_authorizations WHERE order_id = ? AND type = 'edit' AND status = 'approved' AND datetime(resolved_at, '+15 minutes') >= datetime('now') LIMIT 1",
+                            [id],
+                            (authErr, authRow) => {
+                                if (authErr || !authRow) {
+                                    return res.status(403).json({
+                                        error: 'La edición de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
+                                    });
+                                }
+                                proceedWithOrderUpdate();
+                            }
+                        );
+                    }
+                }
+                proceedWithOrderUpdate();
+            });
+            return;
+        }
+
+        proceedWithOrderUpdate();
     });
 
 

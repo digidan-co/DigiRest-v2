@@ -85,7 +85,7 @@ function validateUser(req, res, next) {
         }
     }
 
-    const allowedRoles = ['mesero', 'admin', 'cajero', 'chef', 'delivery'];
+    const allowedRoles = ['mesero', 'admin', 'cajero', 'chef', 'delivery', 'supervisor'];
     if (req.body.role && !allowedRoles.includes(req.body.role)) {
         errors.push(`Rol inválido. Permitidos: ${allowedRoles.join(', ')}`);
     }

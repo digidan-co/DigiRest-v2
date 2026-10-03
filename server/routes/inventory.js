@@ -2,7 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
-const { verifyToken } = require('./auth');
+const { verifyToken, requireRole } = require('./auth');
+const { upload } = require('../middleware/upload');
+const csv = require('csv-parser');
+const { Parser } = require('json2csv');
+const fs = require('fs');
 
 module.exports = (io) => {
     // =============================================
@@ -47,6 +51,105 @@ module.exports = (io) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows || []);
         });
+    });
+
+    // Exportar insumos a CSV
+    router.get('/inventory/supplies/export', (req, res) => {
+        const sql = `SELECT id, name, unit, current_stock, min_stock, cost_per_unit, created_at FROM supplies ORDER BY name ASC`;
+        db.all(sql, [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            try {
+                const fields = ['id', 'name', 'unit', 'current_stock', 'min_stock', 'cost_per_unit', 'created_at'];
+                const parser = new Parser({ fields });
+                const csvData = parser.parse(rows);
+
+                res.header('Content-Type', 'text/csv; charset=utf-8');
+                res.header('Content-Disposition', 'attachment; filename=insumos_digirest.csv');
+                res.send(csvData);
+            } catch (err) {
+                console.error('Error generating supplies CSV:', err);
+                res.status(500).json({ error: 'Error generating CSV' });
+            }
+        });
+    });
+
+    // Importar insumos desde CSV
+    router.post('/inventory/supplies/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: "No se subió ningún archivo" });
+        }
+
+        const filePath = req.file.path;
+        const results = [];
+
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => results.push(data))
+            .on('end', () => {
+                let processed = 0;
+                let errors = 0;
+
+                const dbRun = (sql, params) => {
+                    return new Promise((resolve, reject) => {
+                        db.run(sql, params, function (err) {
+                            if (err) reject(err);
+                            else resolve(this);
+                        });
+                    });
+                };
+
+                const processBatch = async () => {
+                    for (const row of results) {
+                        try {
+                            const name = (row.name || row.nombre || row.insumo || '').trim();
+                            if (!name) continue;
+
+                            const unit = (row.unit || row.unidad || row.medida || 'und').trim();
+                            const current_stock = parseFloat(String(row.current_stock ?? row.stock_actual ?? row.stock ?? row.cantidad ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+                            const min_stock = parseFloat(String(row.min_stock ?? row.stock_minimo ?? row.minimo ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+                            const cost_per_unit = parseFloat(String(row.cost_per_unit ?? row.costo_unitario ?? row.costo ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+
+                            let existing = null;
+                            if (row.id) {
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM supplies WHERE id = ?", [row.id], (err, r) => resolve(r));
+                                });
+                            }
+                            if (!existing) {
+                                existing = await new Promise((resolve) => {
+                                    db.get("SELECT id FROM supplies WHERE LOWER(name) = LOWER(?)", [name], (err, r) => resolve(r));
+                                });
+                            }
+
+                            if (existing) {
+                                await dbRun(
+                                    "UPDATE supplies SET name = ?, unit = ?, current_stock = ?, min_stock = ?, cost_per_unit = ? WHERE id = ?",
+                                    [name, unit, current_stock, min_stock, cost_per_unit, existing.id]
+                                );
+                            } else {
+                                const newId = row.id || uuidv4();
+                                await dbRun(
+                                    "INSERT INTO supplies (id, name, unit, current_stock, min_stock, cost_per_unit) VALUES (?, ?, ?, ?, ?, ?)",
+                                    [newId, name, unit, current_stock, min_stock, cost_per_unit]
+                                );
+                            }
+                            processed++;
+                        } catch (e) {
+                            console.error("Import Error supply row:", row, e);
+                            errors++;
+                        }
+                    }
+
+                    fs.unlink(filePath, (err) => {
+                        if (err) console.error("Error deleting uploaded file:", err);
+                    });
+
+                    if (io) io.to('admin').emit('supplies_updated');
+                    res.json({ message: `Importación completada. Insumos procesados: ${processed}, Errores: ${errors}` });
+                };
+
+                processBatch();
+            });
     });
 
     // Crear insumo
@@ -372,6 +475,163 @@ module.exports = (io) => {
             if (io) io.to('admin').emit('recipe_deleted', { id });
             res.json({ message: 'Receta eliminada exitosamente' });
         });
+    });
+
+    // Exportar recetas a CSV
+    router.get('/inventory/recipes/export', (req, res) => {
+        const sql = `
+            SELECT 
+                p.id AS product_id,
+                p.name AS product_name,
+                COALESCE(r.yield, 1) AS recipe_yield,
+                COALESCE(r.instructions, '') AS instructions,
+                COALESCE(s.id, '') AS supply_id,
+                COALESCE(s.name, '') AS supply_name,
+                COALESCE(ri.quantity, 0) AS quantity,
+                COALESCE(s.unit, '') AS unit
+            FROM recipes r
+            JOIN products p ON r.product_id = p.id
+            LEFT JOIN recipe_items ri ON ri.recipe_id = r.id
+            LEFT JOIN supplies s ON ri.supply_id = s.id
+            ORDER BY p.name ASC, s.name ASC
+        `;
+        db.all(sql, [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            try {
+                const fields = ['product_id', 'product_name', 'recipe_yield', 'instructions', 'supply_id', 'supply_name', 'quantity', 'unit'];
+                const parser = new Parser({ fields });
+                const csvData = parser.parse(rows);
+
+                res.header('Content-Type', 'text/csv; charset=utf-8');
+                res.header('Content-Disposition', 'attachment; filename=recetas_digirest.csv');
+                res.send(csvData);
+            } catch (err) {
+                console.error('Error generating recipes CSV:', err);
+                res.status(500).json({ error: 'Error generating CSV' });
+            }
+        });
+    });
+
+    // Importar recetas desde CSV
+    router.post('/inventory/recipes/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: "No se subió ningún archivo" });
+        }
+
+        const filePath = req.file.path;
+        const results = [];
+
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => results.push(data))
+            .on('end', () => {
+                let recipesCount = 0;
+                let itemsCount = 0;
+                let errors = 0;
+
+                const dbRun = (sql, params) => {
+                    return new Promise((resolve, reject) => {
+                        db.run(sql, params, function (err) {
+                            if (err) reject(err);
+                            else resolve(this);
+                        });
+                    });
+                };
+
+                const processBatch = async () => {
+                    // Group rows by product identifier
+                    const grouped = {};
+                    for (const row of results) {
+                        const prodKey = (row.product_id || row.id_plato || row.product_name || row.plato || row.producto || '').trim();
+                        if (!prodKey) continue;
+                        if (!grouped[prodKey]) grouped[prodKey] = [];
+                        grouped[prodKey].push(row);
+                    }
+
+                    for (const [key, rows] of Object.entries(grouped)) {
+                        try {
+                            const first = rows[0];
+                            const prodId = (first.product_id || first.id_plato || '').trim();
+                            const prodName = (first.product_name || first.plato || first.producto || '').trim();
+
+                            // Find product in DB
+                            let product = null;
+                            if (prodId) {
+                                product = await new Promise(res => db.get("SELECT id, name FROM products WHERE id = ?", [prodId], (err, r) => res(r)));
+                            }
+                            if (!product && prodName) {
+                                product = await new Promise(res => db.get("SELECT id, name FROM products WHERE LOWER(name) = LOWER(?)", [prodName], (err, r) => res(r)));
+                            }
+
+                            if (!product) {
+                                console.warn(`Recipe import: product not found for "${key}"`);
+                                errors++;
+                                continue;
+                            }
+
+                            const yieldVal = parseInt(first.recipe_yield || first.porciones || first.rendimiento || 1, 10) || 1;
+                            const instructions = (first.instructions || first.instrucciones || '').trim();
+
+                            // Find or create recipe
+                            let recipe = await new Promise(res => db.get("SELECT id FROM recipes WHERE product_id = ?", [product.id], (err, r) => res(r)));
+                            let recipeId;
+
+                            if (recipe) {
+                                recipeId = recipe.id;
+                                await dbRun("UPDATE recipes SET name = ?, yield = ?, instructions = ? WHERE id = ?", [product.name, yieldVal, instructions, recipeId]);
+                                // Clean existing items for clean sync
+                                await dbRun("DELETE FROM recipe_items WHERE recipe_id = ?", [recipeId]);
+                            } else {
+                                recipeId = uuidv4();
+                                await dbRun("INSERT INTO recipes (id, product_id, name, yield, instructions) VALUES (?, ?, ?, ?, ?)", [recipeId, product.id, product.name, yieldVal, instructions]);
+                            }
+
+                            // Insert ingredient items
+                            for (const r of rows) {
+                                const supplyName = (r.supply_name || r.insumo || r.ingrediente || '').trim();
+                                const supplyId = (r.supply_id || r.id_insumo || '').trim();
+                                const qty = parseFloat(String(r.quantity || r.cantidad || 0).replace(/[^0-9.-]/g, '')) || 0;
+                                const unit = (r.unit || r.unidad || 'und').trim();
+
+                                if (!supplyName && !supplyId) continue;
+                                if (qty <= 0) continue;
+
+                                let supply = null;
+                                if (supplyId) {
+                                    supply = await new Promise(res => db.get("SELECT id FROM supplies WHERE id = ?", [supplyId], (err, s) => res(s)));
+                                }
+                                if (!supply && supplyName) {
+                                    supply = await new Promise(res => db.get("SELECT id FROM supplies WHERE LOWER(name) = LOWER(?)", [supplyName], (err, s) => res(s)));
+                                }
+
+                                if (!supply) {
+                                    // Auto-create missing supply
+                                    const newSupId = supplyId || uuidv4();
+                                    await dbRun("INSERT INTO supplies (id, name, unit, current_stock, min_stock, cost_per_unit) VALUES (?, ?, ?, 0, 0, 0)", [newSupId, supplyName || 'Insumo importado', unit]);
+                                    supply = { id: newSupId };
+                                }
+
+                                await dbRun("INSERT INTO recipe_items (id, recipe_id, supply_id, quantity) VALUES (?, ?, ?, ?)", [uuidv4(), recipeId, supply.id, qty]);
+                                itemsCount++;
+                            }
+
+                            recipesCount++;
+                        } catch (e) {
+                            console.error("Import Error recipe group:", key, e);
+                            errors++;
+                        }
+                    }
+
+                    fs.unlink(filePath, (err) => {
+                        if (err) console.error("Error deleting uploaded file:", err);
+                    });
+
+                    if (io) io.to('admin').emit('recipe_updated');
+                    res.json({ message: `Importación completada. Recetas procesadas: ${recipesCount}, Ingredientes vinculados: ${itemsCount}, Errores: ${errors}` });
+                };
+
+                processBatch();
+            });
     });
 
     // =============================================

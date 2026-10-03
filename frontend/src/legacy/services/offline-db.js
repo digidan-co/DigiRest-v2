@@ -170,6 +170,52 @@ export const OfflineDB = {
         });
     },
 
+    // --- API Cache Methods (for offline product catalog, categories, etc.) --- //
+
+    async setCache(url, data) {
+        const db = await this.ensureDb();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([STORE_CACHE], 'readwrite');
+            const store = transaction.objectStore(STORE_CACHE);
+            const request = store.put({ url, data, timestamp: Date.now() });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    },
+
+    async getCache(url) {
+        const db = await this.ensureDb();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([STORE_CACHE], 'readonly');
+            const store = transaction.objectStore(STORE_CACHE);
+            const request = store.get(url);
+            request.onsuccess = () => resolve(request.result ? request.result.data : null);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    },
+
+    async clearCache() {
+        const db = await this.ensureDb();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([STORE_CACHE], 'readwrite');
+            const store = transaction.objectStore(STORE_CACHE);
+            const request = store.clear();
+            request.onsuccess = () => resolve();
+            request.onerror = (e) => reject(e.target.error);
+        });
+    },
+
+    async getQueueCount() {
+        const db = await this.ensureDb();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([STORE_QUEUE], 'readonly');
+            const store = transaction.objectStore(STORE_QUEUE);
+            const request = store.count();
+            request.onsuccess = () => resolve(request.result || 0);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    },
+
     // --- Offline Orders Methods --- //
 
     async saveOfflineOrder(order) {

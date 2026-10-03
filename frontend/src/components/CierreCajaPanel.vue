@@ -9,7 +9,6 @@ const CIERRES_PER_PAGE = 10;
 const allCierres = ref([]);
 const filterDate = ref('');
 const cierresPage = ref(1);
-const selectedIds = ref(new Set());
 const loading = ref(false);
 
 const isAdmin = computed(() => state.user?.role === 'admin');
@@ -76,28 +75,12 @@ async function loadCierres() {
     }
 }
 
-function isSelected(id) { return selectedIds.value.has(id); }
-function toggleSelect(id) {
-    const next = new Set(selectedIds.value);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    selectedIds.value = next;
-}
-function toggleSelectAll(e) {
-    const checked = e.target.checked;
-    const next = new Set(checked ? pageItems.value.map(c => c.id) : []);
-    selectedIds.value = next;
-}
-function selectAllChecked() {
-    return pageItems.value.length > 0 && pageItems.value.every(c => selectedIds.value.has(c.id));
-}
-
-async function deleteSelected() {
-    if (selectedIds.value.size === 0) return;
+async function deleteSingleCierre(c) {
+    const formattedTotal = formatMoney(c.total_general || 0);
     const confirmed = await new Promise((resolve) => {
         showConfirmModal(
-            'Eliminar Cierres',
-            `¿Estás seguro de eliminar ${selectedIds.value.size} registro(s) de cierre de caja? Esta acción no se puede deshacer.`,
+            'Eliminar Cierre de Caja',
+            `¿Estás seguro de eliminar el registro de cierre del día ${c.fecha} (${formattedTotal})? Esta acción es irreversible y quedará registrada en auditoría.`,
             () => resolve(true),
             () => resolve(false),
             'Eliminar'
@@ -105,14 +88,12 @@ async function deleteSelected() {
     });
     if (!confirmed) return;
     try {
-        const ids = Array.from(selectedIds.value);
-        await ApiClient.delete('/cierre-caja/batch', { ids });
-        selectedIds.value = new Set();
-        toast(`${ids.length} registro(s) eliminado(s) correctamente`, 'success');
+        await ApiClient.delete(`/cierre-caja/${c.id}`);
+        toast(`Cierre del día ${c.fecha} eliminado correctamente`, 'success');
         await loadCierres();
     } catch (e) {
         console.error(e);
-        toast('Error al eliminar registros: ' + e.message, 'error');
+        toast('Error al eliminar registro: ' + e.message, 'error');
     }
 }
 
@@ -161,14 +142,8 @@ watch(() => state.user, (u) => {
                     <input type="date" v-model="filterDate"
                         class="w-full text-sm py-2 px-3 border border-gray-200 rounded-lg outline-none text-gray-600 focus:border-blue-500 transition-colors">
                 </div>
-                <button type="button" @click="deleteSelected" v-show="isAdmin" :disabled="selectedIds.size === 0"
-                    class="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors whitespace-nowrap"
-                    :class="selectedIds.size === 0 ? 'opacity-50 cursor-not-allowed' : ''"
-                    title="Eliminar registros seleccionados">
-                    <i class="fas fa-trash-alt mr-1"></i> <span>{{ selectedIds.size > 0 ? `Eliminar (${selectedIds.size})` : 'Eliminar' }}</span>
-                </button>
                 <button type="button" @click="loadCierres"
-                    class="bg-gray-50 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors whitespace-nowrap">
+                    class="bg-gray-50 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors whitespace-nowrap cursor-pointer">
                     <i class="fas fa-sync-alt mr-1"></i> Actualizar
                 </button>
             </div>
@@ -178,10 +153,7 @@ watch(() => state.user, (u) => {
             <table class="w-full text-left text-sm whitespace-nowrap">
                 <thead class="bg-gray-50 text-gray-500 uppercase text-[10px] font-bold tracking-wider">
                     <tr>
-                        <th class="p-4 w-10 text-center">
-                            <input v-if="isAdmin" type="checkbox" :checked="selectAllChecked()" @change="toggleSelectAll"
-                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" title="Seleccionar todo">
-                        </th>
+                        <th class="p-4 w-12 text-center" v-if="isAdmin">Acción</th>
                         <th class="p-4">Fecha / Hora</th>
                         <th class="p-4">Pedidos / Platos</th>
                         <th class="p-4 text-red-500">Anulados</th>
@@ -194,16 +166,18 @@ watch(() => state.user, (u) => {
                 </thead>
                 <tbody class="divide-y divide-gray-50">
                     <tr v-if="loading">
-                        <td colspan="9" class="text-center py-6 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Cargando historial...</td>
+                        <td :colspan="isAdmin ? 9 : 8" class="text-center py-6 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Cargando historial...</td>
                     </tr>
                     <tr v-else-if="pageItems.length === 0">
-                        <td colspan="9" class="text-center py-6 text-gray-400">No hay cierres registrados.</td>
+                        <td :colspan="isAdmin ? 9 : 8" class="text-center py-6 text-gray-400">No hay cierres registrados.</td>
                     </tr>
                     <tr v-for="c in pageItems" :key="c.id" class="hover:bg-gray-50 transition-colors">
-                        <td class="p-4 text-center">
-                            <input v-if="isAdmin" type="checkbox" :checked="isSelected(c.id)" @change="toggleSelect(c.id)"
-                                class="rounded border-gray-300 text-red-500 focus:ring-red-500 cursor-pointer">
-                            <span v-else class="text-gray-300 text-xs">-</span>
+                        <td class="p-4 text-center" v-if="isAdmin">
+                            <button type="button" @click="deleteSingleCierre(c)"
+                                class="w-8 h-8 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors inline-flex items-center justify-center cursor-pointer"
+                                title="Eliminar este registro de cierre">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
                         </td>
                         <td class="p-4 font-bold text-gray-800">{{ c.fecha }} <span class="text-xs text-gray-400 ml-1">{{ c.hora }}</span></td>
                         <td class="p-4"><span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-bold">{{ c.cantidad_pedidos }} ped.</span> <span class="text-xs text-gray-500 ml-1">/ {{ c.cantidad_platos }} platos</span></td>

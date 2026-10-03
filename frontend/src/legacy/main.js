@@ -4,6 +4,7 @@ import { $, getSafeDate, formatMoney, escapeHtml } from './utils/helpers.js';
 import { ApiClient } from './services/api-client.js';
 import { OfflineDB } from './services/offline-db.js';
 import { toast, showModalAlert, showConfirmModal, showImageModal } from './components/ui.js';
+import { initAuthorizationsHandler } from './features/authorizations-handler.js';
 
 // Make globally accessible for offline listeners
 window.ApiClient = ApiClient;
@@ -116,7 +117,26 @@ window.updateWaiterCartQty = (index, change) => { }; // Not needed but kept for 
 
 let currentEditingOrder = null;
 
-window.openOrderEditModal = async (id, isWaiter) => {
+window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
+    // Check if cashier requires authorization in strict mode
+    const isCajero = state.user?.role === 'cajero';
+    const requireEditAuth = isCajero && state.restaurantData?.cajeroCanEdit === false;
+
+    if (requireEditAuth && !bypassAuth) {
+        if (window.showAuthorizationModal) {
+            window.showAuthorizationModal({
+                title: 'Autorización para Editar Pedido',
+                msg: `La edición directa de pedidos está restringida. Para editar el pedido #${id}, ingresa el PIN de un Administrador / Supervisor o solicita autorización remota.`,
+                orderId: id,
+                type: 'edit',
+                onAuthorized: () => {
+                    window.openOrderEditModal(id, isWaiter, true);
+                }
+            });
+            return;
+        }
+    }
+
     try {
         let order = await getOrder(id);
         if (order) {
@@ -127,6 +147,7 @@ window.openOrderEditModal = async (id, isWaiter) => {
         if (!order) return toast("Pedido no encontrado", "error");
 
         currentEditingOrder = JSON.parse(JSON.stringify(order)); // Deep copy
+        if (bypassAuth) currentEditingOrder._authorized = true;
 
         // Populate Form
         const clientField = $('oe-client');
@@ -407,6 +428,10 @@ window.deleteUser = (id) => {
         try {
             await serviceDeleteUser(id);
             toast("Usuario eliminado", "success");
+            if (window.reloadUsersPanel) {
+                await window.reloadUsersPanel();
+            }
+            window.dispatchEvent(new CustomEvent('users-refresh'));
             loadAdminUsers();
         } catch (e) {
             console.error(e);
@@ -542,6 +567,16 @@ function loadAdminConfig() {
     if (switchEl) {
         // Default to true if undefined
         switchEl.checked = state.config.isOpen !== false;
+    }
+
+    // Sync Cajero Permissions Switches (Default to true if undefined)
+    const canCancelEl = $('conf-cajero-can-cancel');
+    if (canCancelEl) {
+        canCancelEl.checked = state.restaurantData.cajeroCanCancel !== false;
+    }
+    const canEditEl = $('conf-cajero-can-edit');
+    if (canEditEl) {
+        canEditEl.checked = state.restaurantData.cajeroCanEdit !== false;
     }
 
     const acc = state.accountData || {};
@@ -695,6 +730,7 @@ async function init() {
         // Authenticate socket to join role-specific rooms
         socket.on('connect', () => {
             authenticateSocket();
+            initAuthorizationsHandler(socket);
         });
 
         // Confirm authentication
@@ -883,10 +919,21 @@ async function init() {
 
         applyConfig();
 
-        // Load Categories
-        state.categories = await getCategories();
-        // Load Products
-        state.products = await getProducts();
+        // Load Categories safely (resilient to offline and startup delays)
+        try {
+            state.categories = (await getCategories()) || [];
+        } catch (catErr) {
+            console.warn("Advertencia cargando categorías en inicio:", catErr);
+            state.categories = [];
+        }
+
+        // Load Products safely (resilient to offline and startup delays)
+        try {
+            state.products = (await getProducts()) || [];
+        } catch (prodErr) {
+            console.warn("Advertencia cargando productos en inicio:", prodErr);
+            state.products = [];
+        }
         // Load Delivery Zones
         try {
             state.deliveryZones = await getDeliveryZones();
@@ -975,6 +1022,10 @@ async function init() {
 
         // Listen for Realtime User Updates
         socket.on('users_updated', () => {
+            if (window.reloadUsersPanel) {
+                window.reloadUsersPanel();
+            }
+            window.dispatchEvent(new CustomEvent('users-refresh'));
             if (!$('admin-view').classList.contains('hidden')) {
                 loadAdminUsers();
             }
@@ -2171,6 +2222,10 @@ $('user-form').addEventListener('submit', async (e) => {
         await saveUser(data, id);
         toast(id ? "Usuario actualizado" : "Usuario creado", "success");
         $('user-modal').classList.add('hidden');
+        if (window.reloadUsersPanel) {
+            await window.reloadUsersPanel();
+        }
+        window.dispatchEvent(new CustomEvent('users-refresh'));
         loadAdminUsers();
     } catch (err) {
         console.error(err);
@@ -2261,6 +2316,8 @@ $('config-form').addEventListener('submit', async (e) => {
             address: $('conf-address') ? $('conf-address').value : '',
             welcome: $('conf-welcome') ? $('conf-welcome').value : (state.restaurantData.welcome || ''),
             isOpen: $('conf-is-open') ? $('conf-is-open').checked : (state.config.isOpen !== false),
+            cajeroCanCancel: $('conf-cajero-can-cancel') ? $('conf-cajero-can-cancel').checked : true,
+            cajeroCanEdit: $('conf-cajero-can-edit') ? $('conf-cajero-can-edit').checked : true,
             socialNetworks: sn,
             businessHours: hours
         };
@@ -2781,7 +2838,7 @@ function renderEditItems() {
         total += itemTotal;
 
         const div = document.createElement('div');
-        div.className = 'flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-3 bg-white p-4 rounded-lg border border-gray-100 shadow-sm';
+        div.className = 'flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-3 bg-white p-2 rounded-lg border border-gray-100 shadow-sm';
         div.innerHTML = `
             <div class="flex-1">
                 <div class="font-bold text-gray-800 text-sm">${escapeHtml(item.name)}</div>
@@ -2789,9 +2846,9 @@ function renderEditItems() {
             </div>
             <div class="flex items-center justify-between md:justify-end gap-3">
                 <div class="flex items-center bg-gray-50 rounded-lg border border-gray-200">
-                    <button type="button" class="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, -1)">-</button>
+                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, -1)">-</button>
                     <span class="w-10 text-center font-bold text-sm text-gray-700">${item.qty}</span>
-                    <button type="button" class="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, 1)">+</button>
+                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, 1)">+</button>
                 </div>
                 <button type="button" class="text-red-400 hover:text-red-600 w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors" onclick="removeEditItem(${index})">
                     <i class="fas fa-trash-alt"></i>
@@ -3110,6 +3167,9 @@ $('order-edit-form').addEventListener('submit', async (e) => {
 
             // Recalculate total before sending
             formData.append('total', calculatedTotal);
+            if (currentEditingOrder._authorized) {
+                formData.append('adminVerified', 'true');
+            }
 
             // ApiClient.put now handles FormData automatically
             await ApiClient.put(`/orders/${currentEditingOrder.id}`, formData);
@@ -3139,7 +3199,8 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 waiterId: currentEditingOrder.waiterId || null,
                 waiterName: currentEditingOrder.waiterName || null,
                 chefName: currentEditingOrder.chefName || null,
-                deliveryDriverName: currentEditingOrder.deliveryDriverName || null
+                deliveryDriverName: currentEditingOrder.deliveryDriverName || null,
+                adminVerified: !!currentEditingOrder._authorized
             };
 
             await ApiClient.put(`/orders/${currentEditingOrder.id}`, updatedData);
@@ -3604,6 +3665,34 @@ $('btn-next-cat')?.addEventListener('click', () => {
     renderAdminCategoriesPage();
 });
 
+// Indicador visual flotante de estado de conexión y operaciones pendientes
+function updateGlobalOfflineBanner(isOnline, pendingCount = 0) {
+    let banner = document.getElementById('global-offline-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'global-offline-banner';
+        document.body.appendChild(banner);
+        banner.addEventListener('click', async () => {
+            if (window.ApiClient && navigator.onLine) {
+                const s = await ApiClient.syncOfflineRequests();
+                if (s > 0 && window.toast) toast(`Sincronizadas ${s} operaciones pendientes.`, "success");
+            }
+        });
+    }
+
+    if (!isOnline) {
+        banner.className = 'fixed bottom-4 left-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full shadow-lg text-xs font-bold bg-amber-500 text-white transition-all duration-300 pointer-events-auto animate-pulse';
+        banner.innerHTML = `<i class="fas fa-wifi-slash"></i><span>Modo sin conexión ${pendingCount > 0 ? `(${pendingCount} pedidos locales)` : ''}</span>`;
+        banner.style.display = 'flex';
+    } else if (pendingCount > 0) {
+        banner.className = 'fixed bottom-4 left-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full shadow-lg text-xs font-bold bg-blue-600 text-white transition-all duration-300 pointer-events-auto';
+        banner.innerHTML = `<i class="fas fa-sync fa-spin"></i><span>Sincronizando ${pendingCount} operaciones...</span>`;
+        banner.style.display = 'flex';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
 // CONNECTION STATUS MONITORING
 async function updateConnectionStatus() {
     const online = navigator.onLine;
@@ -3611,11 +3700,18 @@ async function updateConnectionStatus() {
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
 
+    let queueCount = 0;
+    try {
+        if (window.OfflineDB) queueCount = await OfflineDB.getQueueCount();
+    } catch (_) {}
+
+    updateGlobalOfflineBanner(online, queueCount);
+
     if (statusContainer && statusDot && statusText) {
         if (online) {
             statusContainer.className = 'flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md bg-green-100 border border-green-300 transition-all';
             statusDot.className = 'w-2 h-2 rounded-full bg-green-600 transition-colors';
-            statusText.textContent = 'En línea';
+            statusText.textContent = queueCount > 0 ? `En línea (${queueCount} pend.)` : 'En línea';
             statusText.className = 'text-[10px] font-bold text-green-700';
 
             // Try to sync offline requests
@@ -3625,6 +3721,10 @@ async function updateConnectionStatus() {
                     if (synced > 0) {
                         toast(`Sincronizadas ${synced} operaciones pendientes.`, "success");
                         window.dispatchEvent(new Event('offline_sync_complete'));
+                        if (window.OfflineDB) {
+                            const remaining = await OfflineDB.getQueueCount();
+                            updateGlobalOfflineBanner(true, remaining);
+                        }
                     }
                 } catch (e) {
                     console.error("Error syncing offline requests", e);
@@ -3633,7 +3733,7 @@ async function updateConnectionStatus() {
         } else {
             statusContainer.className = 'flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md bg-red-100 border border-red-300 transition-all';
             statusDot.className = 'w-2 h-2 rounded-full bg-red-600 transition-colors animate-pulse';
-            statusText.textContent = 'Sin conexión';
+            statusText.textContent = queueCount > 0 ? `Sin conexión (${queueCount})` : 'Sin conexión';
             statusText.className = 'text-[10px] font-bold text-red-700';
         }
     } else if (online && window.ApiClient) {
@@ -3642,6 +3742,11 @@ async function updateConnectionStatus() {
             const synced = await ApiClient.syncOfflineRequests();
             if (synced > 0 && window.toast) {
                 toast(`Sincronizadas ${synced} operaciones pendientes.`, "success");
+                window.dispatchEvent(new Event('offline_sync_complete'));
+            }
+            if (window.OfflineDB) {
+                const remaining = await OfflineDB.getQueueCount();
+                updateGlobalOfflineBanner(true, remaining);
             }
         } catch (e) {
             console.error("Error syncing offline requests", e);

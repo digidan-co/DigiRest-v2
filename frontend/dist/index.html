@@ -36,7 +36,7 @@
     <script src="/socket.io/socket.io.js" defer></script>
     <link rel="stylesheet" href="style.css?v=2.9">
     <link rel="stylesheet" href="css/sidebar.css">
-  <script type="module" crossorigin src="/assets/index-Hnp6VKOh.js"></script>
+  <script type="module" crossorigin src="/assets/index-CQ6PYk8k.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-DbPbAFHs.css">
 </head>
 
@@ -114,7 +114,7 @@
 
             <!-- Floating Admin Menu Button (Mobile) -->
             <button id="btn-admin-menu"
-                class="md:hidden fixed bottom-[5.5rem] right-4 z-[50] bg-gray-900 hover:bg-black text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-transform active:scale-95 touch-none">
+                class="md:hidden fixed bottom-5 right-4 z-[50] bg-gray-900 hover:bg-black text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-transform active:scale-95 touch-none">
                 <i class="fas fa-bars text-xl"></i>
             </button> <!-- Draggable button -->
 
@@ -1386,7 +1386,7 @@
                             </div>
 
                             <!-- 2 Columns Grid: Negocio vs Canales y Horarios -->
-                            <div class="grid grid-cols-1 lg:grid-cols-2 mt-5 gap-6 lg:gap-8">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 mt-5 mb-4 gap-6 lg:gap-8">
                                 <!-- Columna Izquierda: Información del Negocio y Datos Bancarios -->
                                 <div class="space-y-6">
                                     <!-- Información del Restaurante -->
@@ -1653,6 +1653,57 @@
                                 </div>
                             </div>
 
+                            <!-- 5. PERMISOS Y SEGURIDAD OPERACIONAL (ANULACIÓN Y EDICIÓN) -->
+                            <div class="mb-3 bg-gray-50/70 p-5 sm:p-6 rounded-2xl border border-gray-200/70 shadow-xs">
+                                <div class="flex items-center gap-2.5 mb-2">
+                                    <span class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-700 shadow-sm">
+                                        <i class="fas fa-shield-alt text-sm"></i>
+                                    </span>
+                                    <div>
+                                        <h4 class="font-bold text-gray-800 text-sm">Permisos de Caja y Operaciones</h4>
+                                        <p class="text-[11px] text-gray-500">Controla si los cajeros pueden anular o editar pedidos directamente o si requieren autorización</p>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <!-- Switch Anulación -->
+                                    <div class="bg-white p-4 rounded-xl border border-gray-200/70 shadow-2xs flex items-start justify-between gap-3">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center gap-2">
+                                                <i class="fas fa-trash-alt text-red-500 text-xs"></i>
+                                                <h5 class="font-bold text-gray-800 text-xs">Anular pedidos sin clave de admin</h5>
+                                            </div>
+                                            <p class="text-[10px] text-gray-400 leading-relaxed">
+                                                <strong>Activado:</strong> El cajero anula pedidos inmediatamente indicando el motivo. (Recomendado para horas pico)<br>
+                                                <strong>Desactivado:</strong> Se exigirá PIN de administrador/supervisor o solicitud remota en tiempo real.
+                                            </p>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                                            <input type="checkbox" id="conf-cajero-can-cancel" class="sr-only peer" checked>
+                                            <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--system-primary)]"></div>
+                                        </label>
+                                    </div>
+
+                                    <!-- Switch Edición -->
+                                    <div class="bg-white p-4 rounded-xl border border-gray-200/70 shadow-2xs flex items-start justify-between gap-3">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center gap-2">
+                                                <i class="fas fa-edit text-blue-500 text-xs"></i>
+                                                <h5 class="font-bold text-gray-800 text-xs">Editar pedidos sin clave de admin</h5>
+                                            </div>
+                                            <p class="text-[10px] text-gray-400 leading-relaxed">
+                                                <strong>Activado:</strong> El cajero puede modificar platos, precios o notas de pedidos directamente.<br>
+                                                <strong>Desactivado:</strong> Se requerirá autorización previa de un administrador o supervisor para editar.
+                                            </p>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                                            <input type="checkbox" id="conf-cajero-can-edit" class="sr-only peer" checked>
+                                            <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--system-primary)]"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Botones Inferiores -->
                             <div class="pt-6 mt-6 border-t border-gray-100 flex flex-col items-center justify-center gap-3 w-full">
                                 <button type="submit" id="btn-save-config"
@@ -1712,6 +1763,40 @@
                                 <button type="button" id="btn-open-optimization" aria-label="Optimizar base de datos" class="w-full py-2.5 px-4 rounded-xl btn-system-tertiary text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
                                     <i class="fas fa-trash-alt"></i>
                                     <span>Eliminación y Optimización</span>
+                                </button>
+                            </div>
+
+                            <!-- Copia de Seguridad de Base de Datos (Backup SQLite) -->
+                            <div class="p-5 rounded-2xl border border-gray-100 bg-gray-50/50 flex flex-col justify-between hover:border-[var(--system-primary)]/40 transition-all group">
+                                <div class="flex items-start gap-3.5 mb-4">
+                                    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
+                                        <i class="fas fa-database text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-gray-800 text-sm">Copia de Seguridad de Datos</h4>
+                                        <p class="text-xs text-gray-500 mt-1">Descarga un respaldo instantáneo completo (.sqlite) con ventas, inventario, clientes y cierres de caja.</p>
+                                    </div>
+                                </div>
+                                <button type="button" id="btn-download-backup" aria-label="Descargar copia de seguridad" class="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
+                                    <i class="fas fa-download"></i>
+                                    <span>Descargar Copia de Seguridad (.sqlite)</span>
+                                </button>
+                            </div>
+
+                            <!-- Registro de Auditoría y Trazabilidad Antifraude -->
+                            <div class="p-5 rounded-2xl border border-gray-100 bg-gray-50/50 flex flex-col justify-between hover:border-[var(--system-primary)]/40 transition-all group">
+                                <div class="flex items-start gap-3.5 mb-4">
+                                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
+                                        <i class="fas fa-shield-alt text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-gray-800 text-sm">Registro de Auditoría Antifraude</h4>
+                                        <p class="text-xs text-gray-500 mt-1">Supervisa en tiempo real quién anuló pedidos, borró registros, reinició contadores o cerró la caja.</p>
+                                    </div>
+                                </div>
+                                <button type="button" id="btn-open-audit-logs" aria-label="Ver registro de auditoría" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    <span>Ver Registro de Auditoría</span>
                                 </button>
                             </div>
                         </div>
@@ -1866,6 +1951,7 @@
                     <select id="user-role" required
                         class="w-full p-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 transition-colors bg-white text-xs font-medium">
                         <option value="admin">Administrador</option>
+                        <option value="supervisor">Supervisor</option>
                         <option value="cajero">Cajero</option>
                         <option value="chef">Chef</option>
                         <option value="delivery">Repartidor</option>
@@ -4151,7 +4237,7 @@
         <!-- 5. User Work Schedule Modal -->
         <!-- 5. User Work Schedule Modal -->
         <div id="modal-user-schedule"
-            class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+            class="fixed inset-0 bg-black/60 z-[50] hidden flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
             <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 animate-zoom-in border border-gray-100 max-h-[92vh] overflow-y-auto custom-scroll">
                 <div class="flex items-center justify-between pb-4 border-b border-gray-100">
                     <div class="flex items-center gap-3">
@@ -4163,7 +4249,7 @@
                             <p id="schedule-user-info" class="text-xs text-gray-500">Configura días y horas de acceso para el usuario</p>
                         </div>
                     </div>
-                    <button type="button" id="btn-close-schedule-modal" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center transition-colors">
+                    <button type="button" id="btn-close-schedule-modal" onclick="closeUserScheduleModal()" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center transition-colors">
                         <i class="fas fa-times text-sm"></i>
                     </button>
                 </div>
@@ -4251,7 +4337,7 @@
 
 
                     <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
-                        <button type="button" id="btn-cancel-schedule" class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors cursor-pointer">Cancelar</button>
+                        <button type="button" id="btn-cancel-schedule" onclick="closeUserScheduleModal()" class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors cursor-pointer">Cancelar</button>
                         <button type="submit" id="btn-save-schedule" class="btn-system-primary px-5 py-2 rounded-xl text-xs font-bold shadow-md cursor-pointer">Guardar Todo el Horario</button>
                     </div>
                 </form>
@@ -4356,6 +4442,69 @@
                     class="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 shadow-lg shadow-red-200 transition-transform active:scale-95">
                     Eliminar
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Logs Modal (Antifraude y Control) -->
+    <div id="audit-logs-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-4 backdrop-blur-sm">
+        <div class="glass-panel w-full max-w-4xl max-h-[85vh] rounded-3xl shadow-2xl p-6 slide-up bg-white flex flex-col relative">
+            <div class="flex items-center justify-between pb-4 border-b border-gray-100 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-sm">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-800">Registro de Auditoría y Trazabilidad</h3>
+                        <p class="text-xs text-gray-500">Historial inmutable de acciones críticas (anulaciones, eliminaciones, cierres de caja y respaldos)</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btn-refresh-audit-logs" class="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors" title="Actualizar">
+                        <i class="fas fa-sync-alt text-sm"></i>
+                    </button>
+                    <button type="button" onclick="document.getElementById('audit-logs-modal').classList.add('hidden')" class="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                        <i class="fas fa-times text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-y-auto overflow-x-auto flex-1 my-4 rounded-2xl border border-gray-100 bg-gray-50/30">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-gray-100 text-gray-600 uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10">
+                        <tr>
+                            <th class="p-3">Fecha y Hora</th>
+                            <th class="p-3">Acción</th>
+                            <th class="p-3">Usuario / Rol</th>
+                            <th class="p-3">Detalles</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-logs-body" class="divide-y divide-gray-100 bg-white">
+                        <tr>
+                            <td colspan="4" class="p-8 text-center text-gray-400">
+                                <i class="fas fa-spinner fa-spin text-lg mb-2 block"></i> Cargando registros de auditoría...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pt-3 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div class="flex items-center gap-2 text-xs text-gray-500">
+                    <i class="fas fa-list-ol text-gray-400"></i>
+                    <span id="audit-logs-page-info">Página 1 de 1 (0 registros)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btn-audit-prev" disabled class="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs flex items-center gap-1.5 cursor-pointer">
+                        <i class="fas fa-chevron-left text-[10px]"></i> Anterior
+                    </button>
+                    <button type="button" id="btn-audit-next" disabled class="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs flex items-center gap-1.5 cursor-pointer">
+                        Siguiente <i class="fas fa-chevron-right text-[10px]"></i>
+                    </button>
+                    <button type="button" onclick="document.getElementById('audit-logs-modal').classList.add('hidden')" class="ml-2 px-5 py-2 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 transition-colors text-xs cursor-pointer">
+                        Cerrar
+                    </button>
+                </div>
             </div>
         </div>
     </div>

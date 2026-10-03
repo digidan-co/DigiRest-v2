@@ -139,24 +139,8 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
 
         // ── MASTER USER (Invisible Admin for Multi-Instance Management) ──
         if (MASTER_KEY && MASTER_KEY.length >= 32 && code === MASTER_KEY) {
-            // Audit log for master access
-            const auditId = uuidv4();
-            const auditData = {
-                userAgent: req.headers['user-agent'],
-                ip: req.ip || req.connection.remoteAddress,
-                timestamp: new Date().toISOString()
-            };
-
-            db.run(
-                `INSERT INTO audit_logs (id, event_type, user_id, ip_address, details) 
-                 VALUES (?, ?, ?, ?, ?)`,
-                [auditId, 'master_login', 'master', auditData.ip, JSON.stringify(auditData)],
-                (err) => {
-                    if (err) console.error('Failed to log master access:', err);
-                }
-            );
-
-            console.log(`SECURITY: Master Access Granted from IP: ${auditData.ip}`);
+            const clientIp = req.ip || req.connection.remoteAddress;
+            console.log(`SECURITY: Master Access Granted from IP: ${clientIp}`);
 
             // Check if master already has an active session
             db.get("SELECT token FROM active_sessions WHERE user_id = 'master'", [], (sessErr, existing) => {
@@ -576,7 +560,10 @@ const requireRole = (allowedRoles = []) => {
         if (!req.user || !req.user.role) {
             return res.status(401).json({ error: 'No autenticado o sin rol asignado.' });
         }
-        if (!roles.includes(req.user.role)) {
+        const userRole = req.user.role;
+        // Supervisors inherit all cashier permissions
+        const hasPermission = roles.includes(userRole) || (userRole === 'supervisor' && roles.includes('cajero'));
+        if (!hasPermission) {
             return res.status(403).json({ error: 'Acceso denegado: permisos insuficientes para esta acción.' });
         }
         next();
@@ -678,44 +665,43 @@ router.post('/verify-admin', verifyToken, (req, res) => {
 
     console.log(`[VERIFY-ADMIN] Code received (length=${code.length}), querying admins...`);
 
-    db.all("SELECT id, name, code FROM users WHERE role = 'admin' AND name != 'digidanMasterAdmin'", [], async (err, rows) => {
+    db.all("SELECT id, name, code, role FROM users WHERE role IN ('admin', 'supervisor') AND name != 'digidanMasterAdmin'", [], async (err, rows) => {
         if (err) {
             console.error('[VERIFY-ADMIN] Database error:', err);
             return res.status(500).json({ valid: false, error: 'Error interno del servidor' });
         }
 
         if (!rows || rows.length === 0) {
-            console.log(`[VERIFY-ADMIN] FAIL: No admins found in database`);
-            return res.json({ valid: false, error: 'No hay administradores disponibles en el sistema.' });
+            console.log(`[VERIFY-ADMIN] FAIL: No admins or supervisors found in database`);
+            return res.json({ valid: false, error: 'No hay administradores ni supervisores disponibles en el sistema.' });
         }
 
-        console.log(`[VERIFY-ADMIN] Found ${rows.length} admin(s): ${rows.map(r => r.name).join(', ')}`);
+        console.log(`[VERIFY-ADMIN] Found ${rows.length} admin/supervisor(s): ${rows.map(r => r.name).join(', ')}`);
 
         try {
             for (const row of rows) {
-                console.log(`[VERIFY-ADMIN] Trying code against admin "${row.name}"...`);
+                console.log(`[VERIFY-ADMIN] Trying code against "${row.name}" (${row.role})...`);
                 const match = await bcrypt.compare(code, row.code);
-                console.log(`[VERIFY-ADMIN] bcrypt.compare result for "${row.name}": ${match}`);
                 if (match) {
-                    console.log(`[VERIFY-ADMIN] SUCCESS: Code matches admin "${row.name}"`);
-                    return res.json({ valid: true, admin: { id: row.id, name: row.name } });
+                    console.log(`[VERIFY-ADMIN] SUCCESS: Code matches "${row.name}"`);
+                    return res.json({ valid: true, admin: { id: row.id, name: row.name, role: row.role } });
                 }
             }
 
-            // No admin matched the provided code
-            console.log(`[VERIFY-ADMIN] FAIL: Code did not match any admin`);
-            return res.json({ valid: false, error: 'Credenciales de administrador incorrectas' });
+            // No admin or supervisor matched the provided code
+            console.log(`[VERIFY-ADMIN] FAIL: Code did not match any admin or supervisor`);
+            return res.json({ valid: false, error: 'Credenciales de autorización incorrectas' });
         } catch (e) {
-            console.error('[VERIFY-ADMIN] Error verifying admin credentials:', e);
+            console.error('[VERIFY-ADMIN] Error verifying credentials:', e);
             res.status(500).json({ valid: false, error: 'Error interno del servidor' });
         }
     });
 });
 
-// GET /auth/admin-identities — Returns admin names (no codes/passwords) for frontend admin auth flow
-// Accessible to any authenticated user (needed by cashiers for admin verification)
+// GET /auth/admin-identities — Returns admin/supervisor names (no codes/passwords) for frontend auth flow
+// Accessible to any authenticated user (needed by cashiers for authorization)
 router.get('/admin-identities', verifyToken, (req, res) => {
-    db.all("SELECT id, name FROM users WHERE role = 'admin' AND name != 'digidanMasterAdmin'", [], (err, rows) => {
+    db.all("SELECT id, name, role FROM users WHERE role IN ('admin', 'supervisor') AND name != 'digidanMasterAdmin'", [], (err, rows) => {
         if (err) {
             console.error('Error fetching admin identities:', err);
             return res.status(500).json({ error: 'Error interno del servidor' });

@@ -398,6 +398,24 @@ function initSchema() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- =============================================
+    -- SOLICITUDES DE AUTORIZACIÓN (ANULACIÓN Y EDICIÓN)
+    -- =============================================
+    CREATE TABLE IF NOT EXISTS order_authorizations (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        reason TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        requested_by_id TEXT,
+        requested_by_name TEXT,
+        resolved_by_id TEXT,
+        resolved_by_name TEXT,
+        resolved_note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        resolved_at DATETIME
+    );
     `;
 
     db.exec(schema, (err) => {

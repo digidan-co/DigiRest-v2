@@ -4,6 +4,7 @@ const db = require('../db');
 const bcrypt = require('bcrypt');
 const { verifyToken } = require('./auth');
 const { validateConfig } = require('../middleware/validators');
+const { logAudit } = require('../utils/auditLogger');
 
 module.exports = (io) => {
     // Get Config (Public)
@@ -76,6 +77,11 @@ module.exports = (io) => {
                     if (err2) return res.status(500).json({ error: err2.message });
 
                     console.log(`⚠️  Contadores restablecidos por: ${req.user.name} (${req.user.id})`);
+                    logAudit('COUNTERS_RESET', req.user.id, req.ip, {
+                        user: req.user.name,
+                        role: req.user.role,
+                        message: 'Contadores PG y PL restablecidos a 0'
+                    });
                     res.json({ message: 'Contadores restablecidos correctamente. El próximo pedido comenzará en 1.' });
                 });
             });
