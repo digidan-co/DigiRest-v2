@@ -120,6 +120,7 @@ module.exports = (io) => {
                 // Emit events to specific rooms
                 io.to('admin').emit('order_updated', updatedOrder);
                 io.to('cajero').emit('order_updated', updatedOrder);
+                io.to('supervisor').emit('order_updated', updatedOrder);
                 io.to('chef').emit('order_updated', updatedOrder);
                 io.to('tracker').emit('order_updated', updatedOrder);
                 io.to('mesero').emit('order_updated', updatedOrder);

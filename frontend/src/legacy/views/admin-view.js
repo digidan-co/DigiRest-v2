@@ -363,8 +363,8 @@ export function setupAdminListeners() {
     // Listen for new orders and show notification
     if (window.socket) {
         window.socket.on('new_order', (order) => {
-            // Only show notification for admin/cajero roles
-            if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero')) {
+            // Only show notification for admin/cajero/supervisor roles
+            if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero' || state.user.role === 'supervisor')) {
                 // Import showOrderNotification from ui.js
                 import('../components/ui.js').then(module => {
                     if (module.showOrderNotification) {
@@ -410,7 +410,7 @@ export function setupAdminListeners() {
         });
 
         window.socket.on('new_order_note', (data) => {
-            if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero')) {
+            if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero' || state.user.role === 'supervisor')) {
                 if (window.playNoteSound) window.playNoteSound();
             }
             refreshNotesIfOpen(data);

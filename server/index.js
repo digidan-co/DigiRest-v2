@@ -357,6 +357,9 @@ io.on('connection', (socket) => {
             if (r === 'waiter') socket.join('mesero');
             if (r === 'delivery') socket.join('repartidor');
             if (r === 'repartidor') socket.join('delivery');
+            if (r === 'cajero' || r === 'supervisor') socket.join('admin');
+            if (r === 'admin' || r === 'supervisor') socket.join('cajero');
+            if (r === 'admin' || r === 'cajero') socket.join('supervisor');
 
             if (userId) {
                 socket.join(`user_${userId}`);

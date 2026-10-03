@@ -87,7 +87,7 @@ function daysText(c) {
 
 function canAccessCrm() {
     const user = state.user || JSON.parse(localStorage.getItem('pos_user') || 'null');
-    return user && (user.role === 'admin' || user.role === 'cajero');
+    return user && (user.role === 'admin' || user.role === 'cajero' || user.role === 'supervisor');
 }
 
 async function load() {
@@ -122,7 +122,7 @@ onMounted(() => {
 });
 
 watch(() => state.user, (u) => {
-    if (u && localStorage.getItem('pos_token') && (u.role === 'admin' || u.role === 'cajero')) {
+    if (u && localStorage.getItem('pos_token') && (u.role === 'admin' || u.role === 'cajero' || u.role === 'supervisor')) {
         load();
     }
 });

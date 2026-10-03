@@ -71,6 +71,7 @@ module.exports = (io) => {
                     // Emit Socket.io event for real-time update
                     io.to('admin').emit('order_deleted', { id });
                     io.to('cajero').emit('order_deleted', { id });
+                    io.to('supervisor').emit('order_deleted', { id });
                     io.to('chef').emit('order_deleted', { id });
                     io.to('cocinero').emit('order_deleted', { id });
                     io.to('mesero').emit('order_deleted', { id });

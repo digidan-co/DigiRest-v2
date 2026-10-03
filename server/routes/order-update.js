@@ -113,6 +113,7 @@ module.exports = (io) => {
                 // Emit Socket.io event for real-time update to relevant rooms
                 io.to('admin').emit('order_updated', updateData);
                 io.to('cajero').emit('order_updated', updateData);
+                io.to('supervisor').emit('order_updated', updateData);
                 io.to('chef').emit('order_updated', updateData);
                 io.to('cocinero').emit('order_updated', updateData);
                 io.to('tracker').emit('order_updated', updateData);
@@ -241,6 +242,7 @@ module.exports = (io) => {
 
                         io.to('admin').emit('order_updated', orderData);
                         io.to('cajero').emit('order_updated', orderData);
+                        io.to('supervisor').emit('order_updated', orderData);
                         io.to('chef').emit('order_updated', orderData);
                         io.to('cocinero').emit('order_updated', orderData);
                         io.to('tracker').emit('order_updated', orderData);

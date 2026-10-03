@@ -154,6 +154,7 @@ module.exports = (io) => {
                     deductStockForOrder(newId, parsedItems, req.user?.name || waiterName || 'Mesero', io);
                 }
                 io.to('cajero').emit('new_order', newOrder);
+                io.to('supervisor').emit('new_order', newOrder);
                 io.to('tracker').emit('new_order', newOrder);
                 io.to('waiter').emit('new_order', newOrder);
                 io.to('mesero').emit('new_order', newOrder);
@@ -517,8 +518,10 @@ module.exports = (io) => {
                 // Notify relevant rooms via Socket.IO
                 io.to('admin').emit('order_status_update', updateData);
                 io.to('cajero').emit('order_status_update', updateData);
+                io.to('supervisor').emit('order_status_update', updateData);
                 io.to('admin').emit('order_updated', updateData);
                 io.to('cajero').emit('order_updated', updateData);
+                io.to('supervisor').emit('order_updated', updateData);
                 io.to('chef').emit('order_status_update', updateData);
                 io.to('cocinero').emit('order_status_update', updateData);
                 io.to('tracker').emit('order_status_update', updateData);
@@ -701,8 +704,10 @@ module.exports = (io) => {
 
                 io.to('admin').emit('order_status_update', updateData);
                 io.to('cajero').emit('order_status_update', updateData);
+                io.to('supervisor').emit('order_status_update', updateData);
                 io.to('admin').emit('order_updated', updateData);
                 io.to('cajero').emit('order_updated', updateData);
+                io.to('supervisor').emit('order_updated', updateData);
                 io.to('chef').emit('order_status_update', updateData);
                 io.to('cocinero').emit('order_status_update', updateData);
                 io.to('tracker').emit('order_status_update', updateData);

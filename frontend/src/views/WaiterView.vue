@@ -165,7 +165,7 @@ onUnmounted(() => {
         </div>
 
         <!-- FILA 3: Pestañas "Pedidos Locales" y "Pedidos Generales" -->
-        <div class="flex items-center gap-1.5 p-1 bg-gray-200/80 rounded-2xl mb-5 max-w-md mx-auto">
+        <div class="flex items-center gap-1.5 p-1 bg-gray-200/80 rounded-2xl mb-2 sm:mb-8 max-w-md mx-auto">
             <button type="button" @click="activeTab = 'locales'"
                 class="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer"
                 :class="activeTab === 'locales' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'">
@@ -193,43 +193,45 @@ onUnmounted(() => {
         <div v-show="activeTab === 'locales'">
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 <div v-for="o in activeLocalOrders" :key="o.id"
-                    class="p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all flex flex-col h-full relative"
+                    class="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border shadow-2xs hover:shadow-xs transition-all flex flex-col h-full relative"
                     :class="o._offline ? 'bg-amber-50/60 border-amber-200' : 'bg-white border-gray-200/90'">
                     
-                    <div class="mb-3 border-b border-gray-100 pb-2">
+                    <div class="mb-2 border-b border-gray-100 pb-1.5">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="text-sm font-black text-gray-500">#{{ o.id }}</span>
+                            <span class="text-xs sm:text-sm font-black text-gray-500">#{{ o.id }}</span>
                             <div class="flex gap-1.5 items-center">
                                 <button type="button" @click.stop="openWaiterNotesModal(o.id)"
-                                    class="w-7 h-7 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center hover:bg-orange-200 transition-colors relative bell-ring-container" title="Notas del Pedido">
+                                    class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center hover:bg-orange-200 transition-colors relative bell-ring-container" title="Notas del Pedido">
                                     <div v-if="o.unsolved_notes_count > 0" class="bell-pulse-ring"></div>
-                                    <i class="fas fa-bell text-xs relative z-10" :class="o.unsolved_notes_count > 0 ? 'animate-jump-spin' : ''"></i>
+                                    <i class="fas fa-bell text-[11px] relative z-10" :class="o.unsolved_notes_count > 0 ? 'animate-jump-spin' : ''"></i>
                                 </button>
-                                <span class="text-[12px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider" :class="getStatusColor(o.status)">{{ o.status }}</span>
+                                <span class="text-[11px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider" :class="getStatusColor(o.status)">{{ o.status }}</span>
                             </div>
                         </div>
-                        <div class="flex justify-between items-center mt-1">
-                            <div class="text-lg font-black text-gray-900 flex items-center gap-1.5">
-                                <i class="fas fa-chair text-blue-600 text-sm"></i>
+                        <div class="flex justify-between items-center mt-0.5">
+                            <div class="text-base sm:text-lg font-black text-gray-900 flex items-center gap-1.5">
+                                <i class="fas fa-chair text-blue-600 text-xs sm:text-sm"></i>
                                 <span>Mesa {{ o.table || o.tableNum || '?' }}</span>
                             </div>
-                            <div class="text-xs text-gray-400 font-medium"><i class="far fa-clock mr-1"></i>{{ formatTime(o) }}</div>
+                            <div class="text-[11px] sm:text-xs text-gray-400 font-medium"><i class="far fa-clock mr-1"></i>{{ formatTime(o) }}</div>
                         </div>
                     </div>
 
                     <!-- Progreso en cocina -->
-                    <div class="mb-3">
-                        <div class="flex items-center gap-2 mb-1">
-                            <div class="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                                <div class="bg-gradient-to-r from-[var(--system-primary)] to-amber-500 h-full transition-all duration-300" :style="{ width: orderProgress(o) + '%' }"></div>
+                    <div class="mb-2">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <div class="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                <div class="h-full rounded-full transition-all duration-500 ease-out"
+                                    :class="orderProgress(o) >= 100 ? 'bg-gradient-to-r from-emerald-500 to-green-500' : 'bg-gradient-to-r from-blue-500 to-emerald-500'"
+                                    :style="{ width: orderProgress(o) + '%' }"></div>
                             </div>
-                            <span class="text-xs font-bold text-gray-600 min-w-[35px] text-right">{{ orderProgress(o) }}%</span>
+                            <span class="text-[11px] font-bold text-gray-600 min-w-[32px] text-right">{{ orderProgress(o) }}%</span>
                         </div>
                     </div>
 
                     <!-- Lista de platos -->
-                    <div class="space-y-1 mb-4 flex-1 overflow-y-auto max-h-[220px]">
-                        <div v-for="(i, idx) in o.items" :key="idx" class="flex flex-col text-sm py-1 border-b border-gray-50 last:border-0" :class="itemStyle(i)">
+                    <div class="space-y-0.5 mb-2.5 flex-1 overflow-y-auto max-h-[190px]">
+                        <div v-for="(i, idx) in o.items" :key="idx" class="flex flex-col text-xs sm:text-[13px] py-0.5 border-b border-gray-50 last:border-0" :class="itemStyle(i)">
                             <div class="flex justify-between items-start">
                                 <span>
                                     <i v-if="itemCheckedQty(i) > 0" class="fas fa-check-circle text-xs mr-1" :class="iconColor(i)" :title="itemCheckedQty(i) + '/' + (i.qty || 1) + ' listos'"></i>
@@ -242,12 +244,12 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Total y acciones -->
-                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 mt-auto">
+                    <div class="flex items-center justify-between pt-1.5 border-t border-gray-100 mt-auto">
                         <div class="flex flex-col">
-                            <div class="flex items-center gap-2">
-                                <span class="font-black text-gray-900 text-lg sm:text-xl">{{ formatMoney(o.total) }}</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-black text-gray-900 text-base sm:text-lg">{{ formatMoney(o.total) }}</span>
                                 <div v-if="o.payment === 'Transferencia' && o.proof && o.proof !== 'null'"
-                                    class="relative group w-8 h-8 rounded-lg border border-gray-200 overflow-hidden cursor-pointer shadow-2xs" title="Ver comprobante" @click="showProof(o)">
+                                    class="relative group w-7 h-7 rounded-lg border border-gray-200 overflow-hidden cursor-pointer shadow-2xs" title="Ver comprobante" @click="showProof(o)">
                                     <img :src="o.proof" class="w-full h-full object-cover" alt="Comprobante" loading="lazy" />
                                     <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center transition-all">
                                         <i class="fas fa-search-plus text-white text-[10px]"></i>
@@ -255,15 +257,15 @@ onUnmounted(() => {
                                 </div>
                             </div>
                             <button v-if="o.payment === 'Transferencia' && (!o.proof || o.proof === 'null')" type="button"
-                                class="mt-1 text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors font-semibold"
+                                class="mt-0.5 text-[9px] sm:text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors font-semibold"
                                 @click="handleWaiterProofUpload(o.id)">
                                 <i class="fas fa-upload mr-1"></i> Subir Comprobante
                             </button>
                         </div>
                         <button type="button"
-                            class="w-11 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all shadow-sm active:scale-90 cursor-pointer"
+                            class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all shadow-2xs active:scale-90 cursor-pointer"
                             :data-id="o.id" title="Agregar Plato a la Mesa" @click.stop="openAddItemModal(o.id)">
-                            <i class="fas fa-plus text-lg"></i>
+                            <i class="fas fa-plus text-sm sm:text-base"></i>
                         </button>
                     </div>
                 </div>
@@ -282,27 +284,27 @@ onUnmounted(() => {
         <div v-show="activeTab === 'generales'">
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 <div v-for="o in activeGeneralOrders" :key="o.id"
-                    class="p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all flex flex-col h-full relative"
+                    class="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border shadow-2xs hover:shadow-xs transition-all flex flex-col h-full relative"
                     :class="o._offline ? 'bg-amber-50/60 border-amber-200' : 'bg-white border-gray-200/90'">
                     
-                    <div class="mb-3 border-b border-gray-100 pb-2">
+                    <div class="mb-2 border-b border-gray-100 pb-1.5">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="text-sm font-black text-gray-500">#{{ o.id }}</span>
+                            <span class="text-xs sm:text-sm font-black text-gray-500">#{{ o.id }}</span>
                             <div class="flex gap-1.5 items-center">
                                 <button v-if="o.unsolved_notes_count > 0" type="button" @click.stop="openWaiterNotesModal(o.id)"
-                                    class="w-7 h-7 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center hover:bg-orange-200 transition-colors relative bell-ring-container" title="Notas del Pedido">
+                                    class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center hover:bg-orange-200 transition-colors relative bell-ring-container" title="Notas del Pedido">
                                     <div class="bell-pulse-ring"></div>
-                                    <i class="fas fa-bell text-xs relative z-10 animate-jump-spin"></i>
+                                    <i class="fas fa-bell text-[11px] relative z-10 animate-jump-spin"></i>
                                 </button>
-                                <span class="text-[12px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider" :class="getStatusColor(o.status)">{{ o.status }}</span>
+                                <span class="text-[11px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider" :class="getStatusColor(o.status)">{{ o.status }}</span>
                             </div>
                         </div>
 
-                        <div class="flex items-center justify-between mt-1">
-                            <div class="text-sm font-extrabold text-gray-900 truncate max-w-[70%]">
+                        <div class="flex items-center justify-between mt-0.5">
+                            <div class="text-xs sm:text-sm font-extrabold text-gray-900 truncate max-w-[70%]">
                                 {{ o.client || 'Cliente General' }}
                             </div>
-                            <span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md"
+                            <span class="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md"
                                 :class="o.type === 'Domicilio' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'">
                                 <i :class="o.type === 'Domicilio' ? 'fas fa-motorcycle' : 'fas fa-shopping-bag'"></i>
                                 {{ o.type }}
@@ -310,32 +312,34 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Zona de reparto / Dirección -->
-                        <div v-if="o.delivery_zone" class="inline-flex items-center gap-1 text-[10px] text-orange-800 font-bold bg-orange-50 px-2 py-0.5 rounded mt-1">
+                        <div v-if="o.delivery_zone" class="inline-flex items-center gap-1 text-[10px] text-orange-800 font-bold bg-orange-50 px-1.5 py-0.5 rounded mt-0.5">
                             <i class="fas fa-map-marker-alt text-orange-600"></i>
                             <span>{{ o.delivery_zone }}</span>
                         </div>
-                        <p v-if="o.address && o.address !== 'N/A'" class="text-[11px] text-gray-500 mt-1 truncate">
+                        <p v-if="o.address && o.address !== 'N/A'" class="text-[10px] sm:text-[11px] text-gray-500 mt-0.5 truncate">
                             <i class="fas fa-location-arrow text-[9px] mr-1 text-gray-400"></i>{{ o.address }}
                         </p>
                         <a v-if="o.phone && o.phone.length >= 7" :href="'https://wa.me/+57' + o.phone" target="_blank"
-                            class="text-[11px] text-green-600 hover:text-green-700 font-bold inline-flex items-center gap-1 mt-1">
+                            class="text-[10px] sm:text-[11px] text-green-600 hover:text-green-700 font-bold inline-flex items-center gap-1 mt-0.5">
                             <i class="fab fa-whatsapp"></i> {{ o.phone }}
                         </a>
                     </div>
 
                     <!-- Progreso en cocina -->
-                    <div class="mb-3">
-                        <div class="flex items-center gap-2 mb-1">
-                            <div class="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                                <div class="bg-gradient-to-r from-orange-500 to-amber-500 h-full transition-all duration-300" :style="{ width: orderProgress(o) + '%' }"></div>
+                    <div class="mb-2">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <div class="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                <div class="h-full rounded-full transition-all duration-500 ease-out"
+                                    :class="orderProgress(o) >= 100 ? 'bg-gradient-to-r from-emerald-500 to-green-500' : 'bg-gradient-to-r from-orange-500 to-amber-500'"
+                                    :style="{ width: orderProgress(o) + '%' }"></div>
                             </div>
-                            <span class="text-xs font-bold text-gray-600 min-w-[35px] text-right">{{ orderProgress(o) }}%</span>
+                            <span class="text-[11px] font-bold text-gray-600 min-w-[32px] text-right">{{ orderProgress(o) }}%</span>
                         </div>
                     </div>
 
                     <!-- Lista de platos -->
-                    <div class="space-y-1 mb-4 flex-1 overflow-y-auto max-h-[220px]">
-                        <div v-for="(i, idx) in o.items" :key="idx" class="flex flex-col text-sm py-1 border-b border-gray-50 last:border-0" :class="itemStyle(i)">
+                    <div class="space-y-0.5 mb-2.5 flex-1 overflow-y-auto max-h-[190px]">
+                        <div v-for="(i, idx) in o.items" :key="idx" class="flex flex-col text-xs sm:text-[13px] py-0.5 border-b border-gray-50 last:border-0" :class="itemStyle(i)">
                             <div class="flex justify-between items-start">
                                 <span>
                                     <i v-if="itemCheckedQty(i) > 0" class="fas fa-check-circle text-xs mr-1 text-orange-500" :title="itemCheckedQty(i) + '/' + (i.qty || 1) + ' listos'"></i>
@@ -348,12 +352,12 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Total y método de pago -->
-                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 mt-auto">
+                    <div class="flex items-center justify-between pt-1.5 border-t border-gray-100 mt-auto">
                         <div class="flex flex-col">
-                            <div class="flex items-center gap-2">
-                                <span class="font-black text-gray-900 text-lg sm:text-xl">{{ formatMoney(o.total) }}</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-black text-gray-900 text-base sm:text-lg">{{ formatMoney(o.total) }}</span>
                                 <div v-if="o.payment === 'Transferencia' && o.proof && o.proof !== 'null'"
-                                    class="relative group w-8 h-8 rounded-lg border border-gray-200 overflow-hidden cursor-pointer shadow-2xs" title="Ver comprobante" @click="showProof(o)">
+                                    class="relative group w-7 h-7 rounded-lg border border-gray-200 overflow-hidden cursor-pointer shadow-2xs" title="Ver comprobante" @click="showProof(o)">
                                     <img :src="o.proof" class="w-full h-full object-cover" alt="Comprobante" loading="lazy" />
                                     <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center transition-all">
                                         <i class="fas fa-search-plus text-white text-[10px]"></i>
@@ -362,7 +366,7 @@ onUnmounted(() => {
                             </div>
                             <span class="text-[10px] text-gray-500 font-medium">Pago: {{ o.payment || 'Efectivo' }}</span>
                         </div>
-                        <div class="text-right text-xs text-gray-400">
+                        <div class="text-right text-[11px] sm:text-xs text-gray-400">
                             <i class="far fa-clock mr-1"></i>{{ formatTime(o) }}
                         </div>
                     </div>

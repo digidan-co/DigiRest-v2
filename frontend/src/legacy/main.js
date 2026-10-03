@@ -104,7 +104,7 @@ window.closeWaiterModal = () => {
     if (typeof window.resetWaiterOrderForm === 'function') {
         window.resetWaiterOrderForm();
     }
-    if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero')) {
+    if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero' || state.user.role === 'supervisor')) {
         const adminView = $('admin-view');
         const grView = $('rapid-management-view');
         const isGrOpen = grView && !grView.classList.contains('hidden');
@@ -830,8 +830,8 @@ async function init() {
         };
 
         socket.on('new_order', () => {
-            // Chef and admin should be notified of new orders
-            badgeForRole(['admin', 'chef', 'cocinero']);
+            // Chef, admin, cashier and supervisor should be notified of new orders
+            badgeForRole(['admin', 'cajero', 'supervisor', 'chef', 'cocinero']);
         });
 
         socket.on('order_updated', (data) => {
@@ -1476,7 +1476,7 @@ window.switchView = (viewName) => {
                 btnBack.classList.remove('hidden');
                 btnBack.onclick = () => {
                     const role = state.user.role;
-                    if (role === 'admin' || role === 'cajero') window.switchView('admin');
+                    if (role === 'admin' || role === 'cajero' || role === 'supervisor') window.switchView('admin');
                     else if (role === 'chef' || role === 'cocinero') window.switchView('chef');
                     else if (role === 'waiter' || role === 'mesero') window.switchView('waiter');
                     else if (role === 'delivery' || role === 'repartidor') window.switchView('delivery');
@@ -1527,7 +1527,7 @@ window.switchView = (viewName) => {
 
 // Global Reload Function for Real-Time Updates (called by admin-view.js)
 window.reloadAdminData = async () => {
-    if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero')) {
+    if (state.user && (state.user.role === 'admin' || state.user.role === 'cajero' || state.user.role === 'supervisor')) {
         // 1. Always load offline orders first (works even when offline)
         let offlineOrdersList = [];
         try {
@@ -1606,7 +1606,7 @@ window.loadAdminOrders = window.reloadAdminData;
 function getDefaultViewForRole(role) {
     if (!role) return 'client';
     const r = role.toLowerCase();
-    if (r === 'admin' || r === 'cajero') return 'admin';
+    if (r === 'admin' || r === 'cajero' || r === 'supervisor') return 'admin';
     if (r === 'chef' || r === 'cocinero') return 'chef';
     if (r === 'delivery' || r === 'repartidor') return 'delivery';
     if (r === 'waiter' || r === 'mesero') return 'waiter';
@@ -1656,6 +1656,7 @@ function updateReturnToPanelButton() {
             switch (user.role) {
                 case 'admin':
                 case 'cajero':
+                case 'supervisor':
                     window.switchView('admin');
                     break;
                 case 'chef':

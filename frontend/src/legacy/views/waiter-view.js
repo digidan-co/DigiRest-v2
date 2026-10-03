@@ -345,7 +345,7 @@ export function renderWaiterActiveOrders(orders) {
                     </div>
                 </div>
                 <div class="flex justify-between items-center">
-                    <div class="text-lg font-bold text-gray-800">Mesa ${o.table || o.tableNum || '?'}</div>
+                    <div class="text-lg font-bold text-gray-800">${(o.table || o.tableNum) && (o.table || o.tableNum) !== '?' && o.type !== 'General' && o.type !== 'Domicilio' && o.type !== 'Recoger' ? `Mesa ${o.table || o.tableNum}` : 'Pedido General'}</div>
                     <div class="text-xs text-gray-400"><i class="far fa-clock mr-1"></i>${new Date(o.timestamp).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
             </div>
@@ -789,10 +789,15 @@ export async function openWaiterHistory() {
 
         list.innerHTML = filteredOrders.map(o => {
             total += o.total;
+            const hasTable = (o.table || o.tableNum) && (o.table || o.tableNum) !== '?' && o.type !== 'General' && o.type !== 'Domicilio' && o.type !== 'Recoger';
+            const tableLabel = hasTable ? `Mesa ${escapeHtml(o.table || o.tableNum)}` : 'Pedido General';
             return `
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm mb-2">
                 <div class="flex justify-between items-center mb-2">
-                    <span class="font-bold text-gray-800 text-sm">Mesa ${escapeHtml(o.table || o.tableNum || '?')}</span>
+                    <span class="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                        <i class="${hasTable ? 'fas fa-chair text-blue-500' : 'fas fa-shopping-bag text-orange-500'} text-xs"></i>
+                        ${tableLabel}
+                    </span>
                     <span class="text-xs font-bold px-2 py-1 rounded ${getStatusColor(o.status)}">${escapeHtml(o.status)}</span>
                 </div>
                 <div class="space-y-1">

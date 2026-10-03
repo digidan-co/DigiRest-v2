@@ -95,7 +95,7 @@ function openGps() { if (window.openGpsModal) window.openGpsModal(); }
 function goTracker() { window.switchView('tracker'); }
 function goPanel() {
     const role = state.user?.role;
-    if (role === 'admin' || role === 'cajero') window.switchView('admin');
+    if (role === 'admin' || role === 'cajero' || role === 'supervisor') window.switchView('admin');
     else if (role === 'chef' || role === 'cocinero') window.switchView('chef');
     else if (role === 'waiter' || role === 'mesero') window.switchView('waiter');
     else if (role === 'delivery' || role === 'repartidor') window.switchView('delivery');

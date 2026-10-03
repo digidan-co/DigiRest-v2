@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import { printOrder } from '@/legacy/services/print-service.js';
-import { removeOfflineOrder } from '@/legacy/services/order-service.js';
+import { removeOfflineOrder, listenToOrders, listenToWaiterOrders } from '@/legacy/services/order-service.js';
 import { OfflineDB } from '@/legacy/services/offline-db.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
 
@@ -13,8 +13,25 @@ const generalPage = ref(1);
 const waiterPage = ref(1);
 const PER_PAGE = 15;
 
-const generalOrders = computed(() => (state.orders || []).filter(o => o.type !== 'Local'));
-const waiterOrders = computed(() => (state.waiterOrders || []).filter(o => o.type === 'Local'));
+let unsubGeneral = null;
+let unsubWaiter = null;
+
+onMounted(() => {
+    unsubGeneral = listenToOrders('admin', (orders) => {
+        state.orders = orders;
+    });
+    unsubWaiter = listenToWaiterOrders('admin', (orders) => {
+        state.waiterOrders = orders;
+    });
+});
+
+onUnmounted(() => {
+    if (unsubGeneral) unsubGeneral();
+    if (unsubWaiter) unsubWaiter();
+});
+
+const generalOrders = computed(() => (state.orders || []).filter(o => String(o.type || '').toLowerCase() !== 'local'));
+const waiterOrders = computed(() => (state.waiterOrders || []).filter(o => String(o.type || '').toLowerCase() === 'local'));
 
 function statusBadgeClass(status) {
     if (status === 'Pendiente') return 'bg-white text-gray-600 border border-gray-200';

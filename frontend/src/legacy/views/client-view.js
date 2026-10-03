@@ -1582,7 +1582,7 @@ export async function handleSendOrder() {
             else if (role === 'waiter' || role === 'mesero') window.switchView('waiter');
             else if (role === 'delivery' || role === 'repartidor') window.switchView('delivery');
             else if (role === 'chef' || role === 'cocinero') window.switchView('chef');
-            else if (role === 'cajero') window.switchView('admin');
+            else if (role === 'cajero' || role === 'supervisor') window.switchView('admin');
 
             setLoading('btn-send-wa', false);
             setLoading('btn-go-checkout', false);

@@ -20,6 +20,7 @@ export const state = reactive({
     cart: [],
     user: initialUser,
     orders: [],
+    waiterOrders: [],
     unsubscribes: [],
     confirmId: null,
     restaurantData: {},
