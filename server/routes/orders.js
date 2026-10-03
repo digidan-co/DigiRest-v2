@@ -506,19 +506,29 @@ module.exports = (io) => {
                     proof: req.body.proof
                 };
 
+                // Broadcast status updates immediately to all connected clients
+                io.emit('order_status_update', updateData);
+                io.emit('order_updated', updateData);
+
                 // Notify relevant rooms via Socket.IO
                 io.to('admin').emit('order_status_update', updateData);
                 io.to('cajero').emit('order_status_update', updateData);
+                io.to('admin').emit('order_updated', updateData);
+                io.to('cajero').emit('order_updated', updateData);
                 io.to('chef').emit('order_status_update', updateData);
                 io.to('cocinero').emit('order_status_update', updateData);
                 io.to('tracker').emit('order_status_update', updateData);
                 io.to('mesero').emit('order_status_update', updateData);
                 io.to('waiter').emit('order_status_update', updateData);
+                io.to('mesero').emit('order_updated', updateData);
+                io.to('waiter').emit('order_updated', updateData);
 
                 // Emit to delivery room when status is delivery-related OR when deliveryDriverId changes (including unlock)
                 if (status === 'Terminado' || status === 'En ruta' || status === 'En Reparto' || status === 'Entregado' || req.body.deliveryDriverId !== undefined) {
                     io.to('delivery').emit('order_status_update', updateData);
                     io.to('repartidor').emit('order_status_update', updateData);
+                    io.to('delivery').emit('order_updated', updateData);
+                    io.to('repartidor').emit('order_updated', updateData);
                 }
 
                 if (status === 'Cobrado') {
@@ -655,7 +665,13 @@ module.exports = (io) => {
             ], function (uErr) {
                 if (uErr) return res.status(500).json({ error: uErr.message });
 
+                let parsedItems = [];
+                try {
+                    parsedItems = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
+                } catch (_) {}
+
                 const updateData = {
+                    ...order,
                     id,
                     status: 'Cobrado',
                     payment,
@@ -667,10 +683,18 @@ module.exports = (io) => {
                     payment_details,
                     proof: finalProof,
                     notes: finalNotes,
-                    total: order.total
+                    total: order.total,
+                    type: order.type,
+                    waiterId: order.waiterId,
+                    waiterName: order.waiterName,
+                    table: order.tableNum,
+                    items: parsedItems
                 };
 
-                // Notify all panels
+                // Notify all panels & connected clients immediately
+                io.emit('order_status_update', updateData);
+                io.emit('order_updated', updateData);
+
                 io.to('admin').emit('order_status_update', updateData);
                 io.to('cajero').emit('order_status_update', updateData);
                 io.to('admin').emit('order_updated', updateData);
@@ -680,7 +704,15 @@ module.exports = (io) => {
                 io.to('tracker').emit('order_status_update', updateData);
                 io.to('mesero').emit('order_status_update', updateData);
                 io.to('waiter').emit('order_status_update', updateData);
+                io.to('mesero').emit('order_updated', updateData);
+                io.to('waiter').emit('order_updated', updateData);
                 io.to('delivery').emit('order_status_update', updateData);
+                io.to('repartidor').emit('order_status_update', updateData);
+
+                if (order.waiterId) {
+                    io.to(`user_${order.waiterId}`).emit('order_status_update', updateData);
+                    io.to(`user_${order.waiterId}`).emit('order_updated', updateData);
+                }
 
                 // Notify cashflow to refresh
                 io.to('admin').emit('cashflow_updated', { type: 'order_collected', orderId: id });

@@ -152,10 +152,10 @@ onMounted(async () => {
 
         <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
             <button v-show="state.user" type="button" @click="goPanel" aria-label="Volver al panel"
-                class="h-10 px-3.5 rounded-full bg-[var(--system-primary)] text-[var(--system-secondary)] font-bold text-xs shadow-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 border border-white/20 cursor-pointer"
+                class="h-10 w-10 sm:w-auto sm:px-3.5 rounded-full bg-[var(--system-primary)] text-[var(--system-secondary)] font-bold text-xs shadow-md transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer"
                 title="Volver a mi Panel">
                 <i class="fas fa-arrow-left"></i>
-                <span>Panel</span>
+                <span class="hidden sm:inline">Panel</span>
             </button>
             <button type="button" @click="toggleLogin" aria-label="Acceso al sistema"
                 class="w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center border border-white/30 text-white group cursor-pointer active:scale-95"
@@ -194,10 +194,10 @@ onMounted(async () => {
 
         <!-- Rastrear Pedido (bottom-right of header) -->
         <button type="button" @click="goTracker" aria-label="Rastrear pedidos"
-            class="absolute bottom-4 right-4 z-20 h-10 px-3.5 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center gap-1.5 border border-white/30 text-white group cursor-pointer active:scale-95"
+            class="absolute bottom-4 right-4 z-20 h-10 w-10 sm:w-auto sm:px-3.5 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center gap-1.5 border border-white/30 text-white group cursor-pointer active:scale-95"
             title="Rastrear Pedido">
             <i class="fas fa-search-location text-sm group-hover:scale-110 transition-transform drop-shadow-md"></i>
-            <span class="text-xs font-bold">Rastrear</span>
+            <span class="hidden sm:inline text-xs font-bold">Rastrear</span>
         </button>
     </div>
 
@@ -251,22 +251,21 @@ onMounted(async () => {
                     </div>
                     <div class="p-2 sm:p-2.5 flex flex-col flex-1 justify-between min-h-0">
                         <div>
-                            <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider block mb-0.5 truncate">{{ p.category }}</span>
                             <h4 class="font-bold text-gray-800 text-xs sm:text-sm leading-snug line-clamp-2" :title="p.name">{{ p.name }}</h4>
                         </div>
-                        <div class="flex items-center justify-between mt-auto pt-2 border-t border-gray-100 gap-1.5 shrink-0">
-                            <div class="min-w-0">
-                                <div v-if="hasDiscount(p)" class="flex flex-col">
-                                    <span class="font-black text-red-600 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
-                                    <span class="text-[10px] text-gray-400 line-through leading-none mt-0.5">{{ formatMoney(p.price) }}</span>
+                        <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
+                            <div>
+                                <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
+                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                 </div>
-                                <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
                             <button type="button" @click.stop="handleAddProduct(p.id)"
-                                class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
+                                class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
                                 :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                <span class="text-sm font-extrabold leading-none">Agregar</span>
+                                <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
                             </button>
                         </div>
                     </div>
@@ -311,22 +310,21 @@ onMounted(async () => {
                     </div>
                     <div class="p-2 sm:p-2.5 flex flex-col flex-1 justify-between min-h-0">
                         <div>
-                            <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider block mb-0.5 truncate">{{ p.category }}</span>
                             <h4 class="font-bold text-gray-800 text-xs sm:text-sm leading-snug line-clamp-2" :title="p.name">{{ p.name }}</h4>
                         </div>
-                        <div class="flex items-center justify-between mt-auto pt-2 border-t border-gray-100 gap-1.5 shrink-0">
-                            <div class="min-w-0">
-                                <div v-if="hasDiscount(p)" class="flex flex-col">
-                                    <span class="font-black text-red-600 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
-                                    <span class="text-[10px] text-gray-400 line-through leading-none mt-0.5">{{ formatMoney(p.price) }}</span>
+                        <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
+                            <div>
+                                <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
+                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                 </div>
-                                <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
                             <button type="button" @click.stop="handleAddProduct(p.id)"
-                                class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
+                                class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
                                 :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                <span class="text-sm font-extrabold leading-none">Agregar</span>
+                                <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
                             </button>
                         </div>
                     </div>
@@ -369,22 +367,21 @@ onMounted(async () => {
                     </div>
                     <div class="p-2 sm:p-2.5 flex flex-col flex-1 justify-between min-h-0">
                         <div>
-                            <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider block mb-0.5 truncate">{{ p.category }}</span>
                             <h4 class="font-bold text-gray-800 text-xs sm:text-sm leading-snug line-clamp-2" :title="p.name">{{ p.name }}</h4>
                         </div>
-                        <div class="flex items-center justify-between mt-auto pt-2 border-t border-gray-100 gap-1.5 shrink-0">
-                            <div class="min-w-0">
-                                <div v-if="hasDiscount(p)" class="flex flex-col">
-                                    <span class="font-black text-red-600 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
-                                    <span class="text-[10px] text-gray-400 line-through leading-none mt-0.5">{{ formatMoney(p.price) }}</span>
+                        <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
+                            <div>
+                                <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
+                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                 </div>
-                                <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
                             <button type="button" @click.stop="handleAddProduct(p.id)"
-                                class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
+                                class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
                                 :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                <span class="text-sm font-extrabold leading-none">Agregar</span>
+                                <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
                             </button>
                         </div>
                     </div>
@@ -424,22 +421,21 @@ onMounted(async () => {
                         </div>
                         <div class="p-2 sm:p-2.5 flex flex-col flex-1 justify-between min-h-0">
                             <div>
-                                <p class="text-[9px] font-semibold text-orange-500 uppercase tracking-wide truncate">{{ p.category }}</p>
                                 <h3 class="font-bold text-gray-800 text-xs sm:text-sm leading-snug line-clamp-2" :title="p.name">{{ p.name }}</h3>
                             </div>
-                            <div class="flex items-center justify-between mt-auto pt-2 border-t border-gray-100 gap-1.5 shrink-0">
-                                <div class="min-w-0">
-                                    <div v-if="hasDiscount(p)" class="flex flex-col">
-                                        <span class="font-black text-red-600 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
-                                        <span class="text-[10px] text-gray-400 line-through leading-none mt-0.5">{{ formatMoney(p.price) }}</span>
+                            <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
+                                <div>
+                                    <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
+                                        <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                        <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                     </div>
-                                    <span v-else class="font-black text-gray-900 text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
                                 </div>
                                 <button type="button" @click.stop="handleAddProduct(p.id)"
-                                    class="px-3.5 py-2 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500"
+                                    class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
                                     :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
                                     <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                    <span class="text-sm font-extrabold leading-none">Agregar</span>
+                                    <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
                                 </button>
                             </div>
                         </div>

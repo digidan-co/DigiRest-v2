@@ -618,22 +618,21 @@ function createDishSliderCardHtml(p, { isPromo = false, isRec = false, isTop = f
 
             <div class="p-2 sm:p-2.5 flex flex-col flex-1 justify-between min-h-0">
                 <div>
-                    <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider block mb-0.5 truncate">${escapeHtml(p.category)}</span>
                     <h4 class="font-bold text-gray-800 text-xs sm:text-sm leading-snug line-clamp-2" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</h4>
                 </div>
 
-                <div class="flex items-center justify-between mt-auto pt-2 border-t border-gray-100 gap-1.5 shrink-0">
-                    <div class="min-w-0">
+                <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
+                    <div>
                         ${hasDiscount ? `
-                            <div class="flex flex-col">
+                            <div class="flex items-baseline gap-1.5">
                                 <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
-                                <span class="text-[9px] sm:text-[10px] text-gray-400 line-through leading-none mt-0.5">${formatMoney(p.price)}</span>
+                                <span class="text-[10px] text-gray-400 line-through leading-none">${formatMoney(p.price)}</span>
                             </div>
                         ` : `
                             <span class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
                         `}
                     </div>
-                    <button class="add-cart-btn px-3.5 py-2 sm:px-4 sm:py-2.5 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 bg-gray-900 hover:bg-orange-500" data-id="${p.id}" title="${p.has_toppings ? 'Personalizar opciones' : 'Añadir al carrito'}">
+                    <button class="add-cart-btn w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500" data-id="${p.id}" title="${p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'}">
                         <i class="fas fa-plus text-xs pointer-events-none"></i>
                         <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
                     </button>
@@ -1546,6 +1545,11 @@ export async function handleSendOrder() {
         total: totalWithDelivery,
         status: 'Pendiente'
     };
+
+    if (state.user) {
+        orderData.waiterId = state.user.id;
+        orderData.waiterName = state.user.name;
+    }
 
     if (paymentMethod === 'Mixto') {
         let sumCash = 0;
