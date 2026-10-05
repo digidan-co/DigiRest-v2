@@ -404,25 +404,48 @@ async function printReport() {
 
     win.document.open();
     win.document.write(`
+        <!DOCTYPE html>
         <html>
         <head>
+            <meta charset="UTF-8">
             <title>Cierre de Caja</title>
             <style>
-                body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; }
+                @page {
+                    margin: 0;
+                    size: auto;
+                }
+                * {
+                    box-sizing: border-box;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    color: #000000 !important;
+                }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    font-size: 12px;
+                    line-height: 1.25;
+                    font-weight: 600;
+                    width: 100%;
+                    max-width: 76mm;
+                    margin: 0 auto;
+                    padding: 3mm 4mm 0 4mm;
+                    color: #000000 !important;
+                }
                 .text-center { text-align: center; }
                 .text-right { text-align: right; }
-                .bold { font-weight: bold; }
-                .line { border-bottom: 1px dashed #000; margin: 5px 0; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                .bold { font-weight: 800; }
+                .line { border-bottom: 1.5px dashed #000; margin: 5px 0; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
                 td { padding: 2px 0; }
-                .section-title { font-weight: bold; margin-top: 10px; text-decoration: underline; }
+                .section-title { font-weight: 900; margin-top: 8px; text-transform: uppercase; }
+                .cut-spacer { height: 30mm; display: block; }
             </style>
         </head>
         <body>
             <div class="text-center">
-                <h3 style="margin:0">${state.config.name || 'RESTAURANTE'}</h3>
-                <p>CIERRE DE CAJA</p>
-                <p>${new Date().toLocaleString('es-CO')}</p>
+                <h3 style="margin:0; font-weight:900; font-size:15px">${state.config.name || 'RESTAURANTE'}</h3>
+                <p style="margin:2px 0; font-weight:800">CIERRE DE CAJA</p>
+                <p style="margin:2px 0">${new Date().toLocaleString('es-CO')}</p>
             </div>
             
             <div class="section-title">PLATOS VENDIDOS</div>
@@ -538,8 +561,11 @@ async function printReport() {
                 </tr>
             </table>
 
-            <br><br>
-            <div class="text-center" style="font-size: 10px;">--- FIN REPORTE ---</div>
+            <div class="line" style="margin-top: 15px;"></div>
+            <div class="text-center" style="font-size: 10px; font-weight:700">--- FIN REPORTE ---</div>
+            <div class="text-center" style="font-size: 10px; font-weight:700; margin-top: 4px;">DigiRest v2 - by Digidan.co</div>
+            <!-- Espacio inferior para avance y corte en impresora térmica (feed margin) -->
+            <div class="cut-spacer"></div>
             <script>
                 // Short timeout to guarantee resources format properly
                 setTimeout(() => {
