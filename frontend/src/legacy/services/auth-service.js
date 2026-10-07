@@ -49,6 +49,8 @@ export async function logoutUser() {
     } finally {
         ApiClient.setToken(null);
         localStorage.removeItem('pos_user');
+        sessionStorage.removeItem('_anuncios_digirest');
+        sessionStorage.removeItem('_warningSaaS_digirest');
     }
 }
 

@@ -113,7 +113,26 @@ const formatDate = (dt) => {
   return '';
 };
 
+function isUserAdmin() {
+  try {
+    const rawUser = localStorage.getItem('pos_user');
+    const token = localStorage.getItem('pos_token');
+    if (!token || !rawUser) return false;
+    const user = JSON.parse(rawUser);
+    return user && user.role === 'admin';
+  } catch {
+    return false;
+  }
+}
+
 async function checkAnuncios() {
+  // Solo se debe mostrar al administrador
+  if (!isUserAdmin()) {
+    show.value = false;
+    anuncios.value = [];
+    return;
+  }
+
   let list = [];
   
   // 1. Primero intentar obtener de sessionStorage
@@ -122,10 +141,14 @@ async function checkAnuncios() {
     try { list = JSON.parse(raw); } catch (e) {}
   }
 
-  // 2. Si no hay en sessionStorage, consultar al endpoint local /api/saas/anuncios
+  // 2. Si no hay en sessionStorage, consultar al endpoint local /api/saas/anuncios con token del admin
   if (!Array.isArray(list) || list.length === 0) {
     try {
-      const res = await fetch('/api/saas/anuncios', { cache: 'no-store' });
+      const token = localStorage.getItem('pos_token');
+      const res = await fetch('/api/saas/anuncios', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: 'no-store'
+      });
       if (res.ok) {
         list = await res.json();
       }
@@ -148,7 +171,10 @@ async function checkAnuncios() {
 }
 
 onMounted(() => {
-  checkAnuncios();
+  // Solo chequear si el usuario actual es administrador (evita mostrar en carga pública o a clientes)
+  if (isUserAdmin()) {
+    checkAnuncios();
+  }
   window.addEventListener('saas-refresh', checkAnuncios);
   window.addEventListener('saas-check-anuncios', checkAnuncios);
   window.checkSaasAnuncios = checkAnuncios;

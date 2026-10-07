@@ -30,7 +30,23 @@ function dismiss() {
   sessionStorage.removeItem('_warningSaaS_digirest');
 }
 
+function isUserAdmin() {
+  try {
+    const rawUser = localStorage.getItem('pos_user');
+    const token = localStorage.getItem('pos_token');
+    if (!token || !rawUser) return false;
+    const user = JSON.parse(rawUser);
+    return user && user.role === 'admin';
+  } catch {
+    return false;
+  }
+}
+
 function checkWarning() {
+  if (!isUserAdmin()) {
+    show.value = false;
+    return;
+  }
   const raw = sessionStorage.getItem('_warningSaaS_digirest');
   if (raw) {
     try {
@@ -41,7 +57,9 @@ function checkWarning() {
 }
 
 onMounted(() => {
-  checkWarning();
+  if (isUserAdmin()) {
+    checkWarning();
+  }
   window.addEventListener('saas-refresh', checkWarning);
 });
 

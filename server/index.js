@@ -220,7 +220,7 @@ app.post('/api/csp-report', (req, res) => {
     res.status(204).end();
 });
 
-const { router: authRouter, setIo } = require('./routes/auth');
+const { router: authRouter, verifyToken, requireRole, setIo } = require('./routes/auth');
 setIo(io);
 const usersRouter = require('./routes/users')(io);
 const productsRouter = require('./routes/products')(io);
@@ -272,13 +272,18 @@ app.get('/api/saas/status', async (req, res) => {
         res.json({ estado: 'Activa', saldo_documentos: 0, vencimiento: null });
     }
 });
-app.get('/api/saas/anuncios', async (req, res) => {
-    const anuncios = await saasService.getAnunciosActivos();
-    res.json(anuncios);
+app.get('/api/saas/anuncios', verifyToken, requireRole(['admin']), async (req, res) => {
+    try {
+        const anuncios = await saasService.getAnunciosActivos();
+        res.json(anuncios);
+    } catch (error) {
+        console.error('[DigiRest SaaS] Error obteniendo anuncios:', error.message);
+        res.json([]);
+    }
 });
 
 // Endpoint de diagnóstico para verificar la conexión con panel / app.digidan.co
-app.get('/api/saas/diagnostics', async (req, res) => {
+app.get('/api/saas/diagnostics', verifyToken, requireRole(['admin']), async (req, res) => {
     const { url, key } = saasService.getSaasConfig();
     let statusTest = null;
     let anunciosTest = null;
