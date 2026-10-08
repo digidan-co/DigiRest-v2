@@ -244,7 +244,14 @@ onMounted(async () => {
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
-                        <span v-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
+                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                            <i class="fas fa-layer-group text-[10px]"></i>
+                            <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
+                        </span>
+                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                            <i class="fas fa-layer-group text-[11px]"></i>
+                        </span>
+                        <span v-else-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
                             <i class="fas fa-cookie-bite text-[11px]"></i>
                         </span>
                         <span v-if="p.order_count_7d > 0" class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-bold bg-black/60 backdrop-blur-md text-white shadow-xs">🔥 {{ p.order_count_7d }} pedidos</span>
@@ -256,16 +263,16 @@ onMounted(async () => {
                         <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
                             <div>
                                 <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
-                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                                     <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                 </div>
-                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
                             <button type="button" @click.stop="handleAddProduct(p.id)"
                                 class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
-                                :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
+                                :title="(p.has_variants || p.has_toppings) ? 'Elegir opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
+                                <span class="text-xs sm:text-sm font-extrabold leading-none">{{ (p.has_variants || p.has_toppings) ? 'Elegir' : 'Agregar' }}</span>
                             </button>
                         </div>
                     </div>
@@ -303,7 +310,14 @@ onMounted(async () => {
                         <span v-else class="badge-recommended absolute top-2 left-2 px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider text-white shadow-xs flex items-center gap-1" style="background-color: #d97706; color: #ffffff;">
                             <i class="fas fa-star text-[8px] text-amber-200"></i> Recomendado
                         </span>
-                        <span v-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
+                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                            <i class="fas fa-layer-group text-[10px]"></i>
+                            <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
+                        </span>
+                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                            <i class="fas fa-layer-group text-[11px]"></i>
+                        </span>
+                        <span v-else-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
                             <i class="fas fa-cookie-bite text-[11px]"></i>
                         </span>
                         <span v-if="p.order_count_7d > 0" class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-bold bg-black/60 backdrop-blur-md text-white shadow-xs">🔥 {{ p.order_count_7d }} pedidos</span>
@@ -315,16 +329,16 @@ onMounted(async () => {
                         <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
                             <div>
                                 <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
-                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                                     <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                 </div>
-                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
                             <button type="button" @click.stop="handleAddProduct(p.id)"
                                 class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
-                                :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
+                                :title="(p.has_variants || p.has_toppings) ? 'Elegir opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
+                                <span class="text-xs sm:text-sm font-extrabold leading-none">{{ (p.has_variants || p.has_toppings) ? 'Elegir' : 'Agregar' }}</span>
                             </button>
                         </div>
                     </div>
@@ -360,7 +374,14 @@ onMounted(async () => {
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
                         <span v-else-if="idx === 0" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black bg-orange-500 text-white shadow-xs">#{{ idx + 1 }} Más Pedido</span>
-                        <span v-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
+                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                            <i class="fas fa-layer-group text-[10px]"></i>
+                            <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
+                        </span>
+                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                            <i class="fas fa-layer-group text-[11px]"></i>
+                        </span>
+                        <span v-else-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
                             <i class="fas fa-cookie-bite text-[11px]"></i>
                         </span>
                         <span v-if="p.order_count_7d > 0" class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-bold bg-black/60 backdrop-blur-md text-white shadow-xs">🔥 {{ p.order_count_7d }} pedidos</span>
@@ -372,16 +393,16 @@ onMounted(async () => {
                         <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
                             <div>
                                 <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
-                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                                     <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                 </div>
-                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                             </div>
                             <button type="button" @click.stop="handleAddProduct(p.id)"
                                 class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
-                                :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
+                                :title="(p.has_variants || p.has_toppings) ? 'Elegir opciones' : 'Añadir al pedido'">
                                 <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
+                                <span class="text-xs sm:text-sm font-extrabold leading-none">{{ (p.has_variants || p.has_toppings) ? 'Elegir' : 'Agregar' }}</span>
                             </button>
                         </div>
                     </div>
@@ -415,7 +436,14 @@ onMounted(async () => {
                             <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy"
                                 class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                             <span v-if="hasDiscount(p)" class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">Promo</span>
-                            <span v-if="p.has_toppings" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
+                            <span v-if="p.has_variants && p.has_toppings" class="absolute top-1.5 right-1.5 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                                <i class="fas fa-layer-group text-[10px]"></i>
+                                <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
+                            </span>
+                            <span v-else-if="p.has_variants" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                                <i class="fas fa-layer-group text-[11px]"></i>
+                            </span>
+                            <span v-else-if="p.has_toppings" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
                                 <i class="fas fa-cookie-bite text-[11px]"></i>
                             </span>
                         </div>
@@ -426,16 +454,16 @@ onMounted(async () => {
                             <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
                                 <div>
                                     <div v-if="hasDiscount(p)" class="flex items-baseline gap-1.5">
-                                        <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                        <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                                         <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                                     </div>
-                                    <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(effectivePrice(p)) }}</span>
+                                    <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                                 </div>
                                 <button type="button" @click.stop="handleAddProduct(p.id)"
                                     class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500"
-                                    :title="p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'">
+                                    :title="(p.has_variants || p.has_toppings) ? 'Elegir opciones' : 'Añadir al pedido'">
                                     <i class="fas fa-plus text-xs pointer-events-none"></i>
-                                    <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
+                                    <span class="text-xs sm:text-sm font-extrabold leading-none">{{ (p.has_variants || p.has_toppings) ? 'Elegir' : 'Agregar' }}</span>
                                 </button>
                             </div>
                         </div>

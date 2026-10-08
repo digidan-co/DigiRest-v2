@@ -36,7 +36,7 @@
     <script src="/socket.io/socket.io.js" defer></script>
     <link rel="stylesheet" href="style.css?v=2.9">
     <link rel="stylesheet" href="css/sidebar.css">
-  <script type="module" crossorigin src="/assets/index-Dw2dYLjL.js"></script>
+  <script type="module" crossorigin src="/assets/index-_3FUlUM4.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-DKWdNI6S.css">
 </head>
 
@@ -2187,7 +2187,7 @@
                             <!-- Details injected via JS -->
                         </div>
                         <div class="mt-2 text-red-600 font-bold bg-white p-2 text-center rounded">
-                            <i class="fas fa-exclamation-triangle"></i> Obligatorio subir el comprobante
+                            <i class="fas fa-exclamation-triangle m-2"></i> Obligatorio subir el comprobante
                             para enviar el pedido.
                         </div>
                     </div>
@@ -2466,7 +2466,45 @@
                         </div>
                     </div>
 
-                    <!-- Fila 6: Toppings -->
+                    <!-- Fila 6: Variantes / Tamaños de Porción -->
+                    <div class="border border-gray-200 bg-gray-50/70 p-2 sm:p-2.5 rounded-xl space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                                    <i class="fas fa-layer-group text-indigo-500"></i>
+                                    <span>Variantes / Tamaños</span>
+                                </span>
+                                <p class="text-[9px] sm:text-[10px] text-gray-400">Precios por tamaño o porción (ej: Pequeña, Mediana, Grande)</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                                <input type="checkbox" id="p-has-variants" class="sr-only peer">
+                                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 shadow-inner"></div>
+                            </label>
+                        </div>
+
+                        <div id="p-variants-config-container" class="hidden space-y-2 pt-2 border-t border-gray-200">
+                            <div class="flex items-center justify-between flex-wrap gap-1.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] font-bold text-gray-700">Opciones de Tamaño:</span>
+                                    <span class="text-[9px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold" id="p-variants-count-badge">0 tamaños</span>
+                                </div>
+                            </div>
+
+                            <!-- Lista dinámica de tamaños con scroll sutil -->
+                            <div id="p-variants-list" class="space-y-1.5 max-h-48 overflow-y-auto pr-0.5 subtle-scrollbar">
+                                <!-- Filas de tamaños agregadas dinámicamente -->
+                            </div>
+
+                            <div class="flex items-center justify-between pt-1">
+                                <button type="button" id="btn-add-variant-row" class="text-[10px] sm:text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 flex items-center gap-1.5 transition-colors cursor-pointer">
+                                    <i class="fas fa-plus text-[9px]"></i> Agregar Tamaño / Variante
+                                </button>
+                                <span class="text-[9px] text-gray-400 italic">El precio base se fijará con el menor valor.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fila 7: Toppings -->
                     <div class="border border-gray-200 bg-gray-50/70 p-2 sm:p-2.5 rounded-xl space-y-1.5">
                         <div class="flex items-center justify-between">
                             <div>

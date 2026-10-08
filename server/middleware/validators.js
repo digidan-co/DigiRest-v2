@@ -234,6 +234,52 @@ function validateProduct(req, res, next) {
         }
     }
 
+    // Dish Variants Validation (Sizes / Portions with different prices)
+    const hasVariants = req.body.has_variants === 'true' || req.body.has_variants === true || req.body.has_variants === 1 || req.body.has_variants === '1';
+    if (hasVariants) {
+        let variants = req.body.variants_config;
+        if (typeof variants === 'string') {
+            try {
+                variants = JSON.parse(variants);
+            } catch (e) {
+                errors.push('La configuración de variantes tiene un formato inválido');
+                variants = [];
+            }
+        }
+        if (!Array.isArray(variants) || variants.length === 0) {
+            errors.push('Debe configurar al menos un tamaño/variante cuando las variantes están activadas');
+        } else {
+            const validVariants = [];
+            let minPrice = Infinity;
+            for (const v of variants) {
+                if (!v || typeof v !== 'object') continue;
+                const vName = sanitizeString(String(v.name || ''), 100);
+                const vPrice = sanitizeNumeric(v.price);
+                if (!vName) {
+                    errors.push('Cada tamaño/variante debe tener un nombre válido');
+                    break;
+                }
+                if (vPrice === null || vPrice < 0) {
+                    errors.push(`El precio del tamaño "${vName}" debe ser un número positivo`);
+                    break;
+                }
+                if (vPrice < minPrice) minPrice = vPrice;
+                validVariants.push({
+                    id: v.id ? String(v.id) : `var_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    name: vName,
+                    price: vPrice,
+                    is_default: Boolean(v.is_default)
+                });
+            }
+            if (validVariants.length > 0) {
+                req.body.variants_config = JSON.stringify(validVariants);
+                if (req.body.price === undefined || req.body.price === null || req.body.price <= 0) {
+                    req.body.price = isFinite(minPrice) ? minPrice : 0;
+                }
+            }
+        }
+    }
+
     if (errors.length > 0) {
         return res.status(400).json({ error: 'Datos del producto inválidos', details: errors });
     }

@@ -42,9 +42,10 @@ export const printOrder = (order) => {
 
         return `
             <div class="item-row">
-                <span class="item-name">${item.qty}x ${escapeHtml(item.name)}</span>
+                <span class="item-name">${item.qty}x ${escapeHtml(item.name)}${item.variant_name ? ` [${escapeHtml(item.variant_name)}]` : ''}</span>
                 <span class="item-price">${formatMoney(item.price * item.qty)}</span>
             </div>
+            ${item.variant_name ? `<div class="item-extra">* Tamaño: ${escapeHtml(item.variant_name)}</div>` : ''}
             ${toppingsText ? `<div class="item-extra">* Adic: ${escapeHtml(toppingsText)}</div>` : ''}
             ${notesText ? `<div class="item-extra">* Nota: ${escapeHtml(notesText)}</div>` : ''}
         `;

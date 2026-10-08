@@ -123,9 +123,9 @@ export function renderWaiterProducts() {
                              ${catProducts.map(p => `
                                 <div class="waiter-prod-card bg-white border border-gray-100 p-1.5 rounded-lg shadow-sm hover:shadow-md cursor-pointer flex flex-col justify-center items-center h-[74px] active:scale-95 transition-transform duration-75 relative overflow-hidden group/card" data-id="${p.id}">
                                     <div class="absolute inset-0 bg-orange-50 opacity-0 group-hover/card:opacity-100 transition-opacity pointer-events-none"></div>
-                                    ${p.has_toppings ? `<span class="w-5 h-5 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center text-[10px] border border-amber-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Personalizable"><i class="fas fa-cookie-bite"></i></span>` : ''}
+                                    ${(p.has_variants && p.has_toppings) ? `<span class="px-1.5 h-5 rounded-md bg-indigo-100 text-indigo-800 flex items-center justify-center gap-0.5 text-[9px] font-bold border border-indigo-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Tamaños y Adiciones"><i class="fas fa-layer-group"></i><i class="fas fa-cookie-bite text-amber-600"></i></span>` : p.has_variants ? `<span class="w-5 h-5 rounded-md bg-indigo-100 text-indigo-800 flex items-center justify-center text-[10px] border border-indigo-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Tamaños"><i class="fas fa-layer-group"></i></span>` : p.has_toppings ? `<span class="w-5 h-5 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center text-[10px] border border-amber-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Personalizable"><i class="fas fa-cookie-bite"></i></span>` : ''}
                                     <h4 class="font-bold text-gray-700 text-[13px] leading-[15px] text-center mb-1 relative z-10 w-full line-clamp-2 px-1">${escapeHtml(p.name)}</h4>
-                                    <span class="font-bold text-orange-600 text-[13px] relative z-10">${formatMoney((p.is_promo && p.promo_price) ? p.promo_price : p.price)}</span>
+                                    <span class="font-bold text-orange-600 text-[13px] relative z-10">${p.has_variants ? 'Desde ' : ''}${formatMoney((p.is_promo && p.promo_price) ? p.promo_price : p.price)}</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -156,12 +156,12 @@ export function addToWaiterCart(productId) {
         renderWaiterProducts();
     }
 
-    if (product.has_toppings) {
+    if (product.has_toppings || product.has_variants) {
         openClientToppingsModal(product, {
             onConfirm: (customizedItem) => {
                 waiterCart.push(customizedItem);
                 updateFloatingCartButton();
-                toast(`${product.name} con adiciones agregado`, 'success');
+                toast(`${product.name} agregado`, 'success');
                 if (!$('waiter-review-modal')?.classList.contains('hidden')) {
                     renderReviewCartList();
                 }
@@ -171,7 +171,7 @@ export function addToWaiterCart(productId) {
     }
 
     const price = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
-    const existing = waiterCart.find(i => i.id === productId && !i.toppings_text && !i.notes);
+    const existing = waiterCart.find(i => i.id === productId && !i.toppings_text && !i.variant_name && !i.notes);
     if (existing) {
         existing.qty++;
     } else {
@@ -216,8 +216,16 @@ export function openWaiterCartReview() {
 }
 
 function formatToppingsListHtml(item) {
+    let variantBadge = '';
+    if (item.variant_name) {
+        variantBadge = `
+            <div class="mt-0.5 mb-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold">
+                <i class="fas fa-layer-group text-[8px]"></i> Tamaño: ${escapeHtml(item.variant_name)}
+            </div>
+        `;
+    }
     if (Array.isArray(item.toppings) && item.toppings.length > 0) {
-        return `
+        return variantBadge + `
             <div class="mt-1.5 bg-amber-50/90 border border-amber-200/80 rounded-lg p-2 text-xs">
                 <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1 mb-1">
                     <i class="fas fa-cookie-bite text-amber-600"></i> Toppings / Adiciones:
@@ -235,7 +243,7 @@ function formatToppingsListHtml(item) {
     }
     if (item.toppings_text) {
         const listItems = item.toppings_text.split(',').map(s => s.trim()).filter(Boolean);
-        return `
+        return variantBadge + `
             <div class="mt-1.5 bg-amber-50/90 border border-amber-200/80 rounded-lg p-2 text-xs">
                 <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1 mb-1">
                     <i class="fas fa-cookie-bite text-amber-600"></i> Toppings / Adiciones:
@@ -246,7 +254,7 @@ function formatToppingsListHtml(item) {
             </div>
         `;
     }
-    return '';
+    return variantBadge;
 }
 
 function renderReviewCartList() {
@@ -1075,9 +1083,9 @@ function renderWaiProducts(searchTerm = '') {
 
             html += catProducts.map(p => `
                 <div class="wai-prod-card bg-white border border-gray-100 p-2 rounded-xl shadow-sm hover:shadow-md cursor-pointer flex flex-col items-center text-center active:scale-95 transition-all h-24 justify-center relative overflow-hidden group" data-id="${p.id}">
-                    ${p.has_toppings ? `<span class="w-5 h-5 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center text-[10px] border border-amber-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Personalizable"><i class="fas fa-cookie-bite"></i></span>` : ''}
+                    ${(p.has_variants && p.has_toppings) ? `<span class="px-1.5 h-5 rounded-md bg-indigo-100 text-indigo-800 flex items-center justify-center gap-0.5 text-[9px] font-bold border border-indigo-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Tamaños y Adiciones"><i class="fas fa-layer-group"></i><i class="fas fa-cookie-bite text-amber-600"></i></span>` : p.has_variants ? `<span class="w-5 h-5 rounded-md bg-indigo-100 text-indigo-800 flex items-center justify-center text-[10px] border border-indigo-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Tamaños"><i class="fas fa-layer-group"></i></span>` : p.has_toppings ? `<span class="w-5 h-5 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center text-[10px] border border-amber-200 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; right: 4px;" title="Personalizable"><i class="fas fa-cookie-bite"></i></span>` : ''}
                     <h4 class="font-bold text-gray-700 text-xs leading-tight line-clamp-2 w-full mb-1">${escapeHtml(p.name)}</h4>
-                    <span class="font-bold text-orange-600 text-xs">${formatMoney((p.is_promo && p.promo_price) ? p.promo_price : p.price)}</span>
+                    <span class="font-bold text-orange-600 text-xs">${p.has_variants ? 'Desde ' : ''}${formatMoney((p.is_promo && p.promo_price) ? p.promo_price : p.price)}</span>
                 </div>
             `).join('');
         }
@@ -1101,19 +1109,19 @@ function addToWaiCart(productId) {
         renderWaiProducts('');
     }
 
-    if (product.has_toppings) {
+    if (product.has_toppings || product.has_variants) {
         openClientToppingsModal(product, {
             onConfirm: (customizedItem) => {
                 itemsToAdd.push(customizedItem);
                 updateWaiCart();
-                toast(`${product.name} con adiciones agregado`, 'success');
+                toast(`${product.name} agregado`, 'success');
             }
         });
         return;
     }
 
     const price = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
-    const existing = itemsToAdd.find(i => i.id === productId && !i.toppings_text && !i.notes);
+    const existing = itemsToAdd.find(i => i.id === productId && !i.toppings_text && !i.variant_name && !i.notes);
     if (existing) {
         existing.qty++;
     } else {

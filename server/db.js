@@ -467,6 +467,10 @@ function initSchema() {
             db.run("ALTER TABLE products ADD COLUMN is_promo INTEGER DEFAULT 0", (err) => { });
             db.run("ALTER TABLE products ADD COLUMN promo_price REAL DEFAULT 0", (err) => { });
 
+            // Migration: Add dish variants (sizes/portions with different prices) to products
+            db.run("ALTER TABLE products ADD COLUMN has_variants INTEGER DEFAULT 0", (err) => { });
+            db.run("ALTER TABLE products ADD COLUMN variants_config TEXT DEFAULT '[]'", (err) => { });
+
             // Migration: Add delivery_zone and delivery_fee to orders
             db.run("ALTER TABLE orders ADD COLUMN delivery_zone TEXT", (err) => { });
             db.run("ALTER TABLE orders ADD COLUMN delivery_fee REAL DEFAULT 0", (err) => { });

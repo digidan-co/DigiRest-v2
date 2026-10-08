@@ -8,6 +8,7 @@ import { $, formatMoney, escapeHtml } from '../utils/helpers.js';
 import { deleteProduct, deleteCategory, importProductsCSV, importCategoriesCSV, toggleProductRecommended, toggleProductPromo } from '../services/product-service.js';
 import { toast, showConfirmModal } from '../components/ui.js';
 import { populateDishFormExtensions } from '../features/toppings-manager.js';
+import { populateDishVariantsExtensions } from '../features/variants-manager.js';
 
 function triggerQuotaUpdate() {
     if (typeof window.updateQuotaWidget === 'function') {
@@ -82,9 +83,28 @@ export function renderAdminProductsPage() {
                         </div>
                     </div>
                 </td>
-                <td class="p-2 text-sm font-bold">${formatMoney(p.price)}</td>
+                <td class="p-2 text-sm font-bold">
+                    ${p.has_variants ? `
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold block uppercase">Desde</span>
+                            <span>${formatMoney(p.price)}</span>
+                        </div>
+                    ` : formatMoney(p.price)}
+                </td>
                 <td class="p-2 text-center">
-                    ${p.has_toppings ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">Sí</span>' : '<span class="text-gray-300 text-xs">—</span>'}
+                    ${(p.has_variants && p.has_toppings) ? `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Tamaños y Adiciones">
+                            <i class="fas fa-layer-group text-[8px]"></i> + <i class="fas fa-cookie-bite text-[8px]"></i>
+                        </span>
+                    ` : p.has_variants ? `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Tamaños disponibles">
+                            <i class="fas fa-layer-group text-[8px]"></i> Tamaños
+                        </span>
+                    ` : p.has_toppings ? `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200" title="Adiciones">
+                            <i class="fas fa-cookie-bite text-[8px]"></i> Toppings
+                        </span>
+                    ` : '<span class="text-gray-300 text-xs">—</span>'}
                 </td>
                 <td class="p-2 text-center">
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -578,6 +598,7 @@ window.openEditProductModal = (id) => {
     fillProductForm(p, false);
     if ($('product-modal')) $('product-modal').classList.remove('hidden');
     populateDishFormExtensions(p);
+    populateDishVariantsExtensions(p);
 };
 
 window.openDuplicateProductModal = (id) => {
@@ -586,6 +607,7 @@ window.openDuplicateProductModal = (id) => {
     fillProductForm(p, true);
     if ($('product-modal')) $('product-modal').classList.remove('hidden');
     populateDishFormExtensions(p);
+    populateDishVariantsExtensions(p);
 };
 
 window.deleteProductRow = (id) => {

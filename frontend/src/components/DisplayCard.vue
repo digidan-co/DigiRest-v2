@@ -29,21 +29,29 @@ function hasDiscount(x) { return x.is_promo && x.promo_price && x.promo_price < 
                 <div class="flex items-center gap-1.5 mb-0.5">
                     <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider truncate">{{ p.category }}</span>
                     <span v-if="hasDiscount(p)" class="sm:hidden px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-100 text-red-700">Promo</span>
-                    <span v-if="p.has_toppings" class="sm:hidden text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Toppings</span>
+                    <span v-if="p.has_variants && p.has_toppings" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Tamaños + Extras</span>
+                    <span v-else-if="p.has_variants" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Tamaños</span>
+                    <span v-else-if="p.has_toppings" class="sm:hidden text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Toppings</span>
                 </div>
                 <h3 class="font-bold text-gray-800 text-sm leading-tight truncate sm:whitespace-normal sm:line-clamp-1">{{ p.name }}</h3>
                 <p class="hidden sm:block text-[10px] text-gray-400 leading-tight line-clamp-2 mt-0.5">{{ p.desc || '' }}</p>
-                <div v-if="p.has_toppings" class="hidden sm:block mt-1">
+                <div v-if="p.has_variants && p.has_toppings" class="hidden sm:block mt-1">
+                    <span class="inline-flex items-center text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60"><i class="fas fa-layer-group mr-1 text-[8px]"></i><i class="fas fa-cookie-bite mr-1 text-[8px] text-amber-600"></i>Tamaños y Adiciones</span>
+                </div>
+                <div v-else-if="p.has_variants" class="hidden sm:block mt-1">
+                    <span class="inline-flex items-center text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60"><i class="fas fa-layer-group mr-1 text-[8px]"></i>Múltiples Tamaños</span>
+                </div>
+                <div v-else-if="p.has_toppings" class="hidden sm:block mt-1">
                     <span class="inline-flex items-center text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60"><i class="fas fa-cookie-bite mr-1 text-[8px]"></i>Personalizable</span>
                 </div>
             </div>
             <div class="flex sm:justify-between items-center gap-2.5 sm:gap-0 sm:mt-2 sm:pt-1 sm:border-t sm:border-gray-50 shrink-0">
                 <div class="text-right sm:text-left">
                     <div v-if="hasDiscount(p)" class="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5">
-                        <span class="font-extrabold text-red-600 text-sm leading-none">{{ formatMoney(effectivePrice(p)) }}</span>
+                        <span class="font-extrabold text-red-600 text-sm leading-none">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                         <span class="text-[9px] text-gray-400 line-through leading-none">{{ formatMoney(p.price) }}</span>
                     </div>
-                    <span v-else class="font-extrabold text-gray-900 text-sm leading-none">{{ formatMoney(effectivePrice(p)) }}</span>
+                    <span v-else class="font-extrabold text-gray-900 text-sm leading-none">{{ p.has_variants ? 'Desde ' : '' }}{{ formatMoney(effectivePrice(p)) }}</span>
                 </div>
                 <div class="w-6 h-6"></div>
             </div>

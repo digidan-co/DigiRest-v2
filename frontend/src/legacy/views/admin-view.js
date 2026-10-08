@@ -1985,6 +1985,7 @@ window.showOrderDetails = function (orderIdOrObj) {
                 <td class="p-2.5 text-gray-500 font-bold w-12 text-center bg-gray-50/30">${qty}</td>
                 <td class="p-2.5">
                     <div class="font-bold text-gray-800">${escapeHtml(item.name)}</div>
+                    ${item.variant_name ? `<div class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 inline-flex items-center gap-1 mt-0.5 mr-1"><i class="fas fa-layer-group text-[9px]"></i><span>Tamaño: ${escapeHtml(item.variant_name)}</span></div>` : ''}
                     ${toppingsText ? `<div class="text-xs font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/70 inline-flex items-center gap-1 mt-0.5"><i class="fas fa-cookie-bite text-[9px] text-amber-600"></i><span>${escapeHtml(toppingsText)}</span></div>` : ''}
                     ${notesText ? `<div class="text-xs text-orange-600 italic mt-0.5 flex items-center gap-1"><i class="fas fa-comment-alt text-[9px]"></i><span>${escapeHtml(notesText)}</span></div>` : ''}
                 </td>

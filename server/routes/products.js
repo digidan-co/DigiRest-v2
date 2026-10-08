@@ -210,7 +210,8 @@ module.exports = (io) => {
                 // Fields to export (includes all current v2 fields and preserves legacy fields)
                 const fields = [
                     'id', 'name', 'desc', 'price', 'category', 'available', 'img',
-                    'has_toppings', 'toppings_config', 'is_recommended', 'is_promo', 'promo_price', 'created_at'
+                    'has_toppings', 'toppings_config', 'has_variants', 'variants_config',
+                    'is_recommended', 'is_promo', 'promo_price', 'created_at'
                 ];
                 const opts = { fields };
                 const parser = new Parser(opts);
@@ -275,6 +276,10 @@ module.exports = (io) => {
 
                             const toppings_config = row.toppings_config || row.configuracion_toppings || '[]';
 
+                            const rawHasVar = row.has_variants !== undefined ? row.has_variants : (row.tiene_variantes !== undefined ? row.tiene_variantes : 0);
+                            const has_variants = (rawHasVar === '1' || rawHasVar === 1 || rawHasVar === 'true' || rawHasVar === true || String(rawHasVar).toLowerCase() === 'si') ? 1 : 0;
+                            const variants_config = row.variants_config || row.configuracion_variantes || '[]';
+
                             const rawRec = row.is_recommended !== undefined ? row.is_recommended : (row.es_recomendado !== undefined ? row.es_recomendado : (row.recomendado !== undefined ? row.recomendado : 0));
                             const is_recommended = (rawRec === '1' || rawRec === 1 || rawRec === 'true' || rawRec === true || String(rawRec).toLowerCase() === 'si') ? 1 : 0;
 
@@ -311,17 +316,17 @@ module.exports = (io) => {
                                 await dbRun(
                                     `UPDATE products 
                                      SET name=?, desc=?, price=?, category=?, available=?, img=?, 
-                                         has_toppings=?, toppings_config=?, is_recommended=?, is_promo=?, promo_price=?
+                                         has_toppings=?, toppings_config=?, has_variants=?, variants_config=?, is_recommended=?, is_promo=?, promo_price=?
                                      WHERE id=?`,
-                                    [name, desc, price, category, available, img, has_toppings, toppings_config, is_recommended, is_promo, promo_price, existing.id]
+                                    [name, desc, price, category, available, img, has_toppings, toppings_config, has_variants, variants_config, is_recommended, is_promo, promo_price, existing.id]
                                 );
                             } else {
                                 const newId = row.id || uuidv4();
                                 await dbRun(
                                     `INSERT INTO products 
-                                     (id, name, desc, price, category, available, img, has_toppings, toppings_config, is_recommended, is_promo, promo_price)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                                    [newId, name, desc, price, category, available, img, has_toppings, toppings_config, is_recommended, is_promo, promo_price]
+                                     (id, name, desc, price, category, available, img, has_toppings, toppings_config, has_variants, variants_config, is_recommended, is_promo, promo_price)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    [newId, name, desc, price, category, available, img, has_toppings, toppings_config, has_variants, variants_config, is_recommended, is_promo, promo_price]
                                 );
                             }
                             processed++;
@@ -345,7 +350,7 @@ module.exports = (io) => {
     });
 
     router.post('/products', verifyToken, requireRole(['admin', 'cajero']), upload.single('image'), validateProduct, async (req, res) => {
-        let { id, name, desc, price, category, available, has_toppings, toppings_config, is_recommended, is_promo, promo_price } = req.body;
+        let { id, name, desc, price, category, available, has_toppings, toppings_config, has_variants, variants_config, is_recommended, is_promo, promo_price } = req.body;
         let imgUrl = req.body.img;
 
         // If new file uploaded — optimize with sharp after multer saves it
@@ -405,6 +410,16 @@ module.exports = (io) => {
                     fields.push('toppings_config = ?');
                     values.push(tc || null);
                 }
+                if (has_variants !== undefined) {
+                    const hv = has_variants === 'true' || has_variants === true || has_variants === 1 || has_variants === '1';
+                    fields.push('has_variants = ?');
+                    values.push(hv ? 1 : 0);
+                }
+                if (variants_config !== undefined) {
+                    const vc = typeof variants_config === 'object' ? JSON.stringify(variants_config) : variants_config;
+                    fields.push('variants_config = ?');
+                    values.push(vc || '[]');
+                }
                 if (is_recommended !== undefined) {
                     const ir = is_recommended === 'true' || is_recommended === true || is_recommended === 1 || is_recommended === '1';
                     fields.push('is_recommended = ?');
@@ -442,7 +457,7 @@ module.exports = (io) => {
                 }
 
                 const newId = uuidv4();
-                const sql = `INSERT INTO products (id, name, desc, price, category, available, img, has_toppings, toppings_config, is_recommended, is_promo, promo_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                const sql = `INSERT INTO products (id, name, desc, price, category, available, img, has_toppings, toppings_config, has_variants, variants_config, is_recommended, is_promo, promo_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
                 let availInt = 1;
                 if (available !== undefined) {
@@ -452,6 +467,8 @@ module.exports = (io) => {
 
                 const ht = has_toppings === 'true' || has_toppings === true || has_toppings === 1 || has_toppings === '1' ? 1 : 0;
                 const tc = typeof toppings_config === 'object' ? JSON.stringify(toppings_config) : (toppings_config || null);
+                const hv = has_variants === 'true' || has_variants === true || has_variants === 1 || has_variants === '1' ? 1 : 0;
+                const vc = typeof variants_config === 'object' ? JSON.stringify(variants_config) : (variants_config || '[]');
                 const ir = is_recommended === 'true' || is_recommended === true || is_recommended === 1 || is_recommended === '1' ? 1 : 0;
                 const ip = is_promo === 'true' || is_promo === true || is_promo === 1 || is_promo === '1' ? 1 : 0;
                 const pp = !isNaN(parseFloat(promo_price)) ? parseFloat(promo_price) : 0;
@@ -460,7 +477,7 @@ module.exports = (io) => {
                     imgUrl = '/img/noimage.png';
                 }
 
-                db.run(sql, [newId, name, desc || '', price, category, availInt, imgUrl || null, ht, tc, ir, ip, pp], function (err) {
+                db.run(sql, [newId, name, desc || '', price, category, availInt, imgUrl || null, ht, tc, hv, vc, ir, ip, pp], function (err) {
                     if (err) return res.status(500).json({ error: err.message });
                     io.emit('products_updated');
                     res.json({
@@ -473,6 +490,8 @@ module.exports = (io) => {
                         img: imgUrl,
                         has_toppings: ht,
                         toppings_config: tc,
+                        has_variants: hv,
+                        variants_config: vc,
                         is_recommended: ir,
                         is_promo: ip,
                         promo_price: pp

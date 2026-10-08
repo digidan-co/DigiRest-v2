@@ -238,6 +238,9 @@ onUnmounted(() => {
                                     {{ displayQty(i) }}{{ i.name }}
                                 </span>
                             </div>
+                            <span v-if="i.variant_name" class="inline-flex items-center gap-1 text-[10px] text-indigo-700 font-bold pl-2 leading-tight">
+                                <i class="fas fa-layer-group text-[8px]"></i> Tamaño: {{ i.variant_name }}
+                            </span>
                             <span v-if="i.toppings_text" class="text-[10px] text-amber-800 font-semibold pl-2 leading-tight">+ {{ i.toppings_text }}</span>
                             <span v-if="i.notes" class="text-[10px] text-gray-500 italic pl-2 leading-tight"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>{{ i.notes }}</span>
                         </div>
@@ -346,6 +349,9 @@ onUnmounted(() => {
                                     {{ displayQty(i) }}{{ i.name }}
                                 </span>
                             </div>
+                            <span v-if="i.variant_name" class="inline-flex items-center gap-1 text-[10px] text-indigo-700 font-bold pl-2 leading-tight">
+                                <i class="fas fa-layer-group text-[8px]"></i> Tamaño: {{ i.variant_name }}
+                            </span>
                             <span v-if="i.toppings_text" class="text-[10px] text-amber-800 font-semibold pl-2 leading-tight">+ {{ i.toppings_text }}</span>
                             <span v-if="i.notes" class="text-[10px] text-gray-500 italic pl-2 leading-tight"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>{{ i.notes }}</span>
                         </div>

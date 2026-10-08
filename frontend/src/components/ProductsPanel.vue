@@ -183,9 +183,23 @@ async function onImportCategories(e) {
                                 <div class="text-[11px] text-gray-500 flex items-center gap-1 font-medium mt-0.5"><i class="fas fa-tag text-[9px] text-gray-400"></i> {{ catName(p) }}</div>
                             </div>
                         </td>
-                        <td class="p-2 text-sm font-bold">{{ formatMoney(p.price) }}</td>
+                        <td class="p-2 text-sm font-bold">
+                            <div v-if="p.has_variants">
+                                <span class="text-[10px] text-gray-400 font-bold block uppercase leading-none">Desde</span>
+                                <span>{{ formatMoney(p.price) }}</span>
+                            </div>
+                            <span v-else>{{ formatMoney(p.price) }}</span>
+                        </td>
                         <td class="p-2 text-center">
-                            <span v-if="p.has_toppings" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">Sí</span>
+                            <span v-if="p.has_variants && p.has_toppings" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Tamaños y Adiciones">
+                                <i class="fas fa-layer-group text-[8px]"></i> + <i class="fas fa-cookie-bite text-[8px]"></i>
+                            </span>
+                            <span v-else-if="p.has_variants" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Tamaños disponibles">
+                                <i class="fas fa-layer-group text-[8px]"></i> Tamaños
+                            </span>
+                            <span v-else-if="p.has_toppings" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200" title="Adiciones">
+                                <i class="fas fa-cookie-bite text-[8px]"></i> Toppings
+                            </span>
                             <span v-else class="text-gray-300 text-xs">—</span>
                         </td>
                         <td class="p-2 text-center">

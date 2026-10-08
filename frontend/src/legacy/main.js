@@ -81,6 +81,7 @@ import { updateQuotaWidget, setupAdminListeners } from './views/admin-view.js';
 import { setupInventoryListeners } from './views/inventory-view.js';
 import { renderAdminCashflowPage } from './views/cashflow-view.js';
 import { initToppingsManager, resetDishToppingsConfig, getDishToppingsConfig } from './features/toppings-manager.js';
+import { initVariantsManager, resetDishVariantsConfig, getDishVariantsConfig } from './features/variants-manager.js';
 import { initDeliveryZonesManager, populateClientDeliveryZones } from './features/delivery-zones-manager.js';
 import { getDeliveryZones } from './services/delivery-service.js';
 import { initCrmManager } from './features/crm-manager.js';
@@ -811,6 +812,7 @@ async function init() {
         setupInventoryListeners();
         setupCloseRegisterListeners();
         initToppingsManager();
+        initVariantsManager();
         initDeliveryZonesManager();
         initCrmManager();
         initPaymentModal();
@@ -2064,6 +2066,7 @@ $('btn-new-product').addEventListener('click', () => {
     $('p-id').value = '';
     $('prod-form').reset();
     resetDishToppingsConfig();
+    resetDishVariantsConfig();
     const btnDelImg = $('btn-delete-img');
     const delInput = $('p-delete-img');
     const imgContainer = $('p-current-img-container');
@@ -2088,18 +2091,33 @@ $('prod-form').addEventListener('submit', async (e) => {
         const file = $('p-file').files[0];
         const id = $('p-id').value;
 
+        const hasVariants = $('p-has-variants')?.checked ? 1 : 0;
+        const variantsList = hasVariants ? getDishVariantsConfig() : [];
+        if (hasVariants && variantsList.length === 0) {
+            setLoading('btn-save-prod', false);
+            return showModalAlert("Variantes Requeridas", "Por favor agrega al menos un tamaño o porción para este plato.", "warning");
+        }
+
         const hasToppings = $('p-has-toppings')?.checked ? 1 : 0;
         const toppingsConfig = hasToppings ? JSON.stringify(getDishToppingsConfig()) : '[]';
         const isRecommended = $('p-is-recommended')?.checked ? 1 : 0;
         const isPromo = $('p-is-promo')?.checked ? 1 : 0;
         const promoPrice = isPromo ? (Number($('p-promo-price')?.value) || 0) : 0;
 
+        let basePrice = Number($('p-price').value);
+        if (hasVariants && variantsList.length > 0) {
+            const minVarPrice = Math.min(...variantsList.map(v => v.price).filter(p => p > 0));
+            if (isFinite(minVarPrice)) basePrice = minVarPrice;
+        }
+
         const data = {
             name: $('p-name').value,
             desc: $('p-desc').value,
             category: $('p-cat').value,
-            price: Number($('p-price').value),
+            price: basePrice,
             available: $('p-available').checked,
+            has_variants: hasVariants,
+            variants_config: JSON.stringify(variantsList),
             has_toppings: hasToppings,
             toppings_config: toppingsConfig,
             is_recommended: isRecommended,

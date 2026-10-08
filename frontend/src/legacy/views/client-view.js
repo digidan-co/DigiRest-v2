@@ -279,7 +279,15 @@ export function openDisplayDetail(id, cardElement) {
 
     const badgeExtra = $('display-badge-extra');
     if (badgeExtra) {
-        if (product.has_toppings) {
+        if (product.has_variants && product.has_toppings) {
+            badgeExtra.className = 'inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 bg-indigo-100 px-2.5 py-0.5 rounded-full';
+            badgeExtra.innerHTML = '<i class="fas fa-layer-group text-[10px] text-indigo-600"></i><i class="fas fa-cookie-bite text-[10px] text-amber-600"></i> Tamaños y Adiciones';
+            badgeExtra.classList.remove('hidden');
+        } else if (product.has_variants) {
+            badgeExtra.className = 'inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 bg-indigo-100 px-2.5 py-0.5 rounded-full';
+            badgeExtra.innerHTML = '<i class="fas fa-layer-group text-[10px] text-indigo-600"></i> Múltiples Tamaños';
+            badgeExtra.classList.remove('hidden');
+        } else if (product.has_toppings) {
             badgeExtra.className = 'inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full';
             badgeExtra.innerHTML = '<i class="fas fa-cookie-bite text-[10px]"></i> Personalizable';
             badgeExtra.classList.remove('hidden');
@@ -298,7 +306,14 @@ export function openDisplayDetail(id, cardElement) {
 
     const priceContainer = $('display-price');
     if (priceContainer) {
-        if (product.is_promo && product.promo_price) {
+        if (product.has_variants) {
+            priceContainer.innerHTML = `
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-xs font-bold text-gray-400 uppercase">Desde</span>
+                    <span class="text-2xl sm:text-3xl font-extrabold text-gray-900">${formatMoney(product.price)}</span>
+                </div>
+            `;
+        } else if (product.is_promo && product.promo_price) {
             priceContainer.innerHTML = `
                 <div class="flex items-baseline gap-2">
                     <span class="text-2xl sm:text-3xl font-extrabold text-red-600">${formatMoney(product.promo_price)}</span>
@@ -325,7 +340,7 @@ export function openDisplayDetail(id, cardElement) {
         if (isClientView) {
             addBtn.classList.remove('hidden');
             if (addText) {
-                addText.innerText = product.has_toppings ? 'Personalizar' : 'Añadir al Pedido';
+                addText.innerText = (product.has_variants || product.has_toppings) ? 'Elegir Opciones' : 'Añadir al Pedido';
             }
             addBtn.onclick = () => {
                 closeHandler();
@@ -603,7 +618,16 @@ function createDishSliderCardHtml(p, { isPromo = false, isRec = false, isTop = f
                     </span>
                 ` : ''}
 
-                ${p.has_toppings ? `
+                ${(p.has_variants && p.has_toppings) ? `
+                    <span class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-gray-800 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños disponibles y personalizable">
+                        <i class="fas fa-layer-group text-[10px] text-indigo-600"></i>
+                        <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
+                    </span>
+                ` : p.has_variants ? `
+                    <span class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-600 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños disponibles">
+                        <i class="fas fa-layer-group text-[11px]"></i>
+                    </span>
+                ` : p.has_toppings ? `
                     <span class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
                         <i class="fas fa-cookie-bite text-[11px]"></i>
                     </span>
@@ -623,7 +647,12 @@ function createDishSliderCardHtml(p, { isPromo = false, isRec = false, isTop = f
 
                 <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
                     <div>
-                        ${hasDiscount ? `
+                        ${p.has_variants ? `
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide leading-none">Desde</span>
+                                <span class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                            </div>
+                        ` : hasDiscount ? `
                             <div class="flex items-baseline gap-1.5">
                                 <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
                                 <span class="text-[10px] text-gray-400 line-through leading-none">${formatMoney(p.price)}</span>
@@ -632,7 +661,7 @@ function createDishSliderCardHtml(p, { isPromo = false, isRec = false, isTop = f
                             <span class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
                         `}
                     </div>
-                    <button class="add-cart-btn w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500" data-id="${p.id}" title="${p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'}">
+                    <button class="add-cart-btn w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer bg-gray-900 hover:bg-orange-500" data-id="${p.id}" title="${(p.has_variants || p.has_toppings) ? 'Elegir opciones' : 'Añadir al pedido'}">
                         <i class="fas fa-plus text-xs pointer-events-none"></i>
                         <span class="text-xs sm:text-sm font-extrabold leading-none">Agregar</span>
                     </button>
@@ -686,7 +715,15 @@ function createDishCardHtml(p, { isDisplay = false, isPromo = false, isRec = fal
                                 Promo
                             </span>
                         ` : ''}
-                        ${p.has_toppings ? `
+                        ${(p.has_variants && p.has_toppings) ? `
+                            <span class="sm:hidden text-[8px] font-bold text-indigo-900 bg-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <i class="fas fa-layer-group text-[7px] text-indigo-600"></i><i class="fas fa-cookie-bite text-[7px] text-amber-600"></i> Opciones
+                            </span>
+                        ` : p.has_variants ? `
+                            <span class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <i class="fas fa-layer-group text-[7px]"></i> Tamaños
+                            </span>
+                        ` : p.has_toppings ? `
                             <span class="sm:hidden text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
                                 Toppings
                             </span>
@@ -695,7 +732,21 @@ function createDishCardHtml(p, { isDisplay = false, isPromo = false, isRec = fal
                     <h3 class="font-bold text-gray-800 text-sm leading-tight truncate sm:whitespace-normal sm:line-clamp-1">${escapeHtml(p.name)}</h3>
                     <!-- Description: Hidden on mobile (<sm), shown on desktop -->
                     <p class="hidden sm:block text-[10px] text-gray-400 leading-tight line-clamp-2 mt-0.5">${escapeHtml(p.desc || '')}</p>
-                    ${p.has_toppings ? `
+                    ${(p.has_variants && p.has_toppings) ? `
+                        <div class="hidden sm:block mt-1">
+                            <span class="inline-flex items-center text-[9px] font-semibold text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60 gap-1">
+                                <i class="fas fa-layer-group text-[8px] text-indigo-600"></i>
+                                <i class="fas fa-cookie-bite text-[8px] text-amber-600"></i>
+                                Tamaños y Adiciones
+                            </span>
+                        </div>
+                    ` : p.has_variants ? `
+                        <div class="hidden sm:block mt-1">
+                            <span class="inline-flex items-center text-[9px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60">
+                                <i class="fas fa-layer-group mr-1 text-[8px]"></i>Múltiples Tamaños
+                            </span>
+                        </div>
+                    ` : p.has_toppings ? `
                         <div class="hidden sm:block mt-1">
                             <span class="inline-flex items-center text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
                                 <i class="fas fa-cookie-bite mr-1 text-[8px]"></i>Personalizable
@@ -707,7 +758,12 @@ function createDishCardHtml(p, { isDisplay = false, isPromo = false, isRec = fal
                 <!-- Price and Add Button -->
                 <div class="flex sm:justify-between items-center gap-2.5 sm:gap-0 sm:mt-2 sm:pt-1 sm:border-t sm:border-gray-50 shrink-0">
                     <div class="text-right sm:text-left">
-                        ${hasDiscount ? `
+                        ${p.has_variants ? `
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide leading-none">Desde</span>
+                                <span class="font-black text-gray-900 text-base sm:text-lg leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                            </div>
+                        ` : hasDiscount ? `
                             <div class="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5">
                                 <span class="font-black text-red-600 text-base sm:text-lg leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
                                 <span class="text-[10px] text-gray-400 line-through leading-none">${formatMoney(p.price)}</span>
@@ -717,7 +773,7 @@ function createDishCardHtml(p, { isDisplay = false, isPromo = false, isRec = fal
                         `}
                     </div>
                     ${!isDisplay ? `
-                        <button class="add-cart-btn px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-gray-900 hover:bg-orange-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer ml-1 sm:ml-0 shrink-0" data-id="${p.id}" title="${p.has_toppings ? 'Personalizar opciones' : 'Añadir al pedido'}">
+                        <button class="add-cart-btn px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-gray-900 hover:bg-orange-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer ml-1 sm:ml-0 shrink-0" data-id="${p.id}" title="${(p.has_variants || p.has_toppings) ? 'Elegir opciones' : 'Añadir al pedido'}">
                             <i class="fas fa-plus text-xs pointer-events-none"></i>
                             <span class="leading-none text-xs sm:text-sm font-extrabold">Agregar</span>
                         </button>
@@ -740,6 +796,8 @@ let _ctmOptionalGroups = [];
 let _ctmAllOptionalItems = [];
 let _ctmSelectedMandatory = new Map(); // groupName -> toppingId
 let _ctmSelectedOptionalIds = new Set(); // Set of toppingId
+let _ctmVariants = [];
+let _ctmSelectedVariantId = null;
 
 export function setupClientToppingsModalListeners() {
     const btnClose = $('btn-close-ctm');
@@ -811,6 +869,8 @@ export function openClientToppingsModal(product, { onConfirm = null } = {}) {
     _ctmMandatoryGroups = [];
     _ctmOptionalGroups = [];
     _ctmAllOptionalItems = [];
+    _ctmVariants = [];
+    _ctmSelectedVariantId = null;
 
     setupClientToppingsModalListeners();
 
@@ -821,12 +881,34 @@ export function openClientToppingsModal(product, { onConfirm = null } = {}) {
     if ($('ctm-dish-category')) $('ctm-dish-category').innerText = product.category;
     if ($('ctm-dish-img')) $('ctm-dish-img').src = product.img || 'img/placeholder-dish.svg';
 
-    const basePrice = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
+    // Parse dish variants (Sizes / Portions)
+    if (product.has_variants) {
+        if (typeof product.variants_config === 'string') {
+            try {
+                _ctmVariants = JSON.parse(product.variants_config) || [];
+            } catch (e) {
+                _ctmVariants = [];
+            }
+        } else if (Array.isArray(product.variants_config)) {
+            _ctmVariants = product.variants_config;
+        }
+    }
+
+    if (_ctmVariants.length > 0) {
+        const def = _ctmVariants.find(v => v.is_default) || _ctmVariants[0];
+        _ctmSelectedVariantId = String(def.id || def.name);
+    }
+
+    let basePrice = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
+    if (_ctmVariants.length > 0) {
+        const selVar = _ctmVariants.find(v => String(v.id || v.name) === String(_ctmSelectedVariantId));
+        if (selVar) basePrice = selVar.price;
+    }
     if ($('ctm-dish-base-price')) $('ctm-dish-base-price').innerText = formatMoney(basePrice);
 
     const origEl = $('ctm-dish-orig-price');
     if (origEl) {
-        if (product.is_promo && product.promo_price) {
+        if (product.is_promo && product.promo_price && _ctmVariants.length === 0) {
             origEl.innerText = formatMoney(product.price);
             origEl.classList.remove('hidden');
         } else {
@@ -852,10 +934,10 @@ export function openClientToppingsModal(product, { onConfirm = null } = {}) {
     const container = $('ctm-toppings-container');
     if (!container) return;
 
-    if (!configs || configs.length === 0) {
+    if ((!configs || configs.length === 0) && _ctmVariants.length === 0) {
         container.innerHTML = `
             <div class="text-center py-6 bg-white rounded-2xl border border-gray-100">
-                <p class="text-xs text-gray-500">Este plato no tiene adiciones configuradas actualmente.</p>
+                <p class="text-xs text-gray-500">Este plato no tiene opciones ni adiciones configuradas actualmente.</p>
             </div>
         `;
         updateClientToppingsTotal();
@@ -913,6 +995,39 @@ function renderClientToppingsMain() {
     if (!container) return;
 
     let html = '';
+
+    // 0. Variants / Portions Selector (Mandatory if variants exist)
+    if (_ctmVariants.length > 0) {
+        html += `
+            <fieldset class="border-2 border-indigo-200/90 rounded-2xl p-3 sm:p-4 bg-indigo-50/40 shadow-xs mb-3">
+                <legend class="px-2.5 py-0.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 rounded-full border border-indigo-300 shadow-2xs flex items-center gap-1.5">
+                    <i class="fas fa-layer-group text-[9px]"></i> Tamaño / Porción (Obligatorio)
+                </legend>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+        `;
+
+        _ctmVariants.forEach(v => {
+            const vId = String(v.id || v.name);
+            const isSelected = (_ctmSelectedVariantId === vId);
+            html += `
+                <div class="ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${isSelected ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-bold ring-2 ring-indigo-400/40 shadow-xs' : 'bg-white border-gray-200 hover:border-indigo-300 text-gray-700'}"
+                    data-id="${escapeHtml(vId)}">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-400 bg-white'}">
+                            <div class="w-1.5 h-1.5 rounded-full bg-white ${isSelected ? '' : 'hidden'}"></div>
+                        </div>
+                        <span class="text-xs truncate font-bold leading-tight">${escapeHtml(v.name)}</span>
+                    </div>
+                    <span class="text-xs font-black text-indigo-700 ml-2 shrink-0">${formatMoney(v.price)}</span>
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+            </fieldset>
+        `;
+    }
 
     // 1. Mandatory Fieldset (if mandatory toppings exist)
     if (_ctmMandatoryGroups.length > 0) {
@@ -983,6 +1098,38 @@ function renderClientToppingsMain() {
     }
 
     container.innerHTML = html;
+
+    // Attach variant tiles listeners
+    container.querySelectorAll('.ctm-variant-tile').forEach(tile => {
+        tile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const vId = String(tile.dataset.id);
+            _ctmSelectedVariantId = vId;
+
+            container.querySelectorAll('.ctm-variant-tile').forEach(t => {
+                const isSel = (String(t.dataset.id) === vId);
+                const radio = t.querySelector('.ctm-variant-radio');
+                const dot = radio ? radio.querySelector('div') : null;
+
+                if (isSel) {
+                    t.className = 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-indigo-50 border-indigo-500 text-indigo-950 font-bold ring-2 ring-indigo-400/40 shadow-xs';
+                    if (radio) radio.className = 'ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors border-indigo-600 bg-indigo-600 text-white';
+                    if (dot) dot.classList.remove('hidden');
+                } else {
+                    t.className = 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-white border-gray-200 hover:border-indigo-300 text-gray-700';
+                    if (radio) radio.className = 'ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors border-gray-400 bg-white';
+                    if (dot) dot.classList.add('hidden');
+                }
+            });
+
+            const selVar = _ctmVariants.find(v => String(v.id || v.name) === vId);
+            if (selVar && $('ctm-dish-base-price')) {
+                $('ctm-dish-base-price').innerText = formatMoney(selVar.price);
+            }
+
+            updateClientToppingsTotal();
+        });
+    });
 
     // Attach mandatory tiles listeners
     container.querySelectorAll('.ctm-mand-tile').forEach(tile => {
@@ -1177,14 +1324,22 @@ export function closeClientToppingsModal() {
     _ctmMandatoryGroups = [];
     _ctmOptionalGroups = [];
     _ctmAllOptionalItems = [];
+    _ctmVariants = [];
+    _ctmSelectedVariantId = null;
 }
 
 function updateClientToppingsTotal() {
     if (!_currentCustomizingProduct) return;
 
-    const basePrice = (_currentCustomizingProduct.is_promo && _currentCustomizingProduct.promo_price)
-        ? _currentCustomizingProduct.promo_price
-        : _currentCustomizingProduct.price;
+    let basePrice = 0;
+    if (_ctmVariants.length > 0) {
+        const selVar = _ctmVariants.find(v => String(v.id || v.name) === String(_ctmSelectedVariantId));
+        basePrice = selVar ? selVar.price : _currentCustomizingProduct.price;
+    } else {
+        basePrice = (_currentCustomizingProduct.is_promo && _currentCustomizingProduct.promo_price)
+            ? _currentCustomizingProduct.promo_price
+            : _currentCustomizingProduct.price;
+    }
 
     let toppingsExtra = 0;
     _ctmSelectedOptionalIds.forEach(id => {
@@ -1203,7 +1358,24 @@ function handleAddCustomizedDishToCart() {
     if (!_currentCustomizingProduct) return;
 
     const product = _currentCustomizingProduct;
-    const basePrice = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
+
+    // 0. Validate variant if dish has variants
+    let selectedVariant = null;
+    let basePrice = 0;
+    if (_ctmVariants.length > 0) {
+        if (!_ctmSelectedVariantId) {
+            toast('Por favor selecciona un tamaño para el plato', 'warning');
+            return;
+        }
+        selectedVariant = _ctmVariants.find(v => String(v.id || v.name) === String(_ctmSelectedVariantId));
+        if (!selectedVariant) {
+            toast('Por favor selecciona un tamaño válido', 'warning');
+            return;
+        }
+        basePrice = selectedVariant.price;
+    } else {
+        basePrice = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
+    }
 
     // 1. Validate mandatory groups
     for (let i = 0; i < _ctmMandatoryGroups.length; i++) {
@@ -1264,6 +1436,8 @@ function handleAddCustomizedDishToCart() {
         id: `${product.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         productId: product.id,
         name: product.name,
+        variant: selectedVariant ? { id: selectedVariant.id, name: selectedVariant.name, price: selectedVariant.price } : null,
+        variant_name: selectedVariant ? selectedVariant.name : null,
         base_price: basePrice,
         price: unitPrice,
         qty: _ctmQty,
@@ -1277,7 +1451,8 @@ function handleAddCustomizedDishToCart() {
     } else {
         state.cart.push(cartItem);
         updateCartUI();
-        toast(`Añadido: ${product.name} (x${_ctmQty})`, 'success');
+        const displayName = selectedVariant ? `${product.name} (${selectedVariant.name})` : product.name;
+        toast(`Añadido: ${displayName} (x${_ctmQty})`, 'success');
     }
     closeClientToppingsModal();
 }
@@ -1293,13 +1468,13 @@ export function addToCart(id) {
         return;
     }
 
-    if (prod.has_toppings) {
+    if (prod.has_toppings || prod.has_variants) {
         openClientToppingsModal(prod);
         return;
     }
 
     const price = (prod.is_promo && prod.promo_price) ? prod.promo_price : prod.price;
-    const existing = state.cart.find(i => String(i.productId) === String(id) && !i.toppings_text && !i.notes);
+    const existing = state.cart.find(i => String(i.productId) === String(id) && !i.toppings_text && !i.variant_name && !i.notes);
 
     if (existing) {
         existing.qty++;
@@ -1403,6 +1578,7 @@ export function renderCartList() {
                 <div class="bg-orange-50 text-orange-600 font-bold w-6 h-6 flex items-center justify-center rounded-lg text-xs shrink-0 mt-0.5">${item.qty}</div>
                 <div class="min-w-0 flex-1">
                     <p class="font-bold text-xs text-gray-800 leading-tight">${escapeHtml(item.name)}</p>
+                    ${item.variant_name ? `<p class="text-[10px] text-indigo-700 font-bold leading-tight mt-0.5"><i class="fas fa-layer-group text-[8px] mr-1"></i>Tamaño: ${escapeHtml(item.variant_name)}</p>` : ''}
                     ${item.toppings_text ? `<p class="text-[10px] text-amber-700 font-medium leading-tight mt-0.5"><i class="fas fa-cookie-bite mr-1 text-[8px]"></i>${escapeHtml(item.toppings_text)}</p>` : ''}
                     ${item.notes ? `<p class="text-[9px] text-gray-400 italic leading-tight mt-0.5">Nota: ${escapeHtml(item.notes)}</p>` : ''}
                     <p class="text-[10px] text-gray-400 font-semibold mt-1">${formatMoney(item.price)} c/u</p>
@@ -1601,6 +1777,7 @@ export async function handleSendOrder() {
         msg += `Estos son mis platos:\n`;
         state.cart.forEach(i => {
             msg += `- ${i.qty}x ${i.name} (${formatMoney(i.price * i.qty)})\n`;
+            if (i.variant_name) msg += `   *Tamaño:* ${i.variant_name}\n`;
             if (i.toppings_text) msg += `   *Adiciones:* ${i.toppings_text}\n`;
             if (i.notes) msg += `   *Nota:* ${i.notes}\n`;
         });

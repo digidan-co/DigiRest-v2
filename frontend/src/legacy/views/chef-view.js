@@ -50,7 +50,7 @@ export function renderChefGrid(orders) {
             <div class="flex flex-col py-1.5 border-b border-gray-50 last:border-0 pl-1 pr-1">
                 <div class="flex justify-between items-start w-full gap-2">
                     <label class="flex-1 cursor-pointer select-none mt-0.5">
-                        <span class="text-sm font-bold ${checkedQty >= i.qty ? 'line-through text-gray-400' : 'text-gray-800'}">${i.qty}x ${escapeHtml(i.name)}${checkedByText}</span>
+                        <span class="text-sm font-bold ${checkedQty >= i.qty ? 'line-through text-gray-400' : 'text-gray-800'}">${i.qty}x ${escapeHtml(i.name)}${i.variant_name ? ` <span class="inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200"><i class="fas fa-layer-group text-[9px]"></i>${escapeHtml(i.variant_name)}</span>` : ''}${checkedByText}</span>
                         ${toppingsText ? `
                             <div class="mt-1 flex flex-wrap gap-1">
                                 <span class="inline-flex items-center text-[11px] font-semibold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
@@ -213,7 +213,7 @@ export function renderChefWaiterOrders(orders) {
             <div class="flex flex-col py-1.5 border-b border-gray-50 last:border-0 pl-1 pr-1">
                 <div class="flex justify-between items-start w-full gap-2">
                     <label class="flex-1 cursor-pointer select-none mt-0.5">
-                        <span class="text-sm font-bold ${checkedQty >= i.qty ? 'line-through text-gray-400' : 'text-gray-800'}">${i.qty}x ${escapeHtml(i.name)}${checkedByText}</span>
+                        <span class="text-sm font-bold ${checkedQty >= i.qty ? 'line-through text-gray-400' : 'text-gray-800'}">${i.qty}x ${escapeHtml(i.name)}${i.variant_name ? ` <span class="inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200"><i class="fas fa-layer-group text-[9px]"></i>${escapeHtml(i.variant_name)}</span>` : ''}${checkedByText}</span>
                         ${toppingsText ? `
                             <div class="mt-1 flex flex-wrap gap-1">
                                 <span class="inline-flex items-center text-[11px] font-semibold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
