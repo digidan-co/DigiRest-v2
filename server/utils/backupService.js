@@ -97,8 +97,10 @@ function pruneOldBackups() {
         if (!fs.existsSync(backupsDir)) return;
 
         // Configurable desde Dokploy / .env (Por defecto: 7 días de retención y máx 50MB)
-        const maxKeep = parseInt(process.env.BACKUP_RETENTION_DAYS, 10) || 7;
-        const maxStorageMb = parseInt(process.env.MAX_BACKUP_STORAGE_MB, 10) || 50;
+        const rawKeep = process.env.BACKUP_RETENTION_DAYS;
+        const maxKeep = rawKeep ? (parseInt(String(rawKeep).replace(/[^0-9]/g, ''), 10) || 7) : 7;
+        const rawStorageMb = process.env.MAX_BACKUP_STORAGE_MB || process.env.BACKUP_STORAGE_LIMIT_MB;
+        const maxStorageMb = rawStorageMb ? (parseInt(String(rawStorageMb).replace(/[^0-9]/g, ''), 10) || 50) : 50;
         const maxStorageBytes = maxStorageMb * 1024 * 1024;
 
         let files = fs.readdirSync(backupsDir)
