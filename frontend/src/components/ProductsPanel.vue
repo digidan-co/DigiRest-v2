@@ -164,7 +164,7 @@ async function onImportCategories(e) {
                     <tr>
                         <th class="p-4">Plato y Categoría</th>
                         <th class="p-4">Precio</th>
-                        <th class="p-4 text-center">Toppings</th>
+                        <th class="p-4 text-center">Toppings / Variantes</th>
                         <th class="p-4 text-center">Recomendado</th>
                         <th class="p-4 text-center">Promoción</th>
                         <th class="p-4 text-center">Disponibilidad</th>
