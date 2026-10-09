@@ -80,7 +80,7 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
                 <h3 id="prompt-modal-title" class="font-bold text-xl text-gray-800 mb-2"></h3>
                 <p id="prompt-modal-msg" class="text-sm text-gray-500 mb-4"></p>
                 <div class="mb-5 text-left">
-                    <input type="text" id="prompt-modal-input" class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all shadow-sm" placeholder="">
+                    <input type="text" id="prompt-modal-input" class="w-full mb-4 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all shadow-sm" placeholder="">
                     <p id="prompt-modal-error" class="hidden text-xs text-red-500 mt-2 font-medium">¡Debes ingresar un motivo!</p>
                 </div>
                 <div id="prompt-admin-auth" class="hidden mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-3">

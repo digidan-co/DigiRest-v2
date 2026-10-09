@@ -24,7 +24,11 @@ frontend/.env.*
 *.crt
 
 # 3. Copias de Seguridad y Base de Datos en Ejecución
-# (Evita subir gigabytes de backups a GitHub y llenar el VPS)
+# (Evita subir bases de datos de desarrollo y backups a GitHub/VPS)
+server/data/*.sqlite
+server/data/pos.sqlite
+*.sqlite
+!server/default_template.sqlite
 server/data/backups/
 server/data/backups/*
 server/data/*.sqlite-wal

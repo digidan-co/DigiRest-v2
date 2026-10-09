@@ -110,7 +110,15 @@ function validateUploadedFile(req, res, next) {
     }
 
     // Check overall storage limit (configurable via Dokploy)
-    const maxMb = parseInt(process.env.MAX_IMAGE_STORAGE_MB, 10) || 50;
+    const rawStorageMb = process.env.MAX_IMAGE_STORAGE_MB 
+        || process.env.MAX_STORAGE_MB 
+        || process.env.STORAGE_LIMIT_MB 
+        || process.env.MAX_IMAGE_MB 
+        || process.env.MAX_IMAGES_MB 
+        || process.env.MAX_STORAGE 
+        || process.env.STORAGE_LIMIT 
+        || process.env.STORAGE_MB;
+    const maxMb = rawStorageMb ? (parseInt(String(rawStorageMb).replace(/[^0-9]/g, ''), 10) || 50) : 50;
     const maxBytes = maxMb * 1024 * 1024;
     const uploadDir = path.join(__dirname, '../uploads/');
     let totalStorageBytes = 0;

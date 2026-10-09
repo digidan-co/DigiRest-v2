@@ -309,8 +309,20 @@ module.exports = (io) => {
                 return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
             };
 
-            const maxRecordsLimit = parseInt(process.env.MAX_RECORDS_LIMIT, 10) || 15000;
-            const maxImageStorageMb = parseInt(process.env.MAX_IMAGE_STORAGE_MB, 10) || 50;
+            const rawStorageMb = process.env.MAX_IMAGE_STORAGE_MB 
+                || process.env.MAX_STORAGE_MB 
+                || process.env.STORAGE_LIMIT_MB 
+                || process.env.MAX_IMAGE_MB 
+                || process.env.MAX_IMAGES_MB 
+                || process.env.MAX_STORAGE 
+                || process.env.STORAGE_LIMIT 
+                || process.env.STORAGE_MB;
+            const maxImageStorageMb = rawStorageMb ? (parseInt(String(rawStorageMb).replace(/[^0-9]/g, ''), 10) || 50) : 50;
+
+            const rawRecordsLimit = process.env.MAX_RECORDS_LIMIT 
+                || process.env.RECORDS_LIMIT 
+                || process.env.MAX_RECORDS;
+            const maxRecordsLimit = rawRecordsLimit ? (parseInt(String(rawRecordsLimit).replace(/[^0-9]/g, ''), 10) || 15000) : 15000;
 
             const stats = {
                 records: {
