@@ -1,7 +1,7 @@
 /**
  * DigiRest - Dish Variants / Portions Management Feature
  * Handles Admin Dish Variants Configurator (Sizes, Portions, Multi-pricing)
- * and synchronization with product base price.
+ * and synchronization with product base price and promotional prices.
  */
 
 import { $ } from '../utils/helpers.js';
@@ -18,6 +18,8 @@ export function initVariantsManager() {
     const pHasVariants = $('p-has-variants');
     const container = $('p-variants-config-container');
     const btnAdd = $('btn-add-variant-row');
+    const pIsPromo = $('p-is-promo');
+    const btnPercent = $('btn-apply-percent-variants');
 
     if (pHasVariants && container) {
         pHasVariants.addEventListener('change', (e) => {
@@ -29,15 +31,23 @@ export function initVariantsManager() {
                 if (list && list.children.length === 0) {
                     addVariantRow('', '');
                 }
+                updateVariantsPromoVisibility();
                 syncBasePriceFromVariants();
             }
+        });
+    }
+
+    if (pIsPromo) {
+        pIsPromo.addEventListener('change', () => {
+            updateVariantsPromoVisibility();
+            syncBasePriceFromVariants();
         });
     }
 
     if (btnAdd) {
         btnAdd.addEventListener('click', (e) => {
             e.preventDefault();
-            addVariantRow('', '');
+            addVariantRow('', '', '');
             const list = $('p-variants-list');
             if (list && list.lastElementChild) {
                 const nameInput = list.lastElementChild.querySelector('.v-row-name');
@@ -45,12 +55,68 @@ export function initVariantsManager() {
             }
         });
     }
+
+    if (btnPercent) {
+        btnPercent.addEventListener('click', (e) => {
+            e.preventDefault();
+            const pctStr = window.prompt("Ingresa el % de descuento a aplicar a todos los tamaños (ej: 20 para 20%):", "20");
+            if (!pctStr) return;
+            const pct = parseFloat(pctStr);
+            if (isNaN(pct) || pct <= 0 || pct >= 100) {
+                alert("Por favor ingresa un porcentaje válido entre 1 y 99");
+                return;
+            }
+            const list = $('p-variants-list');
+            if (!list) return;
+            const rows = list.querySelectorAll('.variant-row');
+            rows.forEach(row => {
+                const priceVal = parseFloat(row.querySelector('.v-row-price')?.value);
+                const promoInp = row.querySelector('.v-row-promo');
+                if (promoInp && !isNaN(priceVal) && priceVal > 0) {
+                    const discounted = Math.round((priceVal * (1 - pct / 100)) / 100) * 100;
+                    promoInp.value = discounted;
+                }
+            });
+            syncBasePriceFromVariants();
+        });
+    }
+}
+
+/**
+ * Toggle visibility of promo inputs in each variant row and header
+ */
+export function updateVariantsPromoVisibility() {
+    const pIsPromo = $('p-is-promo');
+    const isPromo = pIsPromo ? pIsPromo.checked : false;
+    const list = $('p-variants-list');
+    const btnPercent = $('btn-apply-percent-variants');
+    const promoHint = $('p-variants-promo-hint');
+    const promoVariantsNote = $('p-promo-variants-note');
+    const pHasVariants = $('p-has-variants');
+    const hasVariants = pHasVariants ? pHasVariants.checked : false;
+
+    if (btnPercent) {
+        btnPercent.classList.toggle('hidden', !isPromo);
+    }
+    if (promoHint) {
+        promoHint.classList.toggle('hidden', !isPromo);
+    }
+    if (promoVariantsNote) {
+        promoVariantsNote.classList.toggle('hidden', !(isPromo && hasVariants));
+    }
+
+    if (list) {
+        const promoWraps = list.querySelectorAll('.v-row-promo-wrap');
+        promoWraps.forEach(wrap => {
+            wrap.classList.toggle('hidden', !isPromo);
+        });
+    }
 }
 
 /**
  * Add a single variant row to the repeater list
  */
-export function addVariantRow(name = '', price = '', id = null) {
+export function addVariantRow(name = '', price = '', promoPrice = '', id = null) {
     const list = $('p-variants-list');
     if (!list) return;
 
@@ -60,22 +126,35 @@ export function addVariantRow(name = '', price = '', id = null) {
     rowEl.dataset.id = rowId;
 
     const numericPrice = (price !== null && price !== undefined && price !== '' && Number(price) > 0) ? Number(price) : '';
+    const numericPromo = (promoPrice !== null && promoPrice !== undefined && promoPrice !== '' && Number(promoPrice) > 0) ? Number(promoPrice) : '';
+    const isPromoActive = Boolean($('p-is-promo')?.checked);
 
     rowEl.innerHTML = `
         <div class="flex-1 min-w-0">
             <input type="text" value="${escapeInputAttr(name)}" placeholder="Ej: Mediana, Familiar..." 
                 class="v-row-name w-full py-1.5 px-2.5 border border-gray-200 rounded-lg outline-none focus:border-indigo-500 text-xs font-semibold text-gray-800" required>
         </div>
-        <div class="w-28 sm:w-36 shrink-0">
-            <div class="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-300 transition-all">
-                <span class="px-2 text-xs font-black text-gray-400 select-none bg-gray-50 py-1.5 border-r border-gray-100 shrink-0">$</span>
+        <div class="w-24 sm:w-28 shrink-0">
+            <div class="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-300 transition-all" title="Precio regular">
+                <span class="px-1.5 text-xs font-black text-gray-400 select-none bg-gray-50 py-1.5 border-r border-gray-100 shrink-0">$</span>
                 <input type="number" 
                     value="${numericPrice}" 
-                    placeholder="0" 
+                    placeholder="Regular" 
                     min="0" 
                     step="100"
-                    class="v-row-price w-full py-1.5 px-2 outline-none text-xs font-bold text-indigo-900 bg-transparent min-w-0" 
+                    class="v-row-price w-full py-1.5 px-1.5 outline-none text-xs font-bold text-indigo-900 bg-transparent min-w-0" 
                     required>
+            </div>
+        </div>
+        <div class="v-row-promo-wrap w-24 sm:w-28 shrink-0 ${isPromoActive ? '' : 'hidden'}">
+            <div class="flex items-center bg-red-50/60 border border-red-200 rounded-lg overflow-hidden focus-within:border-red-500 focus-within:ring-1 focus-within:ring-red-300 transition-all" title="Precio promocional de oferta">
+                <span class="px-1.5 text-xs select-none bg-red-100/60 py-1.5 border-r border-red-200 shrink-0">🔥</span>
+                <input type="number" 
+                    value="${numericPromo}" 
+                    placeholder="Oferta" 
+                    min="0" 
+                    step="100"
+                    class="v-row-promo w-full py-1.5 px-1.5 outline-none text-xs font-bold text-red-600 bg-transparent min-w-0">
             </div>
         </div>
         <button type="button" class="btn-remove-variant text-gray-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors cursor-pointer shrink-0" title="Eliminar tamaño">
@@ -86,6 +165,7 @@ export function addVariantRow(name = '', price = '', id = null) {
     // Row listeners
     const nameInput = rowEl.querySelector('.v-row-name');
     const priceInput = rowEl.querySelector('.v-row-price');
+    const promoInput = rowEl.querySelector('.v-row-promo');
     const btnRemove = rowEl.querySelector('.btn-remove-variant');
 
     priceInput.addEventListener('focus', () => {
@@ -93,6 +173,15 @@ export function addVariantRow(name = '', price = '', id = null) {
             priceInput.value = '';
         }
     });
+
+    if (promoInput) {
+        promoInput.addEventListener('focus', () => {
+            if (promoInput.value === '0') promoInput.value = '';
+        });
+        promoInput.addEventListener('input', () => {
+            syncBasePriceFromVariants();
+        });
+    }
 
     priceInput.addEventListener('input', () => {
         syncBasePriceFromVariants();
@@ -125,13 +214,19 @@ export function renderDishVariantsList(variants = []) {
     if (Array.isArray(variants) && variants.length > 0) {
         variants.forEach(v => {
             if (v && typeof v === 'object') {
-                addVariantRow(v.name || '', (v.price !== null && v.price !== undefined) ? v.price : '', v.id || null);
+                addVariantRow(
+                    v.name || '',
+                    (v.price !== null && v.price !== undefined) ? v.price : '',
+                    (v.promo_price !== null && v.promo_price !== undefined) ? v.promo_price : '',
+                    v.id || null
+                );
             }
         });
     }
 
     updateVariantsBadge();
     syncBasePriceFromVariants();
+    updateVariantsPromoVisibility();
 }
 
 /**
@@ -150,7 +245,7 @@ export function updateVariantsBadge() {
 }
 
 /**
- * Automatically sync the product base price (p-price) with the lowest variant price
+ * Automatically sync the product base price (p-price) and base promo price (p-promo-price)
  */
 export function syncBasePriceFromVariants() {
     const pHasVariants = $('p-has-variants');
@@ -164,15 +259,33 @@ export function syncBasePriceFromVariants() {
     if (rows.length === 0) return;
 
     let minPrice = Infinity;
+    let minPromoPrice = Infinity;
+    let hasPromo = false;
+
     rows.forEach(row => {
         const val = parseFloat(row.querySelector('.v-row-price')?.value);
         if (!isNaN(val) && val > 0 && val < minPrice) {
             minPrice = val;
         }
+        const promoVal = parseFloat(row.querySelector('.v-row-promo')?.value);
+        if (!isNaN(promoVal) && promoVal > 0) {
+            hasPromo = true;
+            if (promoVal < minPromoPrice) {
+                minPromoPrice = promoVal;
+            }
+        }
     });
 
     if (isFinite(minPrice)) {
         pPrice.value = minPrice;
+    }
+
+    const pPromoPrice = $('p-promo-price');
+    const pIsPromo = $('p-is-promo');
+    if (pIsPromo && pIsPromo.checked && pPromoPrice) {
+        if (hasPromo && isFinite(minPromoPrice)) {
+            pPromoPrice.value = minPromoPrice;
+        }
     }
 }
 
@@ -190,12 +303,17 @@ export function getDishVariantsConfig() {
         const id = row.dataset.id || `var_${idx}_${Date.now()}`;
         const name = (row.querySelector('.v-row-name')?.value || '').trim();
         const price = parseFloat(row.querySelector('.v-row-price')?.value) || 0;
+        const promoInput = row.querySelector('.v-row-promo')?.value;
+        const promoPrice = (promoInput !== undefined && promoInput !== '' && !isNaN(parseFloat(promoInput)) && parseFloat(promoInput) > 0)
+            ? parseFloat(promoInput)
+            : null;
 
         if (name) {
             variants.push({
                 id,
                 name,
-                price
+                price,
+                promo_price: promoPrice
             });
         }
     });
@@ -215,6 +333,7 @@ export function resetDishVariantsConfig() {
     if (container) container.classList.add('hidden');
     if (list) list.innerHTML = '';
     updateVariantsBadge();
+    updateVariantsPromoVisibility();
 }
 
 /**
@@ -248,6 +367,8 @@ export function populateDishVariantsExtensions(product) {
         if (list) list.innerHTML = '';
         updateVariantsBadge();
     }
+
+    updateVariantsPromoVisibility();
 }
 
 function escapeInputAttr(str) {
@@ -259,3 +380,4 @@ function escapeInputAttr(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
+

@@ -117,7 +117,7 @@ export function renderAdminProductsPage() {
                         <input type="checkbox" class="sr-only peer prod-promo-toggle" data-id="${p.id}" ${p.is_promo ? 'checked' : ''}>
                         <div class="relative w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--system-primary)]"></div>
                     </label>
-                    ${p.is_promo && p.promo_price ? `<div class="text-[10px] font-bold text-red-500 mt-0.5">${formatMoney(p.promo_price)}</div>` : ''}
+                    ${p.is_promo && p.promo_price ? `<div class="text-[10px] font-bold text-red-500 mt-0.5">${p.has_variants ? '<span class="text-[9px] text-gray-400 font-normal">Desde </span>' : ''}${formatMoney(p.promo_price)}</div>` : ''}
                 </td>
                 <td class="p-2 text-center">
                     <label class="relative inline-flex items-center cursor-pointer">

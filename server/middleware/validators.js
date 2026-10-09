@@ -251,6 +251,9 @@ function validateProduct(req, res, next) {
         } else {
             const validVariants = [];
             let minPrice = Infinity;
+            let minPromoPrice = Infinity;
+            let hasAnyVariantPromo = false;
+
             for (const v of variants) {
                 if (!v || typeof v !== 'object') continue;
                 const vName = sanitizeString(String(v.name || ''), 100);
@@ -264,10 +267,22 @@ function validateProduct(req, res, next) {
                     break;
                 }
                 if (vPrice < minPrice) minPrice = vPrice;
+
+                let vPromoPrice = null;
+                if (v.promo_price !== undefined && v.promo_price !== null && v.promo_price !== '') {
+                    const parsedPromo = sanitizeNumeric(v.promo_price);
+                    if (parsedPromo !== null && parsedPromo > 0) {
+                        vPromoPrice = parsedPromo;
+                        if (vPromoPrice < minPromoPrice) minPromoPrice = vPromoPrice;
+                        hasAnyVariantPromo = true;
+                    }
+                }
+
                 validVariants.push({
                     id: v.id ? String(v.id) : `var_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                     name: vName,
                     price: vPrice,
+                    promo_price: vPromoPrice,
                     is_default: Boolean(v.is_default)
                 });
             }
@@ -275,6 +290,10 @@ function validateProduct(req, res, next) {
                 req.body.variants_config = JSON.stringify(validVariants);
                 if (req.body.price === undefined || req.body.price === null || req.body.price <= 0) {
                     req.body.price = isFinite(minPrice) ? minPrice : 0;
+                }
+                const isPromo = req.body.is_promo === 'true' || req.body.is_promo === true || req.body.is_promo === 1 || req.body.is_promo === '1';
+                if (isPromo && hasAnyVariantPromo && isFinite(minPromoPrice)) {
+                    req.body.promo_price = minPromoPrice;
                 }
             }
         }

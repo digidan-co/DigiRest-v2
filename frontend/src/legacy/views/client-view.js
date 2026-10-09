@@ -307,10 +307,16 @@ export function openDisplayDetail(id, cardElement) {
     const priceContainer = $('display-price');
     if (priceContainer) {
         if (product.has_variants) {
+            const hasPromo = Boolean(product.is_promo && product.promo_price && product.promo_price < product.price);
             priceContainer.innerHTML = `
-                <div class="flex items-baseline gap-1.5">
+                <div class="flex items-baseline gap-2">
                     <span class="text-xs font-bold text-gray-400 uppercase">Desde</span>
-                    <span class="text-2xl sm:text-3xl font-extrabold text-gray-900">${formatMoney(product.price)}</span>
+                    ${hasPromo ? `
+                        <span class="text-2xl sm:text-3xl font-extrabold text-red-600">${formatMoney(product.promo_price)}</span>
+                        <span class="text-xs sm:text-sm text-gray-400 line-through">${formatMoney(product.price)}</span>
+                    ` : `
+                        <span class="text-2xl sm:text-3xl font-extrabold text-gray-900">${formatMoney(product.price)}</span>
+                    `}
                 </div>
             `;
         } else if (product.is_promo && product.promo_price) {
@@ -650,7 +656,12 @@ function createDishSliderCardHtml(p, { isPromo = false, isRec = false, isTop = f
                         ${p.has_variants ? `
                             <div class="flex items-baseline gap-1">
                                 <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide leading-none">Desde</span>
-                                <span class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                                ${hasDiscount ? `
+                                    <span class="font-black text-red-600 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                                    <span class="text-[10px] text-gray-400 line-through leading-none">${formatMoney(p.price)}</span>
+                                ` : `
+                                    <span class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                                `}
                             </div>
                         ` : hasDiscount ? `
                             <div class="flex items-baseline gap-1.5">
@@ -761,7 +772,12 @@ function createDishCardHtml(p, { isDisplay = false, isPromo = false, isRec = fal
                         ${p.has_variants ? `
                             <div class="flex items-baseline gap-1">
                                 <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide leading-none">Desde</span>
-                                <span class="font-black text-gray-900 text-base sm:text-lg leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                                ${hasDiscount ? `
+                                    <span class="font-black text-red-600 text-base sm:text-lg leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                                    <span class="text-[10px] text-gray-400 line-through leading-none">${formatMoney(p.price)}</span>
+                                ` : `
+                                    <span class="font-black text-gray-900 text-base sm:text-lg leading-none tracking-tight">${formatMoney(effectivePrice)}</span>
+                                `}
                             </div>
                         ` : hasDiscount ? `
                             <div class="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5">
@@ -900,16 +916,30 @@ export function openClientToppingsModal(product, { onConfirm = null } = {}) {
     }
 
     let basePrice = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
+    let origPrice = product.price;
+    let isSelectedVariantPromo = false;
+
     if (_ctmVariants.length > 0) {
         const selVar = _ctmVariants.find(v => String(v.id || v.name) === String(_ctmSelectedVariantId));
-        if (selVar) basePrice = selVar.price;
+        if (selVar) {
+            origPrice = selVar.price;
+            if (product.is_promo && selVar.promo_price && selVar.promo_price > 0 && selVar.promo_price < selVar.price) {
+                basePrice = selVar.promo_price;
+                isSelectedVariantPromo = true;
+            } else {
+                basePrice = selVar.price;
+                isSelectedVariantPromo = false;
+            }
+        }
+    } else {
+        isSelectedVariantPromo = Boolean(product.is_promo && product.promo_price && product.promo_price < product.price);
     }
     if ($('ctm-dish-base-price')) $('ctm-dish-base-price').innerText = formatMoney(basePrice);
 
     const origEl = $('ctm-dish-orig-price');
     if (origEl) {
-        if (product.is_promo && product.promo_price && _ctmVariants.length === 0) {
-            origEl.innerText = formatMoney(product.price);
+        if (isSelectedVariantPromo) {
+            origEl.innerText = formatMoney(origPrice);
             origEl.classList.remove('hidden');
         } else {
             origEl.classList.add('hidden');
@@ -1009,16 +1039,27 @@ function renderClientToppingsMain() {
         _ctmVariants.forEach(v => {
             const vId = String(v.id || v.name);
             const isSelected = (_ctmSelectedVariantId === vId);
+            const isVarPromo = Boolean(product.is_promo && v.promo_price && v.promo_price > 0 && v.promo_price < v.price);
             html += `
-                <div class="ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${isSelected ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-bold ring-2 ring-indigo-400/40 shadow-xs' : 'bg-white border-gray-200 hover:border-indigo-300 text-gray-700'}"
+                <div class="ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${isSelected ? (isVarPromo ? 'bg-red-50/70 border-red-500 text-red-950 font-bold ring-2 ring-red-400/40 shadow-xs' : 'bg-indigo-50 border-indigo-500 text-indigo-950 font-bold ring-2 ring-indigo-400/40 shadow-xs') : (isVarPromo ? 'bg-white border-red-200 hover:border-red-400 text-gray-700' : 'bg-white border-gray-200 hover:border-indigo-300 text-gray-700')}"
                     data-id="${escapeHtml(vId)}">
                     <div class="flex items-center gap-2.5 min-w-0">
-                        <div class="ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-400 bg-white'}">
+                        <div class="ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected ? (isVarPromo ? 'border-red-600 bg-red-600 text-white' : 'border-indigo-600 bg-indigo-600 text-white') : 'border-gray-400 bg-white'}">
                             <div class="w-1.5 h-1.5 rounded-full bg-white ${isSelected ? '' : 'hidden'}"></div>
                         </div>
-                        <span class="text-xs truncate font-bold leading-tight">${escapeHtml(v.name)}</span>
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="text-xs truncate font-bold leading-tight">${escapeHtml(v.name)}</span>
+                            ${isVarPromo ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-red-100 text-red-700 leading-none">Oferta</span>` : ''}
+                        </div>
                     </div>
-                    <span class="text-xs font-black text-indigo-700 ml-2 shrink-0">${formatMoney(v.price)}</span>
+                    <div class="flex items-baseline gap-1.5 ml-2 shrink-0">
+                        ${isVarPromo ? `
+                            <span class="text-xs font-black text-red-600">${formatMoney(v.promo_price)}</span>
+                            <span class="text-[10px] text-gray-400 line-through">${formatMoney(v.price)}</span>
+                        ` : `
+                            <span class="text-xs font-black text-indigo-700">${formatMoney(v.price)}</span>
+                        `}
+                    </div>
                 </div>
             `;
         });
@@ -1107,24 +1148,45 @@ function renderClientToppingsMain() {
             _ctmSelectedVariantId = vId;
 
             container.querySelectorAll('.ctm-variant-tile').forEach(t => {
-                const isSel = (String(t.dataset.id) === vId);
+                const tId = String(t.dataset.id);
+                const isSel = (tId === vId);
                 const radio = t.querySelector('.ctm-variant-radio');
                 const dot = radio ? radio.querySelector('div') : null;
+                const vObj = _ctmVariants.find(v => String(v.id || v.name) === tId);
+                const isVarPromo = Boolean(_currentCustomizingProduct?.is_promo && vObj?.promo_price && vObj.promo_price > 0 && vObj.promo_price < vObj.price);
 
                 if (isSel) {
-                    t.className = 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-indigo-50 border-indigo-500 text-indigo-950 font-bold ring-2 ring-indigo-400/40 shadow-xs';
-                    if (radio) radio.className = 'ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors border-indigo-600 bg-indigo-600 text-white';
+                    t.className = isVarPromo
+                        ? 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-red-50/70 border-red-500 text-red-950 font-bold ring-2 ring-red-400/40 shadow-xs'
+                        : 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-indigo-50 border-indigo-500 text-indigo-950 font-bold ring-2 ring-indigo-400/40 shadow-xs';
+                    if (radio) radio.className = isVarPromo
+                        ? 'ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors border-red-600 bg-red-600 text-white'
+                        : 'ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors border-indigo-600 bg-indigo-600 text-white';
                     if (dot) dot.classList.remove('hidden');
                 } else {
-                    t.className = 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-white border-gray-200 hover:border-indigo-300 text-gray-700';
+                    t.className = isVarPromo
+                        ? 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-white border-red-200 hover:border-red-400 text-gray-700'
+                        : 'ctm-variant-tile flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none bg-white border-gray-200 hover:border-indigo-300 text-gray-700';
                     if (radio) radio.className = 'ctm-variant-radio w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors border-gray-400 bg-white';
                     if (dot) dot.classList.add('hidden');
                 }
             });
 
             const selVar = _ctmVariants.find(v => String(v.id || v.name) === vId);
-            if (selVar && $('ctm-dish-base-price')) {
-                $('ctm-dish-base-price').innerText = formatMoney(selVar.price);
+            if (selVar) {
+                const isPromo = Boolean(_currentCustomizingProduct?.is_promo && selVar.promo_price && selVar.promo_price > 0 && selVar.promo_price < selVar.price);
+                const effPrice = isPromo ? selVar.promo_price : selVar.price;
+                if ($('ctm-dish-base-price')) $('ctm-dish-base-price').innerText = formatMoney(effPrice);
+
+                const origEl = $('ctm-dish-orig-price');
+                if (origEl) {
+                    if (isPromo) {
+                        origEl.innerText = formatMoney(selVar.price);
+                        origEl.classList.remove('hidden');
+                    } else {
+                        origEl.classList.add('hidden');
+                    }
+                }
             }
 
             updateClientToppingsTotal();
@@ -1334,7 +1396,12 @@ function updateClientToppingsTotal() {
     let basePrice = 0;
     if (_ctmVariants.length > 0) {
         const selVar = _ctmVariants.find(v => String(v.id || v.name) === String(_ctmSelectedVariantId));
-        basePrice = selVar ? selVar.price : _currentCustomizingProduct.price;
+        if (selVar) {
+            const isPromo = Boolean(_currentCustomizingProduct.is_promo && selVar.promo_price && selVar.promo_price > 0 && selVar.promo_price < selVar.price);
+            basePrice = isPromo ? selVar.promo_price : selVar.price;
+        } else {
+            basePrice = _currentCustomizingProduct.price;
+        }
     } else {
         basePrice = (_currentCustomizingProduct.is_promo && _currentCustomizingProduct.promo_price)
             ? _currentCustomizingProduct.promo_price
@@ -1372,7 +1439,8 @@ function handleAddCustomizedDishToCart() {
             toast('Por favor selecciona un tamaño válido', 'warning');
             return;
         }
-        basePrice = selectedVariant.price;
+        const isPromo = Boolean(product.is_promo && selectedVariant.promo_price && selectedVariant.promo_price > 0 && selectedVariant.promo_price < selectedVariant.price);
+        basePrice = isPromo ? selectedVariant.promo_price : selectedVariant.price;
     } else {
         basePrice = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
     }
@@ -1436,7 +1504,13 @@ function handleAddCustomizedDishToCart() {
         id: `${product.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         productId: product.id,
         name: product.name,
-        variant: selectedVariant ? { id: selectedVariant.id, name: selectedVariant.name, price: selectedVariant.price } : null,
+        variant: selectedVariant ? { 
+            id: selectedVariant.id, 
+            name: selectedVariant.name, 
+            price: basePrice,
+            regular_price: selectedVariant.price,
+            is_promo: Boolean(product.is_promo && selectedVariant.promo_price && selectedVariant.promo_price > 0 && selectedVariant.promo_price < selectedVariant.price)
+        } : null,
         variant_name: selectedVariant ? selectedVariant.name : null,
         base_price: basePrice,
         price: unitPrice,

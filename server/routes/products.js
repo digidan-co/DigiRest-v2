@@ -520,15 +520,25 @@ module.exports = (io) => {
     // Quick toggle for promo status
     router.patch('/products/:id/toggle-promo', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { id } = req.params;
-        db.get("SELECT is_promo FROM products WHERE id = ?", [id], (err, row) => {
+        db.get("SELECT is_promo, has_variants, variants_config, promo_price FROM products WHERE id = ?", [id], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!row) return res.status(404).json({ error: 'Producto no encontrado' });
 
             const newPromo = row.is_promo === 1 ? 0 : 1;
-            db.run("UPDATE products SET is_promo = ? WHERE id = ?", [newPromo, id], function (updateErr) {
+            let promoPrice = row.promo_price;
+            if (newPromo === 1 && row.has_variants === 1) {
+                try {
+                    const vars = JSON.parse(row.variants_config || '[]');
+                    const promoPrices = vars.map(v => parseFloat(v.promo_price)).filter(p => !isNaN(p) && p > 0);
+                    if (promoPrices.length > 0) {
+                        promoPrice = Math.min(...promoPrices);
+                    }
+                } catch (e) {}
+            }
+            db.run("UPDATE products SET is_promo = ?, promo_price = ? WHERE id = ?", [newPromo, promoPrice, id], function (updateErr) {
                 if (updateErr) return res.status(500).json({ error: updateErr.message });
                 io.emit('products_updated');
-                res.json({ id, is_promo: newPromo });
+                res.json({ id, is_promo: newPromo, promo_price: promoPrice });
             });
         });
     });

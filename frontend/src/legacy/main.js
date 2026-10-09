@@ -2126,12 +2126,19 @@ $('prod-form').addEventListener('submit', async (e) => {
         const toppingsConfig = hasToppings ? JSON.stringify(getDishToppingsConfig()) : '[]';
         const isRecommended = $('p-is-recommended')?.checked ? 1 : 0;
         const isPromo = $('p-is-promo')?.checked ? 1 : 0;
-        const promoPrice = isPromo ? (Number($('p-promo-price')?.value) || 0) : 0;
+        let promoPrice = isPromo ? (Number($('p-promo-price')?.value) || 0) : 0;
 
         let basePrice = Number($('p-price').value);
         if (hasVariants && variantsList.length > 0) {
             const minVarPrice = Math.min(...variantsList.map(v => v.price).filter(p => p > 0));
             if (isFinite(minVarPrice)) basePrice = minVarPrice;
+
+            if (isPromo) {
+                const promoPrices = variantsList.map(v => parseFloat(v.promo_price)).filter(p => !isNaN(p) && p > 0);
+                if (promoPrices.length > 0) {
+                    promoPrice = Math.min(...promoPrices);
+                }
+            }
         }
 
         const data = {
