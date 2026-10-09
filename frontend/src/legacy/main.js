@@ -1840,7 +1840,19 @@ $('login-form').addEventListener('submit', async (e) => {
                         }
                     } catch (err) {
                         console.error(err);
-                        toast("Error de conexión", "error");
+                        let errMsg = "Usuario y/o contraseña incorrectos";
+                        try {
+                            if (err && err.message) {
+                                const parsed = JSON.parse(err.message);
+                                if (parsed.error) errMsg = parsed.error;
+                                else if (parsed.message) errMsg = parsed.message;
+                            }
+                        } catch (_) {
+                            if (err && err.message && err.message !== 'Failed to fetch') {
+                                errMsg = err.message;
+                            }
+                        }
+                        toast(errMsg, "error");
                     } finally {
                         _isSelfConfirming = false;
                     }
@@ -1885,7 +1897,19 @@ $('login-form').addEventListener('submit', async (e) => {
 
     } catch (error) {
         console.error(error);
-        toast("Error de conexión", "error");
+        let errMsg = "Usuario y/o contraseña incorrectos";
+        try {
+            if (error && error.message) {
+                const parsed = JSON.parse(error.message);
+                if (parsed.error) errMsg = parsed.error;
+                else if (parsed.message) errMsg = parsed.message;
+            }
+        } catch (_) {
+            if (error && error.message && error.message !== 'Failed to fetch') {
+                errMsg = error.message;
+            }
+        }
+        toast(errMsg, "error");
     } finally {
         if (loginBtn) {
             loginBtn.disabled = false;

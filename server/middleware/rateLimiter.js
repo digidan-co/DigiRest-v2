@@ -6,16 +6,74 @@ const rateLimit = require('express-rate-limit');
 // so successful logins don't count against the limit.
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // 20 attempts per 15 min per IP — enough for multiple staff on same network
+    max: 20, // 20 attempts per 15 min per IP
     message: {
-        error: 'Demasiados intentos de login. Por favor, intenta nuevamente en 15 minutos.'
+        error: 'Usuario bloqueado por multiples intentos fallidos, por favor inténtalo más tarde'
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // Don't count successful logins against the limit
     skipSuccessfulRequests: true,
     skipFailedRequests: false
 });
+
+// ── In-memory tracker for failed login attempts per user ──
+const MAX_FAILED_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const BLOCK_MS = 15 * 60 * 1000;
+
+const failedAttemptsStore = new Map();
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of failedAttemptsStore) {
+        if (!entry.blockedUntil && entry.attempts.length === 0) {
+            failedAttemptsStore.delete(key);
+            continue;
+        }
+        entry.attempts = entry.attempts.filter(t => now - t < WINDOW_MS);
+        if (entry.blockedUntil && now > entry.blockedUntil) {
+            entry.blockedUntil = null;
+        }
+        if (!entry.blockedUntil && entry.attempts.length === 0) {
+            failedAttemptsStore.delete(key);
+        }
+    }
+}, 5 * 60 * 1000).unref();
+
+function recordFailedAttempt(credential) {
+    if (!credential || typeof credential !== 'string') return;
+    const key = credential.toLowerCase().trim();
+    const now = Date.now();
+    let entry = failedAttemptsStore.get(key);
+    if (!entry) {
+        entry = { attempts: [], blockedUntil: null };
+        failedAttemptsStore.set(key, entry);
+    }
+    entry.attempts = entry.attempts.filter(t => now - t < WINDOW_MS);
+    entry.attempts.push(now);
+    if (entry.attempts.length >= MAX_FAILED_ATTEMPTS) {
+        entry.blockedUntil = now + BLOCK_MS;
+    }
+}
+
+function resetAttempts(credential) {
+    if (!credential || typeof credential !== 'string') return;
+    failedAttemptsStore.delete(credential.toLowerCase().trim());
+}
+
+function checkBlocked(credential) {
+    if (!credential || typeof credential !== 'string') return { blocked: false };
+    const key = credential.toLowerCase().trim();
+    const entry = failedAttemptsStore.get(key);
+    if (!entry || !entry.blockedUntil) return { blocked: false };
+    const now = Date.now();
+    if (now < entry.blockedUntil) {
+        return { blocked: true, remainingMs: entry.blockedUntil - now };
+    }
+    entry.blockedUntil = null;
+    entry.attempts = [];
+    return { blocked: false };
+}
 
 // Rate limiter for API endpoints (moderate)
 const apiLimiter = rateLimit({
@@ -43,6 +101,9 @@ const uploadLimiter = rateLimit({
 
 module.exports = {
     loginLimiter,
+    recordFailedAttempt,
+    resetAttempts,
+    checkBlocked,
     apiLimiter,
     uploadLimiter
 };

@@ -54,11 +54,25 @@ async function getSaaSStatus() {
         });
 
         const raw = response.data;
+        let isExpired = false;
+        const vencimiento = raw.vencimiento_suscripcion || raw.vencimiento_documentos || null;
+        if (vencimiento) {
+            const rawDate = vencimiento.includes('T') ? vencimiento.split('T')[0] : vencimiento;
+            const parts = rawDate.split('-');
+            if (parts.length >= 3) {
+                const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59, 999);
+                if (new Date() > expDate) {
+                    isExpired = true;
+                }
+            }
+        }
+        const isSuspended = (raw.estado_suscripcion === 'Suspendido' || raw.estado_suscripcion === 'Suspendida' || isExpired);
         const statusData = {
             configured: true,
-            estado: (raw.estado_suscripcion === 'Activo' || raw.estado_suscripcion === 'Activa') ? 'Activa' : 'Suspendida',
+            estado: isSuspended ? 'Suspendida' : 'Activa',
+            isExpired,
             saldo_documentos: typeof raw.saldo_documentos === 'number' ? raw.saldo_documentos : 0,
-            vencimiento: raw.vencimiento_suscripcion || raw.vencimiento_documentos || null,
+            vencimiento,
             subdominio: raw.subdominio || ''
         };
 

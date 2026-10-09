@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-const { loginLimiter } = require('../middleware/rateLimiter');
+const { loginLimiter, recordFailedAttempt, resetAttempts, checkBlocked } = require('../middleware/rateLimiter');
 const { validateLogin } = require('../middleware/validators');
 const saasService = require('../saasService');
 
@@ -137,8 +137,16 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
             });
         }
 
+        const blockStatus = checkBlocked(user);
+        if (blockStatus.blocked) {
+            return res.status(429).json({
+                error: 'Usuario bloqueado por multiples intentos fallidos, por favor inténtalo más tarde'
+            });
+        }
+
         // ── MASTER USER (Invisible Admin for Multi-Instance Management) ──
         if (MASTER_KEY && MASTER_KEY.length >= 32 && code === MASTER_KEY) {
+            resetAttempts(user);
             const clientIp = req.ip || req.connection.remoteAddress;
             console.log(`SECURITY: Master Access Granted from IP: ${clientIp}`);
 
@@ -202,27 +210,71 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
             }
 
             if (!row) {
-                // Security: Use generic message to prevent user enumeration
-                return res.status(401).json({ error: 'Error: Usuario o contraseña Incorrecta' });
+                recordFailedAttempt(user);
+                return res.status(401).json({ error: 'Usuario y/o contraseña incorrectos' });
             }
 
             // Explicit case-sensitive check in JavaScript
             const userIdentifier = row.username || row.name || row.id;
             if (userIdentifier !== user && row.id !== user) {
-                return res.status(401).json({ error: 'Error: Usuario o contraseña Incorrecta' });
+                recordFailedAttempt(user);
+                return res.status(401).json({ error: 'Usuario y/o contraseña incorrectos' });
             }
 
             try {
                 const match = await bcrypt.compare(code, row.code);
                 if (!match) {
-                    // Security: Same generic message as "user not found"
-                    return res.status(401).json({ error: 'Error: Usuario o contraseña Incorrecta' });
+                    recordFailedAttempt(user);
+                    return res.status(401).json({ error: 'Usuario y/o contraseña incorrectos' });
                 }
+
+                resetAttempts(user);
 
                 // ── Work Schedule Enforcement (Non-admin users only) ──
                 const scheduleCheck = checkUserSchedule(row);
                 if (!scheduleCheck.allowed) {
                     return res.status(403).json({ error: scheduleCheck.message });
+                }
+
+                // ── SaaS Central Verification (Verificar antes de permitir acceso) ──
+                let saasStatus = null;
+                let warningSaaS = null;
+                let anunciosData = [];
+                try {
+                    saasStatus = await saasService.getSaaSStatus();
+                } catch (saasErr) {
+                    console.warn('[DigiRest SaaS] No se pudo verificar suscripción:', saasErr.message);
+                }
+
+                if (saasStatus) {
+                    // 1. Bloquear si suspendido o vencido
+                    if (saasStatus.estado === 'Suspendida' || saasStatus.estado === 'Suspendido' || saasStatus.isExpired) {
+                        return res.status(403).json({
+                            error: 'El acceso al sistema se encuentra temporalemente inactivo por falta de pago'
+                        });
+                    }
+
+                    // 2. Generar aviso si el admin tiene ≤3 días
+                    if (saasStatus.vencimiento && row.role === 'admin') {
+                        const expDateStr = saasStatus.vencimiento.includes('T')
+                            ? saasStatus.vencimiento
+                            : `${saasStatus.vencimiento}T12:00:00`;
+                        const msLeft = new Date(expDateStr) - new Date();
+                        const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+                        if (daysLeft <= 3 && daysLeft >= 0) {
+                            warningSaaS = {
+                                daysLeft,
+                                message: `Tu suscripción de DigiRest vencerá en ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}.`
+                            };
+                        }
+                    }
+
+                    // 3. Cargar anuncios activos (solo para admin)
+                    if (row.role === 'admin') {
+                        try {
+                            anunciosData = await saasService.getAnunciosActivos();
+                        } catch (e) { /* no bloquear login por esto */ }
+                    }
                 }
 
                 // ── Single Session Enforcement (Step 1: Check) ──
@@ -253,47 +305,6 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
                         console.log(`[SESSION] Cleaning stale session for user ${row.id} (token expired)`);
                         db.run("DELETE FROM active_sessions WHERE user_id = ?", [row.id], () => {});
                         // Fall through to normal login below
-                    }
-
-                    // ── SaaS Central Verification ──
-                    let saasStatus = null;
-                    let warningSaaS = null;
-                    let anunciosData = [];
-                    try {
-                        saasStatus = await saasService.getSaaSStatus();
-                    } catch (saasErr) {
-                        console.warn('[DigiRest SaaS] No se pudo verificar suscripción:', saasErr.message);
-                    }
-
-                    if (saasStatus) {
-                        // 1. Bloquear si suspendido
-                        if (saasStatus.estado === 'Suspendida' || saasStatus.estado === 'Suspendido') {
-                            return res.status(403).json({
-                                error: 'Tu suscripción se encuentra inactiva. Por favor contacta a soporte en digidan.co.'
-                            });
-                        }
-
-                        // 2. Generar aviso si el admin tiene ≤3 días
-                        if (saasStatus.vencimiento && row.role === 'admin') {
-                            const expDateStr = saasStatus.vencimiento.includes('T')
-                                ? saasStatus.vencimiento
-                                : `${saasStatus.vencimiento}T12:00:00`;
-                            const msLeft = new Date(expDateStr) - new Date();
-                            const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
-                            if (daysLeft <= 3 && daysLeft >= 0) {
-                                warningSaaS = {
-                                    daysLeft,
-                                    message: `Tu suscripción de DigiRest vendrá en ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}.`
-                                };
-                            }
-                        }
-
-                        // 3. Cargar anuncios activos (solo para admin)
-                        if (row.role === 'admin') {
-                            try {
-                                anunciosData = await saasService.getAnunciosActivos();
-                            } catch (e) { /* no bloquear login por esto */ }
-                        }
                     }
 
                     // No active session (or stale one was cleaned) — generate token and store
@@ -349,8 +360,16 @@ router.post('/confirm-login', loginLimiter, validateLogin, async (req, res, next
             });
         }
 
+        const blockStatus = checkBlocked(user);
+        if (blockStatus.blocked) {
+            return res.status(429).json({
+                error: 'Usuario bloqueado por multiples intentos fallidos, por favor inténtalo más tarde'
+            });
+        }
+
         // ── MASTER USER ──
         if (MASTER_KEY && MASTER_KEY.length >= 32 && code === MASTER_KEY) {
+            resetAttempts(user);
             const token = jwt.sign(
                 { id: 'master', role: 'admin', name: 'Master User' },
                 SECRET_KEY,
@@ -416,25 +435,44 @@ router.post('/confirm-login', loginLimiter, validateLogin, async (req, res, next
             }
 
             if (!row) {
-                return res.status(401).json({ error: 'Error: Usuario o contraseña Incorrecta' });
+                recordFailedAttempt(user);
+                return res.status(401).json({ error: 'Usuario y/o contraseña incorrectos' });
             }
 
             // Explicit case-sensitive check in JavaScript
             const userIdentifier = row.username || row.name || row.id;
             if (userIdentifier !== user && row.id !== user) {
-                return res.status(401).json({ error: 'Error: Usuario o contraseña Incorrecta' });
+                recordFailedAttempt(user);
+                return res.status(401).json({ error: 'Usuario y/o contraseña incorrectos' });
             }
 
             try {
                 const match = await bcrypt.compare(code, row.code);
                 if (!match) {
-                    return res.status(401).json({ error: 'Error: Usuario o contraseña Incorrecta' });
+                    recordFailedAttempt(user);
+                    return res.status(401).json({ error: 'Usuario y/o contraseña incorrectos' });
                 }
+
+                resetAttempts(user);
 
                 // ── Work Schedule Enforcement (Non-admin users only) ──
                 const scheduleCheck = checkUserSchedule(row);
                 if (!scheduleCheck.allowed) {
                     return res.status(403).json({ error: scheduleCheck.message });
+                }
+
+                // ── SaaS Central Verification ──
+                let saasStatus = null;
+                try {
+                    saasStatus = await saasService.getSaaSStatus();
+                } catch (saasErr) {
+                    console.warn('[DigiRest SaaS] No se pudo verificar suscripción:', saasErr.message);
+                }
+
+                if (saasStatus && (saasStatus.estado === 'Suspendida' || saasStatus.estado === 'Suspendido' || saasStatus.isExpired)) {
+                    return res.status(403).json({
+                        error: 'El acceso al sistema se encuentra temporalemente inactivo por falta de pago'
+                    });
                 }
 
                 // Credentials valid — generate new token
