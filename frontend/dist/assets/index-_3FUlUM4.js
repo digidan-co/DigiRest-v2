@@ -312,7 +312,7 @@ var e=Object.defineProperty,t=(t,n)=>{let r={};for(var i in t)e(r,i,{get:t[i],en
         `,Vd(),n.classList.remove(`hidden`);return}let s=new Map,c=new Map,l=[];a.forEach((e,t)=>{if(!e||typeof e!=`object`||!e.name)return;let n=e.id===void 0?`top_${t}`:String(e.id),r=String(e.name).trim();if(!r)return;let i=(e.group_name||`Adiciones`).trim(),a=e.is_required===!0||e.is_required===1||e.is_required===`1`,o=a?0:Number(e.price)||0;if(a)s.has(i)||s.set(i,{name:i,items:[]}),s.get(i).items.push({id:n,name:r,group_name:i,price:0,is_required:!0});else{c.has(i)||c.set(i,{name:i,items:[]});let e={id:n,name:r,group_name:i,price:o,is_required:!1};c.get(i).items.push(e),l.push(e)}}),Td=Array.from(s.values()),Ed=Array.from(c.values()),Dd=l,Td.forEach(e=>{e.items.length>0&&Od.set(e.name,String(e.items[0].id))}),Pd(),Vd(),n.classList.remove(`hidden`)}function Pd(){let e=G(`ctm-toppings-container`);if(!e)return;let t=``;Ad.length>0&&(t+=`
             <fieldset class="border-2 border-indigo-200/90 rounded-2xl p-3 sm:p-4 bg-indigo-50/40 shadow-xs mb-3">
                 <legend class="px-2.5 py-0.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 rounded-full border border-indigo-300 shadow-2xs flex items-center gap-1.5">
-                    <i class="fas fa-layer-group text-[9px]"></i> Tamaño / Porción (Obligatorio)
+                    <i class="fas fa-layer-group text-[9px]"></i> Tamaño / Porción
                 </legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
         `,Ad.forEach(e=>{let n=String(e.id||e.name),r=jd===n;t+=`

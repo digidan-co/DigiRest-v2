@@ -1001,7 +1001,7 @@ function renderClientToppingsMain() {
         html += `
             <fieldset class="border-2 border-indigo-200/90 rounded-2xl p-3 sm:p-4 bg-indigo-50/40 shadow-xs mb-3">
                 <legend class="px-2.5 py-0.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 rounded-full border border-indigo-300 shadow-2xs flex items-center gap-1.5">
-                    <i class="fas fa-layer-group text-[9px]"></i> Tamaño / Porción (Obligatorio)
+                    <i class="fas fa-layer-group text-[9px]"></i> Tamaño / Porción
                 </legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
         `;
