@@ -541,7 +541,6 @@ function initSchema() {
 
             seedDefaultUser();
             seedFinanceDefaults();
-            seedDeliveryZones();
             syncCustomersFromOrders();
         }
     });
@@ -574,30 +573,7 @@ function seedDefaultUser() {
 }
 
 function seedFinanceDefaults() {
-    // Seed default accounts
-    db.get("SELECT COUNT(*) as count FROM finance_accounts", [], (err, row) => {
-        if (!err && row && row.count === 0) {
-            const initialAccounts = [
-                { name: 'Caja Principal (Efectivo)', type: 'Efectivo', bank_name: 'Caja Física', desc: 'Fondo principal de caja en efectivo' },
-                { name: 'Caja Menor', type: 'Efectivo', bank_name: 'Caja Chica', desc: 'Fondo para gastos menores e imprevistos' },
-                { name: 'Bancolombia Negocio', type: 'Transferencia', bank_name: 'Bancolombia', desc: 'Cuenta empresarial para transferencias' },
-                { name: 'Nequi / Daviplata', type: 'Transferencia', bank_name: 'Nequi', desc: 'Billeteras digitales para cobros inmediatos' },
-                { name: 'Datáfono Principal', type: 'Datáfono', bank_name: 'Bold / Redeban', desc: 'Fondo receptor de pagos con tarjetas' }
-            ];
-
-            const insertStmt = db.prepare(`
-                INSERT INTO finance_accounts (name, type, bank_name, description, initial_balance, current_balance, is_active)
-                VALUES (?, ?, ?, ?, 0, 0, 1)
-            `);
-
-            initialAccounts.forEach(acc => {
-                insertStmt.run([acc.name, acc.type, acc.bank_name, acc.desc]);
-            });
-            insertStmt.finalize();
-        }
-    });
-
-    // Seed default categories
+    // Seed default categories only (no default accounts/funds)
     db.get("SELECT COUNT(*) as count FROM finance_categories", [], (err, row) => {
         if (!err && row && row.count === 0) {
             const initialCategories = [
@@ -626,30 +602,6 @@ function seedFinanceDefaults() {
                 insertCatStmt.run([cat.name, cat.type, cat.desc, cat.is_default]);
             });
             insertCatStmt.finalize();
-        }
-    });
-}
-
-function seedDeliveryZones() {
-    db.get("SELECT COUNT(*) as count FROM delivery_zones", [], (err, row) => {
-        if (!err && row && row.count === 0) {
-            const initialZones = [
-                { id: 'zone-centro', name: 'Zona Centro / Casco Urbano', fee: 3500, estimated_time: '25-35 min', available: 1, min_order: 15000 },
-                { id: 'zone-norte', name: 'Zona Norte / Periferia', fee: 5000, estimated_time: '35-45 min', available: 1, min_order: 20000 },
-                { id: 'zone-sur', name: 'Zona Sur / Valles', fee: 6000, estimated_time: '40-50 min', available: 1, min_order: 25000 },
-                { id: 'zone-rural', name: 'Zona Rural / Extramuros', fee: 8500, estimated_time: '50-60 min', available: 1, min_order: 35000 }
-            ];
-
-            const insertStmt = db.prepare(`
-                INSERT INTO delivery_zones (id, name, fee, estimated_time, available, min_order)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `);
-
-            initialZones.forEach(z => {
-                insertStmt.run([z.id, z.name, z.fee, z.estimated_time, z.available, z.min_order]);
-            });
-            insertStmt.finalize();
-            console.log("Delivery zones seeded successfully.");
         }
     });
 }
