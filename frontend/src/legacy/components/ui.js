@@ -134,8 +134,11 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
     titleEl.innerText = title;
     msgEl.innerText = msg;
     inputEl.placeholder = placeholder;
-    inputEl.value = '';
+    inputEl.type = options.inputType || 'text';
+    inputEl.value = options.defaultValue !== undefined ? options.defaultValue : '';
+    errorEl.textContent = options.errorMsg || '¡Debes ingresar un valor!';
     errorEl.classList.add('hidden');
+    inputEl.classList.remove('border-red-500', 'bg-red-50');
 
     // Toggle admin auth section visibility
     if (requireAdminAuth) {
@@ -240,17 +243,40 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
     cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
     okBtn.parentNode.replaceChild(newOk, okBtn);
 
+    const defaultOkText = requireAdminAuth ? 'Anular' : 'Aceptar';
+    newOk.textContent = options.okText || defaultOkText;
+    if (options.okClass) {
+        newOk.className = 'flex-1 px-4 py-3 rounded-xl ' + options.okClass;
+    } else if (requireAdminAuth || options.isDestructive) {
+        newOk.className = 'flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 shadow-lg shadow-red-200 transition-transform active:scale-95';
+    } else {
+        newOk.className = 'flex-1 px-4 py-3 rounded-xl btn-system-primary text-white font-bold shadow-md transition-transform active:scale-95';
+    }
+
     newCancel.onclick = () => {
         modal.classList.add('hidden');
     };
 
     newOk.onclick = async () => {
         // Validate reason input
-        if (!inputEl.value.trim()) {
+        const rawVal = inputEl.value.trim();
+        if (!rawVal) {
+            errorEl.textContent = options.errorMsg || '¡Debes ingresar un valor!';
             errorEl.classList.remove('hidden');
             inputEl.classList.add('border-red-500', 'bg-red-50');
             return;
         }
+
+        if (typeof options.validate === 'function') {
+            const customErr = options.validate(rawVal);
+            if (customErr) {
+                errorEl.textContent = customErr;
+                errorEl.classList.remove('hidden');
+                inputEl.classList.add('border-red-500', 'bg-red-50');
+                return;
+            }
+        }
+
         errorEl.classList.add('hidden');
         inputEl.classList.remove('border-red-500', 'bg-red-50');
 

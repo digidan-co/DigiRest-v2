@@ -2633,58 +2633,65 @@
                 <!-- Configuración de Inventario (Opción C) -->
                 <div class="topping-inv-box space-y-3">
                     <div class="flex items-center justify-between">
-                        <label class="text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5" style="color: #92400e;">
+                        <label class="text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 cursor-pointer" for="t-has-inventory" style="color: #92400e;">
                             <i class="fas fa-boxes-stacked" style="color: #d97706;"></i> Control de Inventario
+                        </label>
+                        <label class="relative inline-flex items-center cursor-pointer" title="Activar/desactivar control de stock para este topping">
+                            <input type="checkbox" id="t-has-inventory" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
                         </label>
                     </div>
 
-                    <!-- Selector de Modo -->
-                    <div class="topping-mode-track">
-                        <button type="button" id="btn-mode-direct" class="topping-mode-btn active">
-                            <i class="fas fa-cubes"></i> Stock Propio
-                        </button>
-                        <button type="button" id="btn-mode-linked" class="topping-mode-btn">
-                            <i class="fas fa-link"></i> Vincular Insumo
-                        </button>
-                    </div>
-                    <input type="hidden" id="t-inventory-mode" value="direct">
+                    <!-- Contenedor desplegable (oculto por defecto) -->
+                    <div id="t-inventory-fields-container" class="hidden space-y-3 pt-2 border-t border-amber-200/60">
+                        <!-- Selector de Modo -->
+                        <div class="topping-mode-track">
+                            <button type="button" id="btn-mode-direct" class="topping-mode-btn active">
+                                <i class="fas fa-cubes"></i> Stock Propio
+                            </button>
+                            <button type="button" id="btn-mode-linked" class="topping-mode-btn">
+                                <i class="fas fa-link"></i> Vincular Insumo
+                            </button>
+                        </div>
+                        <input type="hidden" id="t-inventory-mode" value="direct">
 
-                    <!-- Campos Modo 1: Stock Propio -->
-                    <div id="container-mode-direct" class="grid grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Stock (Porciones / und)</label>
-                            <input type="number" step="any" min="0" id="t-stock" value="0" placeholder="0"
-                                class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-bold text-gray-800">
-                            <span class="text-[9px] text-gray-500 ml-0.5">Medida: porción / und</span>
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Stock Mín. Alerta</label>
-                            <input type="number" step="any" min="0" id="t-min-stock" value="5" placeholder="5"
-                                class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-semibold text-gray-800">
-                            <span class="text-[9px] text-gray-500 ml-0.5">Alerta porciones</span>
-                        </div>
-                    </div>
-
-                    <!-- Campos Modo 2: Insumo Vinculado -->
-                    <div id="container-mode-linked" class="hidden space-y-2">
-                        <div>
-                            <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Insumo de Cocina / Bodega</label>
-                            <select id="t-supply-id" class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-semibold text-gray-800">
-                                <option value="">Selecciona un insumo...</option>
-                            </select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2.5">
+                        <!-- Campos Modo 1: Stock Propio -->
+                        <div id="container-mode-direct" class="grid grid-cols-2 gap-2.5">
                             <div>
-                                <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Consumo por Porción</label>
-                                <input type="number" step="any" min="0.0001" id="t-supply-qty" value="1" placeholder="1"
+                                <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Stock (Porciones / und)</label>
+                                <input type="number" step="any" min="0" id="t-stock" value="0" placeholder="0"
                                     class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-bold text-gray-800">
-                                <span id="t-supply-unit-hint" class="text-[9px] text-amber-800 font-bold ml-0.5">Cant. a descontar</span>
+                                <span class="text-[9px] text-gray-500 ml-0.5">Medida: porción / und</span>
                             </div>
                             <div>
                                 <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Stock Mín. Alerta</label>
-                                <input type="number" step="any" min="0" id="t-linked-min-stock" value="5" placeholder="5"
+                                <input type="number" step="any" min="0" id="t-min-stock" value="5" placeholder="5"
                                     class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-semibold text-gray-800">
                                 <span class="text-[9px] text-gray-500 ml-0.5">Alerta porciones</span>
+                            </div>
+                        </div>
+
+                        <!-- Campos Modo 2: Insumo Vinculado -->
+                        <div id="container-mode-linked" class="hidden space-y-2">
+                            <div>
+                                <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Insumo de Cocina / Bodega</label>
+                                <select id="t-supply-id" class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-semibold text-gray-800">
+                                    <option value="">Selecciona un insumo...</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Consumo por Porción</label>
+                                    <input type="number" step="any" min="0.0001" id="t-supply-qty" value="1" placeholder="1"
+                                        class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-bold text-gray-800">
+                                    <span id="t-supply-unit-hint" class="text-[9px] text-amber-800 font-bold ml-0.5">Cant. a descontar</span>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-bold text-gray-700 uppercase ml-0.5">Stock Mín. Alerta</label>
+                                    <input type="number" step="any" min="0" id="t-linked-min-stock" value="5" placeholder="5"
+                                        class="w-full p-2 border border-gray-200 rounded-xl bg-white outline-none focus:border-[var(--system-primary)] text-xs font-semibold text-gray-800">
+                                    <span class="text-[9px] text-gray-500 ml-0.5">Alerta porciones</span>
+                                </div>
                             </div>
                         </div>
                     </div>

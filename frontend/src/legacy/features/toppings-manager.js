@@ -45,6 +45,14 @@ export function initToppingsManager() {
     }
 
     // Option C: Mode Switch and Supply Select Listeners
+    $('t-has-inventory')?.addEventListener('change', (e) => {
+        const container = $('t-inventory-fields-container');
+        if (e.target.checked) {
+            container?.classList.remove('hidden');
+        } else {
+            container?.classList.add('hidden');
+        }
+    });
     $('btn-mode-direct')?.addEventListener('click', () => setToppingInventoryMode('direct'));
     $('btn-mode-linked')?.addEventListener('click', () => setToppingInventoryMode('linked_supply'));
     $('t-supply-id')?.addEventListener('change', (e) => {
@@ -310,16 +318,22 @@ export function renderToppingsTable() {
                 </td>
                 <td class="p-4 text-center text-xs">
                     <div class="flex flex-col items-center">
-                        <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full text-[11px] ${(t.current_stock || 0) <= 0 ? 'bg-red-50 text-red-700 border border-red-200' : ((t.current_stock || 0) <= (t.min_stock || 5) ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')}">
-                            <i class="fas ${(t.current_stock || 0) <= 0 ? 'fa-exclamation-circle text-red-500' : ((t.current_stock || 0) <= (t.min_stock || 5) ? 'fa-exclamation-triangle text-amber-500' : 'fa-box text-emerald-500')}"></i>
-                            ${t.current_stock !== undefined ? t.current_stock : 0} porc.
-                        </span>
-                        ${t.inventory_mode === 'linked_supply' ? `
-                            <span class="text-[9px] text-blue-600 font-bold mt-0.5 flex items-center gap-0.5" title="Descuenta de ${escapeHtml(t.linked_supply_name || 'Insumo')} (${t.supply_quantity || 1} ${escapeHtml(t.linked_supply_unit || '')} por porción)">
-                                <i class="fas fa-link text-[8px]"></i> ${escapeHtml(t.linked_supply_name || 'Insumo')}
+                        ${t.inventory_mode === 'none' ? `
+                            <span class="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-500 border border-gray-200">
+                                <i class="fas fa-minus text-[8px] text-gray-400"></i> Sin inventario
                             </span>
                         ` : `
-                            <span class="text-[9px] text-gray-400 font-medium mt-0.5">Propio</span>
+                            <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full text-[11px] ${(t.current_stock || 0) <= 0 ? 'bg-red-50 text-red-700 border border-red-200' : ((t.current_stock || 0) <= (t.min_stock || 5) ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')}">
+                                <i class="fas ${(t.current_stock || 0) <= 0 ? 'fa-exclamation-circle text-red-500' : ((t.current_stock || 0) <= (t.min_stock || 5) ? 'fa-exclamation-triangle text-amber-500' : 'fa-box text-emerald-500')}"></i>
+                                ${t.current_stock !== undefined ? t.current_stock : 0} porc.
+                            </span>
+                            ${t.inventory_mode === 'linked_supply' ? `
+                                <span class="text-[9px] text-blue-600 font-bold mt-0.5 flex items-center gap-0.5" title="Descuenta de ${escapeHtml(t.linked_supply_name || 'Insumo')} (${t.supply_quantity || 1} ${escapeHtml(t.linked_supply_unit || '')} por porción)">
+                                    <i class="fas fa-link text-[8px]"></i> ${escapeHtml(t.linked_supply_name || 'Insumo')}
+                                </span>
+                            ` : `
+                                <span class="text-[9px] text-gray-400 font-medium mt-0.5">Propio</span>
+                            `}
                         `}
                     </div>
                 </td>
@@ -461,6 +475,16 @@ export async function openToppingModal(topping = null) {
         if (priceInput) priceInput.value = topping.price !== undefined ? topping.price : 0;
         if (availInput) availInput.checked = topping.available !== 0 && topping.available !== false;
 
+        const hasInvToggle = $('t-has-inventory');
+        const invContainer = $('t-inventory-fields-container');
+        const hasInventory = topping.inventory_mode && topping.inventory_mode !== 'none';
+
+        if (hasInvToggle) hasInvToggle.checked = hasInventory;
+        if (invContainer) {
+            if (hasInventory) invContainer.classList.remove('hidden');
+            else invContainer.classList.add('hidden');
+        }
+
         const mode = topping.inventory_mode === 'linked_supply' ? 'linked_supply' : 'direct';
         setToppingInventoryMode(mode);
 
@@ -482,6 +506,12 @@ export async function openToppingModal(topping = null) {
         if (groupInput) groupInput.value = targetGroup || (getToppingGroups()[0] || '');
         if (priceInput) priceInput.value = 0;
         if (availInput) availInput.checked = true;
+
+        const hasInvToggle = $('t-has-inventory');
+        const invContainer = $('t-inventory-fields-container');
+        if (hasInvToggle) hasInvToggle.checked = false;
+        if (invContainer) invContainer.classList.add('hidden');
+
         setToppingInventoryMode('direct');
         if (stockInput) stockInput.value = 0;
         if (minStockInput) minStockInput.value = 5;
@@ -513,7 +543,9 @@ async function handleSaveTopping(e) {
 
     try {
         const id = $('t-id')?.value || null;
-        const mode = $('t-inventory-mode')?.value || 'direct';
+        const hasInventory = $('t-has-inventory')?.checked ?? false;
+        const rawMode = $('t-inventory-mode')?.value || 'direct';
+        const mode = hasInventory ? rawMode : 'none';
 
         const data = {
             name: $('t-name')?.value.trim(),
@@ -533,9 +565,14 @@ async function handleSaveTopping(e) {
                 if (btnSave) btnSave.disabled = false;
                 return;
             }
-        } else {
+        } else if (mode === 'direct') {
             data.stock = Number($('t-stock')?.value) || 0;
             data.min_stock = Number($('t-min-stock')?.value) || 5;
+            data.supply_id = null;
+            data.supply_quantity = 1;
+        } else {
+            data.stock = 0;
+            data.min_stock = 0;
             data.supply_id = null;
             data.supply_quantity = 1;
         }

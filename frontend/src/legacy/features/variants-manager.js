@@ -5,6 +5,7 @@
  */
 
 import { $ } from '../utils/helpers.js';
+import { showPromptModal, toast } from '../components/ui.js';
 
 let _initialized = false;
 
@@ -59,25 +60,48 @@ export function initVariantsManager() {
     if (btnPercent) {
         btnPercent.addEventListener('click', (e) => {
             e.preventDefault();
-            const pctStr = window.prompt("Ingresa el % de descuento a aplicar a todos los tamaños (ej: 20 para 20%):", "20");
-            if (!pctStr) return;
-            const pct = parseFloat(pctStr);
-            if (isNaN(pct) || pct <= 0 || pct >= 100) {
-                alert("Por favor ingresa un porcentaje válido entre 1 y 99");
-                return;
-            }
-            const list = $('p-variants-list');
-            if (!list) return;
-            const rows = list.querySelectorAll('.variant-row');
-            rows.forEach(row => {
-                const priceVal = parseFloat(row.querySelector('.v-row-price')?.value);
-                const promoInp = row.querySelector('.v-row-promo');
-                if (promoInp && !isNaN(priceVal) && priceVal > 0) {
-                    const discounted = Math.round((priceVal * (1 - pct / 100)) / 100) * 100;
-                    promoInp.value = discounted;
+            const promptFn = (typeof showPromptModal === 'function') ? showPromptModal : window.showPromptModal;
+            if (!promptFn) return;
+
+            promptFn(
+                'Descuento en Tamaños',
+                'Ingresa el porcentaje de descuento a aplicar sobre el precio de cada tamaño:',
+                'Ej: 20',
+                (val) => {
+                    const pct = parseFloat(val);
+                    const list = $('p-variants-list');
+                    if (!list) return;
+                    const rows = list.querySelectorAll('.variant-row');
+                    let appliedCount = 0;
+                    rows.forEach(row => {
+                        const priceVal = parseFloat(row.querySelector('.v-row-price')?.value);
+                        const promoInp = row.querySelector('.v-row-promo');
+                        if (promoInp && !isNaN(priceVal) && priceVal > 0) {
+                            const discounted = Math.round((priceVal * (1 - pct / 100)) / 100) * 100;
+                            promoInp.value = discounted;
+                            appliedCount++;
+                        }
+                    });
+                    syncBasePriceFromVariants();
+                    const toastFn = (typeof toast === 'function') ? toast : window.toast;
+                    if (toastFn) {
+                        toastFn(`Descuento del ${pct}% aplicado a ${appliedCount} tamaño(s)`, 'success');
+                    }
+                },
+                {
+                    inputType: 'number',
+                    defaultValue: '20',
+                    okText: 'Aplicar Descuento',
+                    okClass: 'btn-system-primary text-white font-bold shadow-md transition-transform active:scale-95',
+                    validate: (val) => {
+                        const n = parseFloat(val);
+                        if (isNaN(n) || n <= 0 || n >= 100) {
+                            return 'Por favor ingresa un porcentaje válido entre 1 y 99';
+                        }
+                        return null;
+                    }
                 }
-            });
-            syncBasePriceFromVariants();
+            );
         });
     }
 }

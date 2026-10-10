@@ -145,6 +145,7 @@ module.exports = (io) => {
                    s.unit as linked_supply_unit,
                    s.current_stock as linked_supply_stock,
                    CASE 
+                       WHEN t.inventory_mode = 'none' THEN 999999
                        WHEN t.inventory_mode = 'linked_supply' AND s.id IS NOT NULL THEN
                            CASE 
                                WHEN COALESCE(t.supply_quantity, 1) > 0 THEN 
@@ -190,7 +191,7 @@ module.exports = (io) => {
         const isAvail = (available === 1 || available === '1' || available === true || available === 'true') ? 1 : 0;
         const newId = req.body.id || `top_${uuidv4()}`;
 
-        const mode = inventory_mode === 'linked_supply' ? 'linked_supply' : 'direct';
+        const mode = inventory_mode === 'linked_supply' ? 'linked_supply' : (inventory_mode === 'none' ? 'none' : 'direct');
         const initialStock = !isNaN(parseFloat(stock ?? current_stock)) ? Math.max(0, parseFloat(stock ?? current_stock)) : 0;
         const alertMinStock = !isNaN(parseFloat(min_stock)) ? Math.max(0, parseFloat(min_stock)) : 5;
         const cleanSupplyId = (supply_id && typeof supply_id === 'string' && supply_id.trim()) ? supply_id.trim() : null;
@@ -208,7 +209,7 @@ module.exports = (io) => {
             isAvail,
             mode,
             mode === 'direct' ? initialStock : 0,
-            alertMinStock,
+            mode === 'none' ? 0 : alertMinStock,
             mode === 'linked_supply' ? cleanSupplyId : null,
             mode === 'linked_supply' ? cleanSupplyQty : 1
         ];
@@ -232,8 +233,8 @@ module.exports = (io) => {
                 price: numPrice,
                 available: isAvail,
                 inventory_mode: mode,
-                stock: mode === 'direct' ? initialStock : 0,
-                current_stock: mode === 'direct' ? initialStock : 0,
+                stock: mode === 'direct' ? initialStock : (mode === 'none' ? 999999 : 0),
+                current_stock: mode === 'direct' ? initialStock : (mode === 'none' ? 999999 : 0),
                 min_stock: alertMinStock,
                 supply_id: cleanSupplyId,
                 supply_quantity: cleanSupplyQty,
@@ -273,7 +274,7 @@ module.exports = (io) => {
         const cleanGroup = (group_name && typeof group_name === 'string') ? group_name.trim().slice(0, 50) : 'General';
         const numPrice = !isNaN(parseFloat(price)) ? Math.max(0, parseFloat(price)) : 0;
         const isAvail = (available === 1 || available === '1' || available === true || available === 'true') ? 1 : 0;
-        const mode = inventory_mode === 'linked_supply' ? 'linked_supply' : 'direct';
+        const mode = inventory_mode === 'linked_supply' ? 'linked_supply' : (inventory_mode === 'none' ? 'none' : 'direct');
         const cleanSupplyId = (supply_id && typeof supply_id === 'string' && supply_id.trim()) ? supply_id.trim() : null;
         const cleanSupplyQty = !isNaN(parseFloat(supply_quantity)) && parseFloat(supply_quantity) > 0 ? parseFloat(supply_quantity) : 1;
         const alertMinStock = !isNaN(parseFloat(min_stock)) ? Math.max(0, parseFloat(min_stock)) : 5;
@@ -289,12 +290,14 @@ module.exports = (io) => {
             numPrice,
             isAvail,
             mode,
-            alertMinStock,
+            mode === 'none' ? 0 : alertMinStock,
             mode === 'linked_supply' ? cleanSupplyId : null,
             cleanSupplyQty
         ];
 
-        if (stock !== undefined || current_stock !== undefined) {
+        if (mode === 'none') {
+            updateSql += `, stock = 0, supply_id = NULL`;
+        } else if (stock !== undefined || current_stock !== undefined) {
             const newStockVal = Math.max(0, parseFloat(stock ?? current_stock) || 0);
             updateSql += `, stock = ?`;
             params.push(newStockVal);

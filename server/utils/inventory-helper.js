@@ -86,6 +86,11 @@ async function deductItemsStock(orderId, items, userName = 'Sistema', io = null)
                 );
 
                 if (topRow) {
+                    // Si el topping tiene desactivado el control de inventario, omitir
+                    if (topRow.inventory_mode === 'none') {
+                        continue;
+                    }
+
                     if (topRow.inventory_mode === 'linked_supply' && topRow.supply_id) {
                         // Modo Insumo Vinculado: descontar del insumo de bodega correspondiente
                         const supply = await dbGet(
