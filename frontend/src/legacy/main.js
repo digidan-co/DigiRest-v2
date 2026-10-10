@@ -1298,10 +1298,10 @@ function applyConfig() {
 function alignSidebarSticky() {
     const wrapper = $('admin-sidebar-wrapper');
     if (!wrapper) return;
-    if (window.innerWidth >= 768) {
-        wrapper.style.top = '12px';
-        wrapper.style.marginTop = '0px';
-    } else {
+    // Desktop sticky positioning is handled purely by CSS (theme.css @media >=768px:
+    // position:sticky; top:12px; margin-top:0). Only clean up inline styles on mobile,
+    // so the sidebar never reflows/shifts when the active panel changes height.
+    if (window.innerWidth < 768) {
         wrapper.style.top = '';
         wrapper.style.marginTop = '';
     }

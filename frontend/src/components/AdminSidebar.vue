@@ -273,7 +273,7 @@ onUnmounted(() => {
                     @mousedown.prevent
                     @click="switchTab(t.tab, $event)"
                     class="admin-tab-btn flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap"
-                    :class="activeTab === t.tab ? 'active shadow-md' : 'font-medium group'">
+                    :class="activeTab === t.tab ? 'active shadow-md font-medium' : 'font-medium group'">
                     <i class="fas w-4 text-center px-1 text-xs" :class="t.icon"></i>
                     <span class="text-xs">{{ t.label }}</span>
                 </button>

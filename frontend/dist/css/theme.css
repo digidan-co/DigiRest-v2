@@ -104,9 +104,15 @@ a.bg-\[\#f5b55f\]:hover,
         margin-bottom: 0;
         align-self: flex-start;
         z-index: 30;
-        height: calc(100vh - 1.5rem);
-        max-height: calc(100vh - 1.5rem);
+        /* Account for the admin-view padding (pt-3/pb-4) so the sidebar does not overflow
+           and reflow when the active panel changes height. */
+        height: calc(100vh - 3rem);
+        max-height: calc(100vh - 3rem);
         overflow-anchor: none;
+        /* Firefox: force its own compositing layer so sticky reflow does not shift by a
+           subpixel amount when the (tall) Config panel renders. */
+        will-change: transform;
+        transform: translateZ(0);
     }
     #admin-sidebar {
         top: 0;
@@ -184,7 +190,6 @@ a.bg-\[\#f5b55f\]:hover,
 #admin-sidebar .admin-tab-btn.active i,
 #admin-sidebar .admin-tab-btn.active span {
     color: var(--system-secondary, #64010e) !important;
-    font-weight: 700 !important;
 }
 
 /* Botón Cerrar Sesión y Cambiar Contraseña */
