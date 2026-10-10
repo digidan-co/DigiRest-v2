@@ -606,11 +606,11 @@ function loadAdminConfig() {
     }
 
     const primaryColor = state.config.primaryColor || localStorage.getItem('digirest_primary_color') || "#f5b55f";
-    const contrastColor = state.config.contrastColor || localStorage.getItem('digirest_contrast_color') || "#64010e";
     const sidebarColor = state.config.sidebarColor || localStorage.getItem('digirest_sidebar_color') || "#052244";
-    const themeId = state.config.themeId || localStorage.getItem('digirest_theme_id') || "amber";
-    applySystemTheme(primaryColor, contrastColor, themeId);
-    applySidebarTheme(sidebarColor, primaryColor);
+    const primaryInput = $('conf-primary-color');
+    if (primaryInput) primaryInput.value = primaryColor;
+    const sidebarInput = $('conf-sidebar-color');
+    if (sidebarInput) sidebarInput.value = sidebarColor;
     initThemeListeners();
 }
 

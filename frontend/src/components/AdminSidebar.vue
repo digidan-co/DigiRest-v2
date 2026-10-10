@@ -56,17 +56,32 @@ function toggleSection(name) {
 }
 
 function switchTab(tab, event) {
-    if (event?.currentTarget && typeof event.currentTarget.blur === 'function') {
-        event.currentTarget.blur();
+    if (event) {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+        if (event.currentTarget && typeof event.currentTarget.blur === 'function') {
+            event.currentTarget.blur();
+        }
+    }
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
     }
     activeTab.value = tab;
     localStorage.setItem('adminActiveTab', tab);
 
     // Instant scroll reset without animation or frame delay
     const mainContainer = document.getElementById('main-container');
-    if (mainContainer) {
-        mainContainer.scrollTop = 0;
-    }
+    const resetAllScrolls = () => {
+        if (mainContainer) mainContainer.scrollTop = 0;
+        window.scrollTo(0, 0);
+        if (document.documentElement) document.documentElement.scrollTop = 0;
+        if (document.body) document.body.scrollTop = 0;
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+    };
+
+    resetAllScrolls();
 
     // Switch panels directly (reveal target, hide others simultaneously)
     const targetPanel = document.getElementById('panel-' + tab);
@@ -78,9 +93,7 @@ function switchTab(tab, event) {
         }
     });
 
-    if (mainContainer) {
-        mainContainer.scrollTop = 0;
-    }
+    resetAllScrolls();
 
     // Close sidebar on mobile after selection
     const sidebar = document.getElementById('admin-sidebar');
@@ -95,6 +108,16 @@ function switchTab(tab, event) {
     } else if (tab === 'config') {
         if (window.loadAdminConfig) window.loadAdminConfig();
     }
+
+    resetAllScrolls();
+
+    nextTick(() => {
+        resetAllScrolls();
+        requestAnimationFrame(() => {
+            resetAllScrolls();
+            setTimeout(resetAllScrolls, 50);
+        });
+    });
 }
 
 function logout() {
@@ -246,7 +269,9 @@ onUnmounted(() => {
                 <i class="fas fa-chevron-down text-[9px] section-chevron group-hover:opacity-100 transition-transform duration-200"></i>
             </button>
             <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 border-l-2 my-0.5">
-                <button v-for="t in section.tabs" :key="t.tab" type="button" :data-tab="t.tab" @click="switchTab(t.tab, $event)"
+                <button v-for="t in section.tabs" :key="t.tab" type="button" :data-tab="t.tab"
+                    @mousedown.prevent
+                    @click="switchTab(t.tab, $event)"
                     class="admin-tab-btn flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap"
                     :class="activeTab === t.tab ? 'active shadow-md' : 'font-medium group'">
                     <i class="fas w-4 text-center px-1 text-xs" :class="t.icon"></i>

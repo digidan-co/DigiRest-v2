@@ -98,36 +98,52 @@ a.bg-\[\#f5b55f\]:hover,
 
 @media (min-width: 768px) {
     #admin-sidebar-wrapper {
-        position: sticky !important;
-        top: 12px !important;
-        margin-top: 0 !important;
-        align-self: flex-start !important;
-        z-index: 30 !important;
-        height: calc(100vh - 1.5rem) !important;
+        position: sticky;
+        top: 12px;
+        margin-top: 0;
+        margin-bottom: 0;
+        align-self: flex-start;
+        z-index: 30;
+        height: calc(100vh - 1.5rem);
+        max-height: calc(100vh - 1.5rem);
+        overflow-anchor: none;
+    }
+    #admin-sidebar {
+        top: 0;
+        margin-top: 0;
+        transition: none;
+        overflow-anchor: none;
+    }
+    #admin-sidebar .custom-scroll {
+        overflow-anchor: none;
     }
     #admin-view {
-        min-height: calc(100vh - 1.5rem) !important;
-        align-items: flex-start !important;
+        min-height: calc(100vh - 1.5rem);
+        align-items: flex-start;
+        overflow-anchor: none;
+    }
+    #main-container {
+        overflow-anchor: none;
     }
 }
 
 @media (max-width: 767px) {
     #admin-sidebar-wrapper {
-        position: static !important;
-        z-index: 70 !important;
+        position: static;
+        z-index: 70;
     }
 }
 
 #admin-sidebar {
-    background-color: var(--system-bg-aside, #052244) !important;
-    color: var(--sidebar-text, #ffffff) !important;
-    margin-top: 0 !important;
-    z-index: 70 !important;
-    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.1)) !important;
+    background-color: var(--system-bg-aside, #052244);
+    color: var(--sidebar-text, #ffffff);
+    margin-top: 0;
+    z-index: 70;
+    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.1));
 }
 
 #admin-sidebar-overlay {
-    z-index: 60 !important;
+    z-index: 60;
 }
 
 /* Inactive button: background, borde, texto e icono dinámicos por contraste */
