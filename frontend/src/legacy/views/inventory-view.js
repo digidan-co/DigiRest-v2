@@ -1,6 +1,7 @@
 import { state } from '../core/state.js';
 import { $, formatMoney, escapeHtml } from '../utils/helpers.js';
 import { toast, showConfirmModal, showModalAlert } from '../components/ui.js';
+import { convertUnit, getCompatibleUnits, formatUnit } from '../utils/unit-converter.js';
 import {
     getInventorySummary,
     getSupplies,
@@ -257,6 +258,7 @@ export function setupInventoryListeners() {
                 }
                 $('supply-modal').classList.add('hidden');
                 renderAdminSuppliesPage();
+                window.dispatchEvent(new CustomEvent('inventory-refresh'));
             } catch (err) {
                 showModalAlert('Error', err.message || 'Error guardando insumo', 'error');
             }
@@ -290,6 +292,7 @@ export function setupInventoryListeners() {
                 toast('Stock ajustado exitosamente', 'success');
                 $('adjust-supply-modal').classList.add('hidden');
                 renderAdminSuppliesPage();
+                window.dispatchEvent(new CustomEvent('inventory-refresh'));
             } catch (err) {
                 showModalAlert('Error', err.message || 'Error al ajustar stock', 'error');
             }
@@ -316,25 +319,35 @@ export function setupInventoryListeners() {
         btnAddIng.onclick = () => addRecipeIngredientRow();
     }
 
-    // Listener de cambio de plato en modal receta para actualizar precio y cálculo
+    // Listener de cambio de plato en modal receta
     const prodSelect = $('rec-product-id');
     if (prodSelect) {
         prodSelect.onchange = async (e) => {
             const prodId = e.target.value;
-            if (!prodId) return;
+            await handleProductSelection(prodId);
+        };
+    }
 
-            // Revisar si ya tiene receta existente para cargarla
-            try {
-                const res = await getRecipeByProduct(prodId);
-                if (res?.exists && res.recipe) {
-                    populateRecipeModal(res.recipe, prodId);
-                } else {
-                    _currentRecipeItems = [];
-                    renderRecipeIngredientsList();
-                    recalculateRecipeFinancials();
+    // Listener de cambio de variante en modal receta
+    const varSelect = $('rec-variant-id');
+    if (varSelect) {
+        varSelect.onchange = async (e) => {
+            const prodId = $('rec-product-id')?.value;
+            const vId = e.target.value || null;
+            if (prodId) {
+                try {
+                    const res = await getRecipeByProduct(prodId, vId);
+                    if (res?.exists && res.recipe) {
+                        populateRecipeModal(res.recipe, prodId, vId);
+                    } else {
+                        $('rec-id').value = '';
+                        _currentRecipeItems = [];
+                        renderRecipeIngredientsList();
+                        recalculateRecipeFinancials();
+                    }
+                } catch (err) {
+                    console.error('Error buscando receta de variante:', err);
                 }
-            } catch (err) {
-                console.error('Error buscando receta del plato:', err);
             }
         };
     }
@@ -353,10 +366,11 @@ export function setupInventoryListeners() {
             const rows = document.querySelectorAll('.recipe-ingredient-row');
             const items = [];
             rows.forEach(row => {
-                const supplyId = row.querySelector('.rec-supply-select').value;
-                const qty = parseFloat(row.querySelector('.rec-supply-qty').value) || 0;
+                const supplyId = row.querySelector('.rec-supply-select')?.value;
+                const qty = parseFloat(row.querySelector('.rec-supply-qty')?.value) || 0;
+                const unit = row.querySelector('.rec-supply-unit-select')?.value || null;
                 if (supplyId && qty > 0) {
-                    items.push({ supply_id: supplyId, quantity: qty });
+                    items.push({ supply_id: supplyId, quantity: qty, unit });
                 }
             });
 
@@ -364,8 +378,17 @@ export function setupInventoryListeners() {
                 return toast('Debes añadir al menos un insumo con cantidad mayor a 0', 'error');
             }
 
+            const variantSelect = $('rec-variant-id');
+            const variantId = (variantSelect && variantSelect.value) ? variantSelect.value : null;
+            let variantName = null;
+            if (variantId && variantSelect.selectedIndex >= 0) {
+                variantName = variantSelect.options[variantSelect.selectedIndex].dataset?.name || null;
+            }
+
             const data = {
                 product_id: productId,
+                variant_id: variantId,
+                variant_name: variantName,
                 yield: parseInt($('rec-yield').value, 10) || 1,
                 instructions: $('rec-instructions').value,
                 items
@@ -376,6 +399,8 @@ export function setupInventoryListeners() {
                 toast('Receta guardada exitosamente', 'success');
                 $('recipe-modal').classList.add('hidden');
                 renderAdminRecipesPage();
+                window.dispatchEvent(new CustomEvent('recipes-refresh'));
+                window.dispatchEvent(new CustomEvent('inventory-refresh'));
             } catch (err) {
                 showModalAlert('Error', err.message || 'Error guardando receta', 'error');
             }
@@ -632,6 +657,7 @@ window.deleteSupplyItem = (supplyId, supplyName) => {
                 await deleteSupply(supplyId);
                 toast('Insumo eliminado', 'success');
                 renderAdminSuppliesPage();
+                window.dispatchEvent(new CustomEvent('inventory-refresh'));
             } catch (err) {
                 showModalAlert('No se puede eliminar', err.message || 'Error eliminando insumo', 'error');
             }
@@ -639,7 +665,61 @@ window.deleteSupplyItem = (supplyId, supplyName) => {
     );
 };
 
-window.openEditRecipeModal = async (productId = null) => {
+export async function handleProductSelection(prodId, variantId = null) {
+    const varContainer = $('rec-variant-container');
+    const varSelect = $('rec-variant-id');
+    
+    if (!prodId) {
+        if (varContainer) varContainer.classList.add('hidden');
+        if (varSelect) varSelect.innerHTML = '<option value="">Receta General</option>';
+        _currentRecipeItems = [];
+        renderRecipeIngredientsList();
+        recalculateRecipeFinancials();
+        return;
+    }
+
+    const product = (state.products || []).find(p => p.id === prodId);
+    let variants = [];
+    if (product && (product.has_variants === 1 || product.has_variants === '1' || product.has_variants === true)) {
+        try {
+            variants = typeof product.variants_config === 'string' ? JSON.parse(product.variants_config) : (product.variants_config || []);
+        } catch (e) { variants = []; }
+    }
+
+    if (variants.length > 0) {
+        if (varContainer) varContainer.classList.remove('hidden');
+        if (varSelect) {
+            varSelect.innerHTML = `
+                <option value="" ${!variantId ? 'selected' : ''}>Receta General (Todas las variantes sin receta propia)</option>
+                ${variants.map(v => `
+                    <option value="${v.id}" data-price="${v.price}" data-name="${escapeHtml(v.name)}" ${v.id === variantId ? 'selected' : ''}>
+                        Variante: ${escapeHtml(v.name)} (${formatMoney(v.price)})
+                    </option>
+                `).join('')}
+            `;
+        }
+    } else {
+        if (varContainer) varContainer.classList.add('hidden');
+        if (varSelect) varSelect.innerHTML = '<option value="">Receta General</option>';
+    }
+
+    // Cargar receta existente para este plato y variante
+    try {
+        const res = await getRecipeByProduct(prodId, variantId);
+        if (res?.exists && res.recipe) {
+            populateRecipeModal(res.recipe, prodId, variantId);
+        } else {
+            $('rec-id').value = '';
+            _currentRecipeItems = [];
+            renderRecipeIngredientsList();
+            recalculateRecipeFinancials();
+        }
+    } catch (err) {
+        console.error('Error buscando receta:', err);
+    }
+}
+
+window.openEditRecipeModal = async (productId = null, variantId = null) => {
     // Cargar los insumos si no están en caché
     if (_suppliesCache.length === 0) {
         _suppliesCache = await getSupplies().catch(() => []);
@@ -658,47 +738,37 @@ window.openEditRecipeModal = async (productId = null) => {
     $('rec-instructions').value = '';
     $('rec-yield').value = '1';
 
-    if (productId) {
-        try {
-            const res = await getRecipeByProduct(productId);
-            if (res?.exists && res.recipe) {
-                populateRecipeModal(res.recipe, productId);
-            } else {
-                _currentRecipeItems = [];
-                renderRecipeIngredientsList();
-                recalculateRecipeFinancials();
-            }
-        } catch (err) {
-            console.error(err);
-        }
-    } else {
-        _currentRecipeItems = [];
-        renderRecipeIngredientsList();
-        recalculateRecipeFinancials();
-    }
+    await handleProductSelection(productId, variantId);
 
     $('recipe-modal').classList.remove('hidden');
 };
 
-function populateRecipeModal(recipe, productId) {
+function populateRecipeModal(recipe, productId, variantId = null) {
     $('rec-id').value = recipe.id || '';
     $('rec-product-id').value = productId;
+    const targetVariantId = variantId || recipe.variant_id;
+    if ($('rec-variant-id') && targetVariantId !== undefined) {
+        $('rec-variant-id').value = targetVariantId || '';
+    }
     $('rec-yield').value = recipe.yield || 1;
     $('rec-instructions').value = recipe.instructions || '';
 
     _currentRecipeItems = (recipe.items || []).map(i => ({
         supply_id: i.supply_id,
-        quantity: i.quantity
+        quantity: i.quantity,
+        unit: i.recipe_unit || i.unit || i.supply_unit || ''
     }));
 
     renderRecipeIngredientsList();
     recalculateRecipeFinancials();
 }
 
-function addRecipeIngredientRow(supplyId = '', quantity = '') {
+function addRecipeIngredientRow(supplyId = '', quantity = '', unit = '') {
+    const supp = _suppliesCache.find(s => s.id === supplyId);
     _currentRecipeItems.push({
         supply_id: supplyId,
-        quantity: quantity || 1
+        quantity: quantity || 1,
+        unit: unit || (supp ? supp.unit : 'g')
     });
     renderRecipeIngredientsList();
     recalculateRecipeFinancials();
@@ -721,24 +791,55 @@ function renderRecipeIngredientsList() {
         ).join('');
 
         const selectedSupply = _suppliesCache.find(s => s.id === item.supply_id);
-        const unitLabel = selectedSupply ? selectedSupply.unit : '-';
+        const supplyUnit = selectedSupply ? selectedSupply.unit : 'und';
+        const effectiveUnit = item.unit || supplyUnit;
+        const compatibleUnits = getCompatibleUnits(supplyUnit);
+
+        const unitOptions = compatibleUnits.map(u => 
+            `<option value="${u}" ${u === effectiveUnit ? 'selected' : ''}>${formatUnit(u)}</option>`
+        ).join('');
+
+        // Calcular costo estimado de esta porción
+        let portionCostText = '';
+        if (selectedSupply && item.quantity > 0) {
+            const qtyInBase = convertUnit(item.quantity, effectiveUnit, supplyUnit);
+            const lineCost = qtyInBase * (selectedSupply.cost_per_unit || 0);
+            portionCostText = formatMoney(lineCost);
+        }
 
         return `
-            <div class="recipe-ingredient-row flex items-center gap-2 bg-white p-2.5 rounded-xl border border-gray-200/70 shadow-sm" data-index="${index}">
-                <div class="flex-1">
-                    <select class="rec-supply-select w-full p-2 border border-gray-200 rounded-lg text-xs bg-white outline-none focus:border-orange-500 font-medium">
+            <div class="recipe-ingredient-row bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5" data-index="${index}">
+                <!-- Fila Insumo (ancho completo en móvil, flexible en desktop) -->
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <select class="rec-supply-select w-full p-2.5 border border-gray-200 rounded-xl text-xs bg-white outline-none focus:border-orange-500 font-semibold text-gray-800">
                         <option value="">Selecciona insumo...</option>
                         ${supplyOptions}
                     </select>
+                    <button type="button" class="btn-remove-ing sm:hidden text-red-400 hover:text-red-600 p-2 text-sm transition-colors cursor-pointer shrink-0" title="Quitar">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
                 </div>
-                <div class="w-28 flex items-center gap-1">
-                    <input type="number" step="any" min="0" value="${item.quantity}" placeholder="Cant."
-                        class="rec-supply-qty w-full p-2 border border-gray-200 rounded-lg text-xs text-right font-bold outline-none focus:border-orange-500">
-                    <span class="rec-supply-unit text-[10px] font-bold text-gray-400 w-8">${unitLabel}</span>
+
+                <!-- Fila Cantidad, Unidad y Costo (horizontal en desktop y móvil) -->
+                <div class="flex items-center justify-between sm:justify-start gap-2 shrink-0">
+                    <div class="flex items-center gap-1.5 flex-1 sm:flex-none">
+                        <input type="number" step="any" min="0" value="${item.quantity}" placeholder="Cant."
+                            class="rec-supply-qty w-20 sm:w-24 p-2.5 border border-gray-200 rounded-xl text-xs text-right font-bold outline-none focus:border-orange-500 text-gray-900 bg-gray-50/50">
+                        
+                        <select class="rec-supply-unit-select flex-1 sm:flex-none sm:w-36 p-2.5 border border-gray-200 rounded-xl text-xs bg-gray-50 outline-none focus:border-orange-500 font-bold text-gray-700">
+                            ${unitOptions}
+                        </select>
+                    </div>
+
+                    <div class="text-right px-2 min-w-[75px] shrink-0">
+                        <span class="rec-portion-cost text-xs font-bold text-orange-600 block">${portionCostText || '$0'}</span>
+                        <span class="text-[9px] uppercase font-bold text-gray-400 block tracking-tight">costo</span>
+                    </div>
+
+                    <button type="button" class="btn-remove-ing hidden sm:block text-red-400 hover:text-red-600 p-2 text-sm transition-colors cursor-pointer shrink-0" title="Quitar">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
                 </div>
-                <button type="button" class="btn-remove-ing text-red-400 hover:text-red-600 p-2 text-sm transition-colors" title="Quitar">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
             </div>
         `;
     }).join('');
@@ -748,13 +849,16 @@ function renderRecipeIngredientsList() {
         const index = parseInt(row.dataset.index, 10);
         const select = row.querySelector('.rec-supply-select');
         const qtyInput = row.querySelector('.rec-supply-qty');
-        const removeBtn = row.querySelector('.btn-remove-ing');
+        const unitSelect = row.querySelector('.rec-supply-unit-select');
 
         select.addEventListener('change', (e) => {
             const suppId = e.target.value;
             _currentRecipeItems[index].supply_id = suppId;
             const supp = _suppliesCache.find(s => s.id === suppId);
-            row.querySelector('.rec-supply-unit').textContent = supp ? supp.unit : '-';
+            if (supp) {
+                _currentRecipeItems[index].unit = supp.unit;
+            }
+            renderRecipeIngredientsList();
             recalculateRecipeFinancials();
         });
 
@@ -763,10 +867,19 @@ function renderRecipeIngredientsList() {
             recalculateRecipeFinancials();
         });
 
-        removeBtn.addEventListener('click', () => {
-            _currentRecipeItems.splice(index, 1);
-            renderRecipeIngredientsList();
-            recalculateRecipeFinancials();
+        if (unitSelect) {
+            unitSelect.addEventListener('change', (e) => {
+                _currentRecipeItems[index].unit = e.target.value;
+                recalculateRecipeFinancials();
+            });
+        }
+
+        row.querySelectorAll('.btn-remove-ing').forEach(removeBtn => {
+            removeBtn.addEventListener('click', () => {
+                _currentRecipeItems.splice(index, 1);
+                renderRecipeIngredientsList();
+                recalculateRecipeFinancials();
+            });
         });
     });
 }
@@ -774,16 +887,39 @@ function renderRecipeIngredientsList() {
 function recalculateRecipeFinancials() {
     let totalCost = 0;
 
-    _currentRecipeItems.forEach(item => {
+    _currentRecipeItems.forEach((item, idx) => {
         const supp = _suppliesCache.find(s => s.id === item.supply_id);
         if (supp && item.quantity > 0) {
-            totalCost += (supp.cost_per_unit * item.quantity);
+            const effectiveUnit = item.unit || supp.unit;
+            const qtyInBase = convertUnit(item.quantity, effectiveUnit, supp.unit);
+            const lineCost = qtyInBase * (supp.cost_per_unit || 0);
+            totalCost += lineCost;
+
+            const row = document.querySelector(`.recipe-ingredient-row[data-index="${idx}"]`);
+            if (row) {
+                const costEl = row.querySelector('.rec-portion-cost');
+                if (costEl) costEl.textContent = formatMoney(lineCost);
+            }
         }
     });
 
     const prodSelect = $('rec-product-id');
-    const selectedOption = prodSelect?.options[prodSelect.selectedIndex];
-    const productPrice = selectedOption ? (parseFloat(selectedOption.dataset.price) || 0) : 0;
+    const varSelect = $('rec-variant-id');
+    let productPrice = 0;
+
+    // Si tiene variante seleccionada, tomar el precio de la variante
+    if (varSelect && varSelect.value) {
+        const varOption = varSelect.options[varSelect.selectedIndex];
+        if (varOption && varOption.dataset.price) {
+            productPrice = parseFloat(varOption.dataset.price) || 0;
+        }
+    }
+    
+    if (productPrice === 0 && prodSelect) {
+        const selectedOption = prodSelect.options[prodSelect.selectedIndex];
+        productPrice = selectedOption ? (parseFloat(selectedOption.dataset.price) || 0) : 0;
+    }
+
     const margin = productPrice - totalCost;
     const foodCostPct = productPrice > 0 ? ((totalCost / productPrice) * 100) : 0;
 
@@ -802,6 +938,8 @@ window.deleteRecipeItem = (recipeId, recipeName) => {
                 await deleteRecipe(recipeId);
                 toast('Receta eliminada', 'success');
                 renderAdminRecipesPage();
+                window.dispatchEvent(new CustomEvent('recipes-refresh'));
+                window.dispatchEvent(new CustomEvent('inventory-refresh'));
             } catch (err) {
                 showModalAlert('Error', err.message || 'Error eliminando receta', 'error');
             }

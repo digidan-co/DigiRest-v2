@@ -81,27 +81,41 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 4. ASSETS ESTÁTICOS (JS, CSS, Fuentes, Iconos, Audio): Stale-While-Revalidate
+    // 4. SCRIPTS Y ESTILOS (JS, CSS): Network-First con fallback a caché (evita chunks obsoletos tras build)
     if (
         url.pathname.startsWith('/assets/') ||
+        /\.(js|css)$/i.test(url.pathname)
+    ) {
+        event.respondWith(
+            fetch(req)
+                .then((networkRes) => {
+                    if (networkRes && networkRes.status === 200) {
+                        const copy = networkRes.clone();
+                        caches.open(STATIC_CACHE).then((cache) => cache.put(req, copy));
+                    }
+                    return networkRes;
+                })
+                .catch(() => caches.match(req))
+        );
+        return;
+    }
+
+    // 5. ASSETS MULTIMEDIA (Fuentes, Iconos, Audio, Imágenes): Cache-First con fallback a red
+    if (
         url.pathname.startsWith('/webfonts/') ||
         url.pathname.startsWith('/img/') ||
-        /\.(js|css|webp|png|jpg|jpeg|svg|ico|woff2?|ttf|mp3)$/i.test(url.pathname)
+        /\.(webp|png|jpg|jpeg|svg|ico|woff2?|ttf|mp3)$/i.test(url.pathname)
     ) {
         event.respondWith(
             caches.match(req).then((cachedRes) => {
-                const fetchPromise = fetch(req)
-                    .then((networkRes) => {
-                        if (networkRes && networkRes.status === 200) {
-                            const copy = networkRes.clone();
-                            caches.open(STATIC_CACHE).then((cache) => cache.put(req, copy));
-                        }
-                        return networkRes;
-                    })
-                    .catch(() => cachedRes); // Si falla la red, ya tenemos cachedRes
-
-                // Devolver inmediatamente la caché si existe, o esperar a la red
-                return cachedRes || fetchPromise;
+                if (cachedRes) return cachedRes;
+                return fetch(req).then((networkRes) => {
+                    if (networkRes && networkRes.status === 200) {
+                        const copy = networkRes.clone();
+                        caches.open(STATIC_CACHE).then((cache) => cache.put(req, copy));
+                    }
+                    return networkRes;
+                });
             })
         );
         return;

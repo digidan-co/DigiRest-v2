@@ -28,8 +28,9 @@ export async function getRecipes() {
     return ApiClient.get('/inventory/recipes');
 }
 
-export async function getRecipeByProduct(productId) {
-    return ApiClient.get(`/inventory/recipes/product/${productId}`);
+export async function getRecipeByProduct(productId, variantId = null) {
+    const query = variantId ? `?variant_id=${encodeURIComponent(variantId)}` : '';
+    return ApiClient.get(`/inventory/recipes/product/${productId}${query}`);
 }
 
 export async function saveRecipe(recipe) {

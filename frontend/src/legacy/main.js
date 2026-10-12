@@ -78,7 +78,7 @@ import { initAdminSidebar } from './features/admin-sidebar.js';
 import { formatScheduleSummary, openUserScheduleModal, closeUserScheduleModal, setupUserScheduleListeners, setUserScheduleUsersCache } from './features/user-schedule.js';
 import { SYSTEM_THEMES, applySystemTheme, updateThemePresetUI, renderThemePresets, selectThemePreset, setModuleContrast, initThemeListeners } from './features/theme-manager.js';
 import { updateQuotaWidget, setupAdminListeners } from './views/admin-view.js';
-import { setupInventoryListeners } from './views/inventory-view.js';
+import { setupInventoryListeners, renderAdminSuppliesPage, renderAdminRecipesPage } from './views/inventory-view.js';
 import { renderAdminCashflowPage } from './views/cashflow-view.js';
 import { initToppingsManager, resetDishToppingsConfig, getDishToppingsConfig } from './features/toppings-manager.js';
 import { initVariantsManager, resetDishVariantsConfig, getDishVariantsConfig } from './features/variants-manager.js';
@@ -89,6 +89,8 @@ import { initPaymentModal, openPaymentModal, closePaymentModal } from './feature
 import { getAccounts } from './services/cashflow-service.js';
 
 // Expose globals for HTML inline events (Legacy support)
+window.renderAdminSuppliesPage = renderAdminSuppliesPage;
+window.renderAdminRecipesPage = renderAdminRecipesPage;
 window.openPaymentModal = openPaymentModal;
 window.closePaymentModal = closePaymentModal;
 window.initPaymentModal = initPaymentModal;
@@ -792,17 +794,22 @@ async function init() {
 
         // Real-time Inventory & Recipe listeners
         socket.on('inventory_updated', () => {
-            if (!$('panel-supplies')?.classList.contains('hidden')) {
+            window.dispatchEvent(new CustomEvent('inventory-refresh'));
+            if (typeof renderAdminSuppliesPage === 'function' && !$('panel-supplies')?.classList.contains('hidden')) {
                 renderAdminSuppliesPage();
             }
         });
         socket.on('recipe_saved', () => {
-            if (!$('panel-recipes')?.classList.contains('hidden')) {
+            window.dispatchEvent(new CustomEvent('recipes-refresh'));
+            window.dispatchEvent(new CustomEvent('inventory-refresh'));
+            if (typeof renderAdminRecipesPage === 'function' && !$('panel-recipes')?.classList.contains('hidden')) {
                 renderAdminRecipesPage();
             }
         });
         socket.on('recipe_deleted', () => {
-            if (!$('panel-recipes')?.classList.contains('hidden')) {
+            window.dispatchEvent(new CustomEvent('recipes-refresh'));
+            window.dispatchEvent(new CustomEvent('inventory-refresh'));
+            if (typeof renderAdminRecipesPage === 'function' && !$('panel-recipes')?.classList.contains('hidden')) {
                 renderAdminRecipesPage();
             }
         });
@@ -1161,8 +1168,17 @@ async function init() {
         });
 
     } catch (e) {
-        console.error("Error inicializando:", e);
-        showModalAlert("Error de Conexión", "No se pudo conectar con el servidor.", "error");
+        console.error("Error inicializando la interfaz:", e);
+        // Verificar si realmente el servidor no responde antes de mostrar error de conexión
+        fetch('/api/health')
+            .then(res => {
+                if (!res.ok) {
+                    showModalAlert("Error de Conexión", "No se pudo conectar con el servidor local.", "error");
+                }
+            })
+            .catch(() => {
+                showModalAlert("Error de Conexión", "No se pudo conectar con el servidor local.", "error");
+            });
     } finally {
         clearTimeout(safetyTimeout);
         $('app-loader').classList.add('hidden');

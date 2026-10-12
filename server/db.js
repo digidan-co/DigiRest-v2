@@ -224,7 +224,9 @@ function initSchema() {
 
     CREATE TABLE IF NOT EXISTS recipes (
         id TEXT PRIMARY KEY,
-        product_id TEXT NOT NULL UNIQUE,
+        product_id TEXT NOT NULL,
+        variant_id TEXT,
+        variant_name TEXT,
         name TEXT NOT NULL,
         yield INTEGER DEFAULT 1,
         instructions TEXT,
@@ -237,6 +239,7 @@ function initSchema() {
         recipe_id TEXT NOT NULL,
         supply_id TEXT NOT NULL,
         quantity REAL NOT NULL,
+        unit TEXT,
         FOREIGN KEY(recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
         FOREIGN KEY(supply_id) REFERENCES supplies(id) ON DELETE RESTRICT
     );
@@ -497,6 +500,45 @@ function initSchema() {
                     min_stock = COALESCE((SELECT min_stock FROM supplies WHERE supplies.id = toppings.supply_id OR supplies.id = toppings.id), 5)
                 WHERE (stock = 0 OR stock IS NULL) AND EXISTS (SELECT 1 FROM supplies WHERE supplies.id = toppings.supply_id OR supplies.id = toppings.id)
             `, (err) => { });
+
+            // Migration: Add unit column to recipe_items
+            db.run("ALTER TABLE recipe_items ADD COLUMN unit TEXT", (err) => { });
+
+            // Migration: Support variant recipes (remove single-column UNIQUE on product_id)
+            db.all("PRAGMA table_info(recipes)", [], (tErr, cols) => {
+                const hasVariantId = (cols || []).some(c => c.name === 'variant_id');
+                db.all("PRAGMA index_list(recipes)", [], (iErr, idxs) => {
+                    const hasSingleUnique = (idxs || []).some(idx => idx.unique && idx.name.includes('autoindex_recipes_2'));
+                    if (!hasVariantId || hasSingleUnique) {
+                        db.serialize(() => {
+                            db.run("PRAGMA foreign_keys = OFF");
+                            db.run(`CREATE TABLE IF NOT EXISTS recipes_migrated (
+                                id TEXT PRIMARY KEY,
+                                product_id TEXT NOT NULL,
+                                variant_id TEXT,
+                                variant_name TEXT,
+                                name TEXT NOT NULL,
+                                yield INTEGER DEFAULT 1,
+                                instructions TEXT,
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+                            )`);
+                            if (hasVariantId) {
+                                db.run(`INSERT OR IGNORE INTO recipes_migrated (id, product_id, variant_id, variant_name, name, yield, instructions, created_at)
+                                        SELECT id, product_id, variant_id, variant_name, name, yield, instructions, created_at FROM recipes`);
+                            } else {
+                                db.run(`INSERT OR IGNORE INTO recipes_migrated (id, product_id, name, yield, instructions, created_at)
+                                        SELECT id, product_id, name, yield, instructions, created_at FROM recipes`);
+                            }
+                            db.run("DROP TABLE recipes");
+                            db.run("ALTER TABLE recipes_migrated RENAME TO recipes");
+                            db.run("CREATE INDEX IF NOT EXISTS idx_recipes_product_id ON recipes(product_id)");
+                            db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_prod_variant ON recipes(product_id, COALESCE(variant_id, ''))");
+                            db.run("PRAGMA foreign_keys = ON");
+                        });
+                    }
+                });
+            });
 
             // Indexes for High-Performance Queries (thousands of orders support)
             const indexes = [

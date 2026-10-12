@@ -2972,8 +2972,8 @@
 
     <!-- Recipe Modal (Escandallo) -->
     <div id="recipe-modal"
-        class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-4 backdrop-blur-sm">
-        <div class="glass-panel p-6 rounded-3xl w-full max-w-2xl m-4 relative scale-in bg-white shadow-2xl max-h-[90vh] flex flex-col">
+        class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="glass-panel p-4 sm:p-6 rounded-3xl w-full max-w-2xl relative scale-in bg-white shadow-2xl max-h-[92vh] flex flex-col">
             <div class="flex justify-between items-center border-b pb-3 shrink-0">
                 <div>
                     <h3 id="recipe-modal-title" class="font-bold text-xl text-gray-800">Escandallo / Receta del Plato</h3>
@@ -3001,6 +3001,20 @@
                     </div>
                 </div>
 
+                <!-- Selector de Variante / Tamaño (Condicional si el plato tiene variantes) -->
+                <div id="rec-variant-container" class="hidden bg-amber-50/70 p-3 rounded-2xl border border-amber-200/80">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-[11px] font-bold text-amber-900 uppercase flex items-center gap-1.5">
+                            <i class="fas fa-layer-group text-amber-600"></i> Tamaño / Variante para esta Receta
+                        </label>
+                        <span class="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">Receta Específica</span>
+                    </div>
+                    <select id="rec-variant-id" class="w-full p-2.5 border border-amber-300 rounded-xl bg-white outline-none focus:border-amber-500 text-xs font-bold text-gray-800">
+                        <option value="">Receta General (Aplica a todas las variantes)</option>
+                    </select>
+                    <p class="text-[10px] text-amber-700 mt-1.5">Puedes configurar una receta independiente para cada tamaño (ej: Personal, Mediana, Familiar), o una receta general para todo el plato.</p>
+                </div>
+
                 <!-- Lista de Ingredientes / Insumos -->
                 <div>
                     <div class="flex justify-between items-center mb-2">
@@ -3010,7 +3024,7 @@
                             <i class="fas fa-plus text-[10px]"></i> Añadir Insumo
                         </button>
                     </div>
-                    <div id="recipe-ingredients-list" class="space-y-2 max-h-56 overflow-y-auto p-1 bg-gray-50/70 rounded-xl border border-gray-100">
+                    <div id="recipe-ingredients-list" class="space-y-2 max-h-60 sm:max-h-72 overflow-y-auto p-1 bg-gray-50/70 rounded-xl border border-gray-100">
                         <p id="recipe-no-items-msg" class="text-center py-6 text-gray-400 text-xs">No hay insumos agregados. Haz clic en "Añadir Insumo".</p>
                     </div>
                 </div>
@@ -5056,18 +5070,35 @@
     <!-- Main Script (Modular) -->
     <script type="module" src="/src/main.js"></script>
 
-    <!-- PWA Service Worker Registration -->
+    <!-- PWA Service Worker Registration (Bypass/Purge on local dev/host to prevent stale cache bugs) -->
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('ServiceWorker registrado con éxito');
-                    })
-                    .catch(error => {
-                        console.log('Fallo al registrar ServiceWorker:', error);
+            const isLocal = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1' || 
+                            window.location.hostname.endsWith('.local');
+            if (isLocal) {
+                // En entorno local, desregistrar service worker y limpiar cachés para evitar bloqueos y pantallas en blanco
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                    for (const reg of regs) {
+                        reg.unregister().then(() => console.log('SW local desregistrado para desarrollo limpio'));
+                    }
+                });
+                if ('caches' in window) {
+                    caches.keys().then(keys => {
+                        for (const k of keys) caches.delete(k);
                     });
-            });
+                }
+            } else {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(registration => {
+                            console.log('ServiceWorker registrado con éxito');
+                        })
+                        .catch(error => {
+                            console.log('Fallo al registrar ServiceWorker:', error);
+                        });
+                });
+            }
         }
     </script>
 

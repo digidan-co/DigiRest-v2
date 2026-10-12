@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import {
@@ -119,7 +119,7 @@ function switchSubtab(tab) {
 
 function editSupply(s) { if (window.openEditSupplyModal) window.openEditSupplyModal(s.id); }
 function adjustSupply(s) { if (window.openAdjustSupplyModal) window.openAdjustSupplyModal(s.id); }
-function editRecipe(r) { if (window.openEditRecipeModal) window.openEditRecipeModal(r.product_id); }
+function editRecipe(r) { if (window.openEditRecipeModal) window.openEditRecipeModal(r.product_id, r.variant_id); }
 
 function deleteSupplyItem(s) {
     showConfirmModal('Eliminar Insumo', `¿Estás seguro de eliminar el insumo "${s.name}"? Solo podrá eliminarse si no forma parte de ninguna receta.`, async () => {
@@ -212,10 +212,41 @@ async function onImportRecipes(e) {
     }
 }
 
+function handleInventorySync() {
+    loadSupplies();
+    if (activeSubtab.value === 'kardex') loadKardex();
+}
+
+function handleRecipesSync() {
+    loadRecipes();
+}
+
 onMounted(() => {
     if (localStorage.getItem('pos_token')) {
         loadSupplies();
     }
+
+    if (window.socket) {
+        window.socket.on('inventory_updated', handleInventorySync);
+        window.socket.on('supplies_updated', handleInventorySync);
+        window.socket.on('recipe_saved', handleRecipesSync);
+        window.socket.on('recipe_deleted', handleRecipesSync);
+        window.socket.on('recipe_updated', handleRecipesSync);
+    }
+    window.addEventListener('inventory-refresh', handleInventorySync);
+    window.addEventListener('recipes-refresh', handleRecipesSync);
+});
+
+onUnmounted(() => {
+    if (window.socket) {
+        window.socket.off('inventory_updated', handleInventorySync);
+        window.socket.off('supplies_updated', handleInventorySync);
+        window.socket.off('recipe_saved', handleRecipesSync);
+        window.socket.off('recipe_deleted', handleRecipesSync);
+        window.socket.off('recipe_updated', handleRecipesSync);
+    }
+    window.removeEventListener('inventory-refresh', handleInventorySync);
+    window.removeEventListener('recipes-refresh', handleRecipesSync);
 });
 
 watch(() => state.user, (u) => {
@@ -406,17 +437,24 @@ watch(() => state.user, (u) => {
                         </tr>
                         <tr v-for="r in recipes" :key="r.id" class="hover:bg-gray-50/80 transition-colors">
                             <td class="p-3.5">
-                                <div class="font-bold text-gray-900">{{ r.product_name || r.name }}</div>
-                                <span v-if="r.yield > 1" class="text-[10px] text-gray-400">Rinde {{ r.yield }} porciones</span>
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="font-bold text-gray-900">{{ r.product_name || r.name }}</span>
+                                    <span v-if="r.variant_name" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                        <i class="fas fa-layer-group text-[9px] mr-1"></i>{{ r.variant_name }}
+                                    </span>
+                                </div>
+                                <span v-if="r.yield > 1" class="text-[10px] text-gray-400 block mt-0.5">Rinde {{ r.yield }} porciones</span>
                             </td>
                             <td class="p-3.5 text-gray-500">{{ r.product_category || 'Sin categoría' }}</td>
-                            <td class="p-3.5 text-right font-mono font-bold text-gray-800">{{ formatMoney(r.product_price || 0) }}</td>
+                            <td class="p-3.5 text-right font-mono font-bold text-gray-800">{{ formatMoney(r.effective_price ?? r.product_price ?? 0) }}</td>
                             <td class="p-3.5 text-right font-mono font-bold text-orange-600">{{ formatMoney(r.total_cost || 0) }}</td>
                             <td class="p-3.5 text-right font-mono font-bold text-emerald-600">{{ formatMoney(r.margin || 0) }}</td>
                             <td class="p-3.5 text-center"><span class="px-2 py-0.5 rounded-full text-[11px]" :class="recipePctClass(r)">{{ r.food_cost_pct || 0 }}%</span></td>
                             <td class="p-3.5 max-w-xs">
                                 <template v-if="(r.items || []).length > 0">
-                                    <span v-for="(i, idx) in r.items" :key="idx" class="inline-block bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 text-[10px] mr-1 mb-1">{{ i.supply_name }}: {{ i.quantity }} {{ i.supply_unit }}</span>
+                                    <span v-for="(i, idx) in r.items" :key="idx" class="inline-block bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 text-[10px] mr-1 mb-1">
+                                        {{ i.supply_name }}: {{ i.quantity }} {{ i.unit || i.recipe_unit || i.supply_unit }}
+                                    </span>
                                 </template>
                                 <span v-else class="text-gray-400 italic text-[11px]">Sin ingredientes</span>
                             </td>

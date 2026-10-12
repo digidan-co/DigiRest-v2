@@ -26,37 +26,74 @@ async function deductItemsStock(orderId, items, userName = 'Sistema', io = null)
         const productId = item.productId || item.id;
         const qty = parseFloat(item.qty) || 1;
 
-        // 1. Descuento de insumos por receta del plato
+const { convertUnit } = require('./unitConverter');
+
+        // 1. Descuento de insumos por receta del plato (con soporte para variantes y conversión de unidades)
         if (productId) {
             try {
-                const query = `
-                    SELECT ri.supply_id, ri.quantity, s.name as supply_name, s.current_stock
-                    FROM recipes r
-                    JOIN recipe_items ri ON ri.recipe_id = r.id
-                    JOIN supplies s ON s.id = ri.supply_id
-                    WHERE r.product_id = ?
-                `;
-                const ingredients = await dbAll(query, [productId]);
-                for (const ing of ingredients) {
-                    const totalAmount = ing.quantity * qty;
-                    const newStock = ing.current_stock - totalAmount;
+                const variantId = item.variant?.id || item.variant_id || item.selected_variant?.id;
+                const variantName = item.variant?.name || item.variant_name || item.selected_variant?.name;
 
-                    await dbRun('UPDATE supplies SET current_stock = current_stock - ? WHERE id = ?', [totalAmount, ing.supply_id]);
-                    await dbRun(
-                        `INSERT INTO inventory_movements 
-                         (supply_id, supply_name, type, quantity, stock_after, order_id, notes, user_name) 
-                         VALUES (?, ?, 'DESCUENTO_PEDIDO', ?, ?, ?, ?, ?)`,
-                        [
-                            ing.supply_id,
-                            ing.supply_name,
-                            -totalAmount,
-                            newStock,
-                            orderId,
-                            `Pedido #${orderId} (${item.name} x${qty})`,
-                            userName
-                        ]
+                let recipe = null;
+                // Buscar primero si existe receta específica para la variante
+                if (variantId || variantName) {
+                    recipe = await dbGet(
+                        `SELECT id, name, yield, variant_name FROM recipes 
+                         WHERE product_id = ? AND (variant_id = ? OR variant_name = ?) 
+                         LIMIT 1`,
+                        [productId, variantId || '', variantName || '']
                     );
-                    totalDeductions++;
+                }
+                // Si no hay receta para la variante o el ítem no tiene variante, buscar la receta general del plato
+                if (!recipe) {
+                    recipe = await dbGet(
+                        `SELECT id, name, yield, variant_name FROM recipes 
+                         WHERE product_id = ? AND (variant_id IS NULL OR variant_id = '') 
+                         LIMIT 1`,
+                        [productId]
+                    );
+                }
+
+                if (recipe) {
+                    const query = `
+                        SELECT ri.supply_id, ri.quantity, ri.unit as recipe_unit, 
+                               s.name as supply_name, s.unit as supply_unit, s.current_stock
+                        FROM recipe_items ri
+                        JOIN supplies s ON s.id = ri.supply_id
+                        WHERE ri.recipe_id = ?
+                    `;
+                    const ingredients = await dbAll(query, [recipe.id]);
+                    const recipeYield = parseInt(recipe.yield, 10) || 1;
+
+                    for (const ing of ingredients) {
+                        // Convertir la unidad de la receta a la unidad de bodega del insumo
+                        const qtyPerPortion = convertUnit(ing.quantity, ing.recipe_unit || ing.supply_unit, ing.supply_unit);
+                        const totalAmount = Math.round(((qtyPerPortion / recipeYield) * qty) * 10000) / 10000;
+                        const newStock = Math.round((ing.current_stock - totalAmount) * 10000) / 10000;
+
+                        await dbRun('UPDATE supplies SET current_stock = current_stock - ? WHERE id = ?', [totalAmount, ing.supply_id]);
+
+                        const unitDetail = (ing.recipe_unit && ing.recipe_unit !== ing.supply_unit)
+                            ? `(-${ing.quantity * qty} ${ing.recipe_unit} = -${totalAmount} ${ing.supply_unit})`
+                            : `(-${totalAmount} ${ing.supply_unit})`;
+                        const varLabel = variantName ? ` [${variantName}]` : '';
+
+                        await dbRun(
+                            `INSERT INTO inventory_movements 
+                             (supply_id, supply_name, type, quantity, stock_after, order_id, notes, user_name) 
+                             VALUES (?, ?, 'DESCUENTO_PEDIDO', ?, ?, ?, ?, ?)`,
+                            [
+                                ing.supply_id,
+                                ing.supply_name,
+                                -totalAmount,
+                                newStock,
+                                orderId,
+                                `Pedido #${orderId} (${item.name || item.product_name || recipe.name || 'Plato'}${varLabel} x${qty} ${unitDetail})`,
+                                userName
+                            ]
+                        );
+                        totalDeductions++;
+                    }
                 }
             } catch (err) {
                 console.error(`[Inventario] Error descontando ingredientes para producto ${productId}:`, err.message);
@@ -149,8 +186,7 @@ async function deductItemsStock(orderId, items, userName = 'Sistema', io = null)
     }
 
     if (io) {
-        io.to('admin').emit('inventory_updated', { orderId, type: 'deduction' });
-        io.to('cajero').emit('inventory_updated', { orderId, type: 'deduction' });
+        io.emit('inventory_updated', { orderId, type: 'deduction' });
     }
 
     return { success: true, totalDeductions };
@@ -237,8 +273,7 @@ async function revertStockForOrder(orderId, userName = 'Sistema', io = null) {
         await dbRun('UPDATE orders SET stock_deducted = 0 WHERE id = ?', [orderId]);
 
         if (io) {
-            io.to('admin').emit('inventory_updated', { orderId, type: 'revert' });
-            io.to('cajero').emit('inventory_updated', { orderId, type: 'revert' });
+            io.emit('inventory_updated', { orderId, type: 'revert' });
         }
 
         return { success: true, reverted: true, count: movements?.length || 0 };

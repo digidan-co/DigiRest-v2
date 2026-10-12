@@ -7,6 +7,7 @@ const { upload } = require('../middleware/upload');
 const csv = require('csv-parser');
 const { Parser } = require('json2csv');
 const fs = require('fs');
+const { convertUnit, getCompatibleUnits } = require('../utils/unitConverter');
 
 module.exports = (io) => {
     // =============================================
@@ -144,7 +145,10 @@ module.exports = (io) => {
                         if (err) console.error("Error deleting uploaded file:", err);
                     });
 
-                    if (io) io.to('admin').emit('supplies_updated');
+                    if (io) {
+                        io.emit('supplies_updated');
+                        io.emit('inventory_updated', { type: 'supplies_imported' });
+                    }
                     res.json({ message: `Importación completada. Insumos procesados: ${processed}, Errores: ${errors}` });
                 };
 
@@ -185,7 +189,10 @@ module.exports = (io) => {
                 );
             }
 
-            if (io) io.to('admin').emit('inventory_updated', { type: 'supply_created', id });
+            if (io) {
+                io.emit('inventory_updated', { type: 'supply_created', id });
+                io.emit('supplies_updated', { type: 'supply_created', id });
+            }
 
             res.status(201).json({
                 message: 'Insumo creado exitosamente',
@@ -218,7 +225,10 @@ module.exports = (io) => {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: 'Insumo no encontrado' });
 
-            if (io) io.to('admin').emit('inventory_updated', { type: 'supply_updated', id });
+            if (io) {
+                io.emit('inventory_updated', { type: 'supply_updated', id });
+                io.emit('supplies_updated', { type: 'supply_updated', id });
+            }
 
             res.json({ message: 'Insumo actualizado exitosamente' });
         });
@@ -253,7 +263,10 @@ module.exports = (io) => {
                      VALUES (?, ?, ?, ?, ?, ?, ?)`,
                     [id, supply.name, movementType, adjustAmount, newStock, notes || '', req.user?.name || 'Admin'],
                     () => {
-                        if (io) io.to('admin').emit('inventory_updated', { type: 'stock_adjusted', id });
+                        if (io) {
+                            io.emit('inventory_updated', { type: 'stock_adjusted', id });
+                            io.emit('supplies_updated', { type: 'stock_adjusted', id });
+                        }
                         res.json({
                             message: 'Stock ajustado exitosamente',
                             newStock,
@@ -289,7 +302,10 @@ module.exports = (io) => {
                     if (delErr) return res.status(500).json({ error: delErr.message });
                     if (this.changes === 0) return res.status(404).json({ error: 'Insumo no encontrado' });
 
-                    if (io) io.to('admin').emit('inventory_updated', { type: 'supply_deleted', id });
+                    if (io) {
+                        io.emit('inventory_updated', { type: 'supply_deleted', id });
+                        io.emit('supplies_updated', { type: 'supply_deleted', id });
+                    }
                     res.json({ message: 'Insumo eliminado exitosamente' });
                 });
             }
@@ -300,12 +316,22 @@ module.exports = (io) => {
     // RECETAS Y ESCANDALLOS
     // =============================================
 
-    // Listar recetas con ingredientes y costo estimado
+    // Endpoint para unidades compatibles
+    router.get('/inventory/units/compatible', verifyToken, (req, res) => {
+        const { unit } = req.query;
+        res.json({
+            unit: unit || '',
+            compatible_units: getCompatibleUnits(unit || '')
+        });
+    });
+
+    // Listar recetas con ingredientes y costo estimado (con soporte para variantes y unidades)
     router.get('/inventory/recipes', verifyToken, (req, res) => {
         const sql = `
             SELECT 
-                r.id, r.product_id, r.name, r.yield, r.instructions, r.created_at,
-                p.name as product_name, p.price as product_price, p.category as product_category
+                r.id, r.product_id, r.variant_id, r.variant_name, r.name, r.yield, r.instructions, r.created_at,
+                p.name as product_name, p.price as product_price, p.category as product_category,
+                p.has_variants, p.variants_config
             FROM recipes r
             LEFT JOIN products p ON p.id = r.product_id
             ORDER BY r.name ASC
@@ -321,26 +347,48 @@ module.exports = (io) => {
             recipes.forEach(rec => {
                 const itemSql = `
                     SELECT 
-                        ri.id, ri.supply_id, ri.quantity,
-                        s.name as supply_name, s.unit as supply_unit, s.cost_per_unit, s.current_stock,
-                        (ri.quantity * s.cost_per_unit) as item_cost
+                        ri.id, ri.supply_id, ri.quantity, ri.unit as recipe_unit,
+                        s.name as supply_name, s.unit as supply_unit, s.cost_per_unit, s.current_stock
                     FROM recipe_items ri
                     JOIN supplies s ON s.id = ri.supply_id
                     WHERE ri.recipe_id = ?
                 `;
 
                 db.all(itemSql, [rec.id], (iErr, items) => {
-                    const recipeItems = items || [];
+                    const recipeItems = (items || []).map(item => {
+                        const effectiveUnit = item.recipe_unit || item.supply_unit;
+                        const qtyInSupplyUnit = convertUnit(item.quantity, effectiveUnit, item.supply_unit);
+                        const itemCost = qtyInSupplyUnit * (item.cost_per_unit || 0);
+                        return {
+                            ...item,
+                            unit: effectiveUnit,
+                            item_cost: Math.round(itemCost * 100) / 100
+                        };
+                    });
+
                     const totalCost = recipeItems.reduce((acc, curr) => acc + (curr.item_cost || 0), 0);
-                    const productPrice = rec.product_price || 0;
-                    const foodCostPct = productPrice > 0 ? ((totalCost / productPrice) * 100) : 0;
-                    const margin = productPrice - totalCost;
+                    
+                    // Si la receta es de una variante específica, buscar su precio correspondiente
+                    let effectivePrice = rec.product_price || 0;
+                    if (rec.variant_id && rec.variants_config) {
+                        try {
+                            const vars = JSON.parse(rec.variants_config);
+                            const matchedVar = vars.find(v => String(v.id) === String(rec.variant_id) || v.name === rec.variant_name);
+                            if (matchedVar && matchedVar.price !== undefined) {
+                                effectivePrice = parseFloat(matchedVar.price) || effectivePrice;
+                            }
+                        } catch (e) {}
+                    }
+
+                    const foodCostPct = effectivePrice > 0 ? ((totalCost / effectivePrice) * 100) : 0;
+                    const margin = effectivePrice - totalCost;
 
                     fullRecipes.push({
                         ...rec,
                         items: recipeItems,
-                        total_cost: totalCost,
-                        margin: margin,
+                        total_cost: Math.round(totalCost * 100) / 100,
+                        effective_price: effectivePrice,
+                        margin: Math.round(margin * 100) / 100,
                         food_cost_pct: Math.round(foodCostPct * 10) / 10
                     });
 
@@ -353,42 +401,74 @@ module.exports = (io) => {
         });
     });
 
-    // Obtener receta de un plato específico
+    // Obtener receta de un plato específico (soporta ?variant_id=...)
     router.get('/inventory/recipes/product/:productId', verifyToken, (req, res) => {
         const { productId } = req.params;
+        const { variant_id } = req.query;
 
-        db.get('SELECT * FROM recipes WHERE product_id = ?', [productId], (err, recipe) => {
+        let sql = 'SELECT * FROM recipes WHERE product_id = ?';
+        let params = [productId];
+
+        if (variant_id !== undefined && variant_id !== null && variant_id !== '') {
+            sql += ' AND (variant_id = ? OR (variant_id IS NULL AND ? = ""))';
+            params.push(variant_id, variant_id);
+        }
+
+        db.all(sql, params, (err, recipes) => {
             if (err) return res.status(500).json({ error: err.message });
-            if (!recipe) return res.json({ exists: false, recipe: null });
+            if (!recipes || recipes.length === 0) {
+                // Si buscó una variante específica pero aún no tiene receta propia, fallback a receta general
+                if (variant_id) {
+                    return db.get('SELECT * FROM recipes WHERE product_id = ? AND (variant_id IS NULL OR variant_id = "")', [productId], (fbErr, fbRecipe) => {
+                        if (fbErr || !fbRecipe) return res.json({ exists: false, recipe: null, recipes: [] });
+                        fetchRecipeDetails(fbRecipe, [fbRecipe]);
+                    });
+                }
+                return res.json({ exists: false, recipe: null, recipes: [] });
+            }
 
-            const itemSql = `
-                SELECT 
-                    ri.id, ri.supply_id, ri.quantity,
-                    s.name as supply_name, s.unit as supply_unit, s.cost_per_unit, s.current_stock,
-                    (ri.quantity * s.cost_per_unit) as item_cost
-                FROM recipe_items ri
-                JOIN supplies s ON s.id = ri.supply_id
-                WHERE ri.recipe_id = ?
-            `;
+            fetchRecipeDetails(recipes[0], recipes);
 
-            db.all(itemSql, [recipe.id], (iErr, items) => {
-                if (iErr) return res.status(500).json({ error: iErr.message });
-                const totalCost = (items || []).reduce((acc, curr) => acc + (curr.item_cost || 0), 0);
-                res.json({
-                    exists: true,
-                    recipe: {
-                        ...recipe,
-                        items: items || [],
-                        total_cost: totalCost
-                    }
+            function fetchRecipeDetails(primaryRecipe, allRecipes) {
+                const itemSql = `
+                    SELECT 
+                        ri.id, ri.supply_id, ri.quantity, ri.unit as recipe_unit,
+                        s.name as supply_name, s.unit as supply_unit, s.cost_per_unit, s.current_stock
+                    FROM recipe_items ri
+                    JOIN supplies s ON s.id = ri.supply_id
+                    WHERE ri.recipe_id = ?
+                `;
+
+                db.all(itemSql, [primaryRecipe.id], (iErr, items) => {
+                    if (iErr) return res.status(500).json({ error: iErr.message });
+                    const recipeItems = (items || []).map(item => {
+                        const effectiveUnit = item.recipe_unit || item.supply_unit;
+                        const qtyInSupplyUnit = convertUnit(item.quantity, effectiveUnit, item.supply_unit);
+                        const itemCost = qtyInSupplyUnit * (item.cost_per_unit || 0);
+                        return {
+                            ...item,
+                            unit: effectiveUnit,
+                            item_cost: Math.round(itemCost * 100) / 100
+                        };
+                    });
+                    const totalCost = recipeItems.reduce((acc, curr) => acc + (curr.item_cost || 0), 0);
+                    res.json({
+                        exists: true,
+                        recipe: {
+                            ...primaryRecipe,
+                            items: recipeItems,
+                            total_cost: Math.round(totalCost * 100) / 100
+                        },
+                        recipes: allRecipes
+                    });
                 });
-            });
+            }
         });
     });
 
-    // Guardar (Crear o Actualizar) receta para un plato
+    // Guardar (Crear o Actualizar) receta para un plato o variante
     router.post('/inventory/recipes', verifyToken, (req, res) => {
-        const { product_id, name, yield: recipeYield, instructions, items } = req.body;
+        const { product_id, variant_id, variant_name, name, yield: recipeYield, instructions, items } = req.body;
 
         if (!product_id) {
             return res.status(400).json({ error: 'Debes seleccionar un plato para vincular la receta' });
@@ -398,17 +478,37 @@ module.exports = (io) => {
             return res.status(400).json({ error: 'La receta debe incluir al menos un insumo/ingrediente' });
         }
 
-        db.get('SELECT id, name FROM products WHERE id = ?', [product_id], (pErr, product) => {
+        db.get('SELECT id, name, has_variants, variants_config FROM products WHERE id = ?', [product_id], (pErr, product) => {
             if (pErr || !product) {
                 return res.status(404).json({ error: 'El plato seleccionado no existe' });
             }
 
-            const recipeName = (name && name.trim()) || product.name;
+            const cleanVariantId = variant_id && String(variant_id).trim() !== '' ? String(variant_id).trim() : null;
+            let cleanVariantName = variant_name && String(variant_name).trim() !== '' ? String(variant_name).trim() : null;
+
+            if (cleanVariantId && !cleanVariantName && product.variants_config) {
+                try {
+                    const vars = JSON.parse(product.variants_config);
+                    const matched = vars.find(v => String(v.id) === cleanVariantId);
+                    if (matched) cleanVariantName = matched.name;
+                } catch (e) {}
+            }
+
+            let recipeName = (name && name.trim()) || product.name;
+            if (cleanVariantName && !recipeName.toLowerCase().includes(cleanVariantName.toLowerCase())) {
+                recipeName = `${recipeName} (${cleanVariantName})`;
+            }
+
             const yieldVal = parseInt(recipeYield, 10) || 1;
             const recipeInstructions = instructions || '';
 
-            // Verificar si ya existe una receta para este plato
-            db.get('SELECT id FROM recipes WHERE product_id = ?', [product_id], (rErr, existingRecipe) => {
+            // Verificar si ya existe una receta para este plato y variante
+            const checkSql = cleanVariantId 
+                ? 'SELECT id FROM recipes WHERE product_id = ? AND variant_id = ?'
+                : 'SELECT id FROM recipes WHERE product_id = ? AND (variant_id IS NULL OR variant_id = "")';
+            const checkParams = cleanVariantId ? [product_id, cleanVariantId] : [product_id];
+
+            db.get(checkSql, checkParams, (rErr, existingRecipe) => {
                 if (rErr) return res.status(500).json({ error: rErr.message });
 
                 const recipeId = existingRecipe ? existingRecipe.id : uuidv4();
@@ -416,8 +516,8 @@ module.exports = (io) => {
                 if (existingRecipe) {
                     // Actualizar cabecera
                     db.run(
-                        'UPDATE recipes SET name = ?, yield = ?, instructions = ? WHERE id = ?',
-                        [recipeName, yieldVal, recipeInstructions, recipeId],
+                        'UPDATE recipes SET name = ?, yield = ?, instructions = ?, variant_id = ?, variant_name = ? WHERE id = ?',
+                        [recipeName, yieldVal, recipeInstructions, cleanVariantId, cleanVariantName, recipeId],
                         (updErr) => {
                             if (updErr) return res.status(500).json({ error: updErr.message });
                             saveRecipeItems();
@@ -426,8 +526,8 @@ module.exports = (io) => {
                 } else {
                     // Insertar nueva receta
                     db.run(
-                        'INSERT INTO recipes (id, product_id, name, yield, instructions) VALUES (?, ?, ?, ?, ?)',
-                        [recipeId, product_id, recipeName, yieldVal, recipeInstructions],
+                        'INSERT INTO recipes (id, product_id, variant_id, variant_name, name, yield, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        [recipeId, product_id, cleanVariantId, cleanVariantName, recipeName, yieldVal, recipeInstructions],
                         (insErr) => {
                             if (insErr) return res.status(500).json({ error: insErr.message });
                             saveRecipeItems();
@@ -441,23 +541,29 @@ module.exports = (io) => {
                         if (delErr) return res.status(500).json({ error: delErr.message });
 
                         const insertStmt = db.prepare(
-                            'INSERT INTO recipe_items (id, recipe_id, supply_id, quantity) VALUES (?, ?, ?, ?)'
+                            'INSERT INTO recipe_items (id, recipe_id, supply_id, quantity, unit) VALUES (?, ?, ?, ?, ?)'
                         );
 
                         items.forEach(item => {
                             const itemId = uuidv4();
                             const supplyId = item.supply_id;
                             const qty = parseFloat(item.quantity) || 0;
+                            const unit = (item.unit || item.recipe_unit || '').trim().toLowerCase() || null;
                             if (supplyId && qty > 0) {
-                                insertStmt.run(itemId, recipeId, supplyId, qty);
+                                insertStmt.run(itemId, recipeId, supplyId, qty, unit);
                             }
                         });
 
                         insertStmt.finalize(() => {
-                            if (io) io.to('admin').emit('recipe_saved', { recipeId, productId: product_id });
+                            if (io) {
+                                io.emit('recipe_saved', { recipeId, productId: product_id, variantId: cleanVariantId });
+                                io.emit('inventory_updated', { type: 'recipe_saved', recipeId });
+                            }
                             res.json({
                                 message: 'Receta guardada exitosamente',
-                                recipeId
+                                recipeId,
+                                variant_id: cleanVariantId,
+                                variant_name: cleanVariantName
                             });
                         });
                     });
@@ -472,7 +578,10 @@ module.exports = (io) => {
         db.run('DELETE FROM recipes WHERE id = ?', [id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: 'Receta no encontrada' });
-            if (io) io.to('admin').emit('recipe_deleted', { id });
+            if (io) {
+                io.emit('recipe_deleted', { id });
+                io.emit('inventory_updated', { type: 'recipe_deleted', id });
+            }
             res.json({ message: 'Receta eliminada exitosamente' });
         });
     });
@@ -626,7 +735,10 @@ module.exports = (io) => {
                         if (err) console.error("Error deleting uploaded file:", err);
                     });
 
-                    if (io) io.to('admin').emit('recipe_updated');
+                    if (io) {
+                        io.emit('recipe_updated');
+                        io.emit('inventory_updated', { type: 'recipe_imported' });
+                    }
                     res.json({ message: `Importación completada. Recetas procesadas: ${recipesCount}, Ingredientes vinculados: ${itemsCount}, Errores: ${errors}` });
                 };
 
