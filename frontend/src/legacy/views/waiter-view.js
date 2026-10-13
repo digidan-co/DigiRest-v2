@@ -383,6 +383,7 @@ export function renderWaiterActiveOrders(orders) {
                         <div class="flex justify-between">
                             <span>${checkedIcon}${displayQty}${escapeHtml(i.name)}</span>
                         </div>
+                        ${i.combo_name ? `<span class="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-bold inline-block mr-1 leading-tight"><i class="fas fa-tags text-[8px] mr-0.5"></i>${escapeHtml(i.combo_name)}</span>` : ''}
                         ${i.toppings_text ? `<span class="text-[10px] text-amber-800 font-semibold pl-2 leading-tight">+ ${escapeHtml(i.toppings_text)}</span>` : ''}
                         ${i.notes ? `<span class="text-[10px] text-gray-500 italic pl-2 leading-tight"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>${escapeHtml(i.notes)}</span>` : ''}
                     </div>

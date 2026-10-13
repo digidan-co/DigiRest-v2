@@ -121,6 +121,31 @@ function editSupply(s) { if (window.openEditSupplyModal) window.openEditSupplyMo
 function adjustSupply(s) { if (window.openAdjustSupplyModal) window.openAdjustSupplyModal(s.id); }
 function editRecipe(r) { if (window.openEditRecipeModal) window.openEditRecipeModal(r.product_id, r.variant_id); }
 
+const selectedRecipeForView = ref(null);
+
+function viewRecipe(r) {
+    selectedRecipeForView.value = r;
+}
+
+function closeViewRecipeModal() {
+    selectedRecipeForView.value = null;
+}
+
+function editRecipeFromView() {
+    if (selectedRecipeForView.value) {
+        const r = selectedRecipeForView.value;
+        closeViewRecipeModal();
+        editRecipe(r);
+    }
+}
+
+window.viewRecipeDetails = (recipeId) => {
+    const found = recipes.value.find(r => String(r.id) === String(recipeId) || String(r.product_id) === String(recipeId));
+    if (found) {
+        viewRecipe(found);
+    }
+};
+
 function deleteSupplyItem(s) {
     showConfirmModal('Eliminar Insumo', `¿Estás seguro de eliminar el insumo "${s.name}"? Solo podrá eliminarse si no forma parte de ninguna receta.`, async () => {
         try {
@@ -450,20 +475,35 @@ watch(() => state.user, (u) => {
                             <td class="p-3.5 text-right font-mono font-bold text-orange-600">{{ formatMoney(r.total_cost || 0) }}</td>
                             <td class="p-3.5 text-right font-mono font-bold text-emerald-600">{{ formatMoney(r.margin || 0) }}</td>
                             <td class="p-3.5 text-center"><span class="px-2 py-0.5 rounded-full text-[11px]" :class="recipePctClass(r)">{{ r.food_cost_pct || 0 }}%</span></td>
-                            <td class="p-3.5 max-w-xs">
-                                <template v-if="(r.items || []).length > 0">
-                                    <span v-for="(i, idx) in r.items" :key="idx" class="inline-block bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 text-[10px] mr-1 mb-1">
+                            <td class="p-3.5 max-w-[280px]">
+                                <div v-if="(r.items || []).length > 0" class="flex flex-wrap items-center gap-1 max-h-[46px] overflow-hidden">
+                                    <span v-for="(i, idx) in (r.items || []).slice(0, 3)" :key="idx" class="inline-flex items-center bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 text-[10px] leading-tight shrink-0">
                                         {{ i.supply_name }}: {{ i.quantity }} {{ i.unit || i.recipe_unit || i.supply_unit }}
                                     </span>
-                                </template>
+                                    <span v-if="(r.items || []).length > 3" 
+                                          @click.stop="viewRecipe(r)" 
+                                          class="inline-flex items-center bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 rounded px-1.5 py-0.5 text-[10px] font-bold cursor-pointer transition-colors leading-tight shrink-0" 
+                                          title="Clic para ver todos los ingredientes">
+                                        ... (+{{ r.items.length - 3 }} más)
+                                    </span>
+                                </div>
                                 <span v-else class="text-gray-400 italic text-[11px]">Sin ingredientes</span>
                             </td>
                             <td class="p-3.5 text-center">
                                 <div class="relative inline-block text-left table-action-container">
-                                    <button type="button" class="table-action-trigger w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none" title="Acciones"><i class="fas fa-ellipsis-v text-xs"></i></button>
+                                    <button type="button" class="table-action-trigger w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none" title="Más Acciones">
+                                        <i class="fas fa-ellipsis-v text-xs"></i>
+                                    </button>
                                     <div class="table-action-menu hidden absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 text-xs font-medium text-left">
-                                        <button type="button" @click="editRecipe(r)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-orange-600 hover:bg-orange-50 transition-colors"><i class="fas fa-edit w-4 text-center"></i> <span>Editar Receta</span></button>
-                                        <button type="button" @click="deleteRecipeItem(r)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-red-600 hover:bg-red-50 transition-colors"><i class="fas fa-trash-alt w-4 text-center"></i> <span>Eliminar Receta</span></button>
+                                        <button type="button" @click="viewRecipe(r)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-blue-600 hover:bg-blue-50 transition-colors">
+                                            <i class="fas fa-eye w-4 text-center"></i> <span>Ver Receta</span>
+                                        </button>
+                                        <button type="button" @click="editRecipe(r)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-orange-600 hover:bg-orange-50 transition-colors">
+                                            <i class="fas fa-edit w-4 text-center"></i> <span>Editar Receta</span>
+                                        </button>
+                                        <button type="button" @click="deleteRecipeItem(r)" class="w-full text-left px-3 py-2 flex items-center gap-2 text-red-600 hover:bg-red-50 transition-colors">
+                                            <i class="fas fa-trash-alt w-4 text-center"></i> <span>Eliminar Receta</span>
+                                        </button>
                                     </div>
                                 </div>
                             </td>
@@ -473,4 +513,161 @@ watch(() => state.user, (u) => {
             </div>
         </div>
     </div>
+
+    <!-- MODAL: VER DETALLE COMPLETO DE RECETA (FICHA TÉCNICA) -->
+    <Teleport to="body">
+        <div v-if="selectedRecipeForView" 
+             class="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 z-[100] flex justify-center items-center p-4 sm:p-6 md:p-8 backdrop-blur-xs fade-in"
+             style="margin: 0;"
+             @click.self="closeViewRecipeModal">
+            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 scale-in">
+                
+                <!-- Header -->
+                <div class="p-6 sm:px-8 py-5 sm:py-6 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/50 border-b border-gray-100 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-12 h-12 rounded-2xl bg-[var(--system-primary)] text-[var(--system-secondary)] flex items-center justify-center text-xl shadow-sm font-bold shrink-0">
+                            <i class="fas fa-book-open"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h3 class="font-extrabold text-lg sm:text-xl text-gray-900 leading-tight">
+                                    {{ selectedRecipeForView.product_name || selectedRecipeForView.name }}
+                                </h3>
+                                <span v-if="selectedRecipeForView.variant_name" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    <i class="fas fa-layer-group text-[9px] mr-1"></i>{{ selectedRecipeForView.variant_name }}
+                                </span>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600">
+                                    {{ selectedRecipeForView.product_category || 'Sin categoría' }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <span class="font-medium text-gray-700">Rendimiento:</span> 
+                                {{ selectedRecipeForView.yield > 1 ? selectedRecipeForView.yield + ' porciones' : '1 porción' }}
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" @click="closeViewRecipeModal" class="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer shrink-0">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Body con más padding y holgura -->
+                <div class="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1 custom-scroll">
+                    
+                    <!-- KPI Cards de Rentabilidad / Escandallo -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                        <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
+                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Precio Venta</p>
+                            <p class="text-base font-extrabold text-gray-900 font-mono">
+                                {{ formatMoney(selectedRecipeForView.effective_price ?? selectedRecipeForView.product_price ?? 0) }}
+                            </p>
+                        </div>
+                        <div class="bg-orange-50/70 p-4 rounded-2xl border border-orange-100 text-center">
+                            <p class="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">Costo Receta</p>
+                            <p class="text-base font-extrabold text-orange-700 font-mono">
+                                {{ formatMoney(selectedRecipeForView.total_cost || 0) }}
+                            </p>
+                        </div>
+                        <div class="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-100 text-center">
+                            <p class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Margen Bruto</p>
+                            <p class="text-base font-extrabold text-emerald-700 font-mono">
+                                {{ formatMoney(selectedRecipeForView.margin || 0) }}
+                            </p>
+                        </div>
+                        <div class="bg-blue-50/70 p-4 rounded-2xl border border-blue-100 text-center">
+                            <p class="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">% Food Cost</p>
+                            <div class="inline-block px-2.5 py-0.5 rounded-full text-xs font-black" :class="recipePctClass(selectedRecipeForView)">
+                                {{ selectedRecipeForView.food_cost_pct || 0 }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Ingredientes e Insumos -->
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-bold text-sm text-gray-800 flex items-center gap-2">
+                                <i class="fas fa-carrot text-orange-500"></i>
+                                Ingredientes e Insumos Requeridos
+                                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                    {{ (selectedRecipeForView.items || []).length }} insumos
+                                </span>
+                            </h4>
+                        </div>
+
+                        <div class="rounded-2xl border border-gray-100 overflow-scroll bg-white shadow-2xs">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-gray-50/90 text-gray-500 uppercase text-[10px] font-bold tracking-wider border-b border-gray-100">
+                                    <tr>
+                                        <th class="py-3 px-4">Insumo</th>
+                                        <th class="py-3 px-4 text-right">Cantidad</th>
+                                        <th class="py-3 px-4 text-right">Costo Unit.</th>
+                                        <th class="py-3 px-4 text-right">Subtotal Costo</th>
+                                        <th class="py-3 px-4 text-center">Stock Almacén</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-50">
+                                    <tr v-if="(!selectedRecipeForView.items || selectedRecipeForView.items.length === 0)">
+                                        <td colspan="5" class="text-center py-6 text-gray-400 italic">No hay ingredientes vinculados a esta receta.</td>
+                                    </tr>
+                                    <tr v-for="(item, idx) in selectedRecipeForView.items" :key="idx" class="hover:bg-gray-50/60 transition-colors">
+                                        <td class="py-3.5 px-4">
+                                            <div class="font-bold text-gray-800">{{ item.supply_name }}</div>
+                                        </td>
+                                        <td class="py-3.5 px-4 text-right font-mono font-semibold text-gray-700">
+                                            {{ item.quantity }} <span class="text-[10px] text-gray-400">{{ item.unit || item.recipe_unit || item.supply_unit }}</span>
+                                        </td>
+                                        <td class="py-3.5 px-4 text-right font-mono text-gray-500">
+                                            {{ formatMoney(item.cost_per_unit || 0) }} / {{ item.supply_unit }}
+                                        </td>
+                                        <td class="py-3.5 px-4 text-right font-mono font-bold text-orange-600">
+                                            {{ formatMoney(item.item_cost || 0) }}
+                                        </td>
+                                        <td class="py-3.5 px-4 text-center font-mono">
+                                            <span class="inline-flex items-center gap-1 text-[11px] font-semibold"
+                                                  :class="(item.current_stock ?? 0) <= 0 ? 'text-red-500' : ((item.current_stock ?? 0) <= 5 ? 'text-amber-500' : 'text-emerald-600')">
+                                                <i class="fas fa-circle text-[6px]"></i>
+                                                {{ item.current_stock ?? 0 }} {{ item.supply_unit }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Instrucciones de Preparación / Notas del Chef -->
+                    <div>
+                        <h4 class="font-bold text-sm text-gray-800 mb-2.5 flex items-center gap-2">
+                            <i class="fas fa-clipboard-list text-blue-500"></i>
+                            Instrucciones y Procedimiento de Preparación
+                        </h4>
+                        <div class="p-2 bg-gray-50 rounded-2xl border border-gray-100 text-xs text-gray-700 leading-relaxed whitespace-pre-line">
+                            <p v-if="selectedRecipeForView.instructions && selectedRecipeForView.instructions.trim()">
+                                {{ selectedRecipeForView.instructions }}
+                            </p>
+                            <p v-else class="text-gray-400 italic">
+                                No se han registrado notas o instrucciones especiales de preparación para este plato. Puedes agregarlas haciendo clic en "Editar Receta".
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Footer -->
+                <div class="px-6 sm:px-8 py-4 sm:py-5 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between gap-3">
+                    <button type="button" 
+                            @click="editRecipeFromView" 
+                            class="px-4 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 transition-all flex items-center gap-2 shadow-2xs cursor-pointer">
+                        <i class="fas fa-edit"></i> Editar Receta
+                    </button>
+                    <button type="button" 
+                            @click="closeViewRecipeModal" 
+                            class="btn-system-primary px-6 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm cursor-pointer">
+                        Entendido
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </Teleport>
 </template>

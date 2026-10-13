@@ -15,6 +15,7 @@ import CierreCajaPanel from './components/CierreCajaPanel.vue';
 import InventoryPanel from './components/InventoryPanel.vue';
 import ToppingsPanel from './components/ToppingsPanel.vue';
 import DeliveryZonesPanel from './components/DeliveryZonesPanel.vue';
+import PromotionsCombosPanel from './components/PromotionsCombosPanel.vue';
 import CrmPanel from './components/CrmPanel.vue';
 import UsersPanel from './components/UsersPanel.vue';
 import ReservationsList from './components/ReservationsList.vue';
@@ -160,6 +161,14 @@ if (toppingsMount) {
     const toppingsApp = createApp(ToppingsPanel);
     toppingsApp.use(pinia);
     toppingsApp.mount(toppingsMount);
+}
+
+// Admin promotions and combos panel: Vue SFC.
+const promotionsCombosMount = document.getElementById('panel-promotions-combos');
+if (promotionsCombosMount) {
+    const promotionsCombosApp = createApp(PromotionsCombosPanel);
+    promotionsCombosApp.use(pinia);
+    promotionsCombosApp.mount(promotionsCombosMount);
 }
 
 // Admin delivery zones panel: Vue SFC.

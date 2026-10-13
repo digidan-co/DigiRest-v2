@@ -323,7 +323,7 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
         }
 
         modal.classList.add('hidden');
-        onConfirm(inputEl.value.trim());
+        onConfirm(inputEl.value.trim(), adminCodeInput?.value?.trim() || null);
     };
 
     inputEl.oninput = () => {

@@ -17,6 +17,7 @@ const sections = [
     ]},
     { name: 'Menú & Carta', tabs: [
         { tab: 'products', icon: 'fa-utensils', label: 'Platos y Categorías' },
+        { tab: 'promotions-combos', icon: 'fa-tags', label: 'Promociones y Combos' },
         { tab: 'supplies', icon: 'fa-boxes-stacked', label: 'Insumos y Recetas' },
         { tab: 'toppings', icon: 'fa-cookie-bite', label: 'Toppings / Adiciones' },
     ]},
@@ -30,7 +31,7 @@ const sections = [
     ]},
 ];
 
-const forbiddenForCajero = ['products', 'categories', 'users', 'config', 'supplies', 'recipes', 'toppings', 'delivery-zones'];
+const forbiddenForCajero = ['products', 'categories', 'users', 'config', 'supplies', 'recipes', 'toppings', 'delivery-zones', 'promotions-combos'];
 
 const userName = computed(() => state.user?.name || '');
 const businessName = computed(() => state.restaurantData.name || state.config.nombreRestaurante || 'Cargando...');

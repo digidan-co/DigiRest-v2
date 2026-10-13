@@ -79,21 +79,52 @@ window.openWhatsApp = (orderId) => {
 };
 // ----- End WhatsApp Helpers -----
 
+// Helper: Determina si una fecha pertenece a la jornada actual en Colombia (corte 11:59:59 p. m.)
+function isSameDayColombia(dateInput) {
+    if (!dateInput) return true;
+    try {
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return true;
+        const orderDateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        return orderDateStr === todayStr;
+    } catch (e) {
+        return true;
+    }
+}
+
 // Cancel function
 window.promptCancelOrder = (id, modalToHide = null) => {
     const isCajero = state.user?.role === 'cajero';
-    // Cashiers are restricted only if cajeroCanCancel is explicitly set to false (Strict Mode)
-    // Default is true (flexible mode: cashier cancels with reason, no PIN required)
-    const requireAdminAuth = isCajero && state.restaurantData?.cajeroCanCancel === false;
+    const isAdmin = state.user?.role === 'admin';
+
+    // Buscar el pedido en el estado actual para conocer su fecha
+    const order = [...(state.orders || []), ...(state.waiterOrders || [])].find(o => String(o.id) === String(id));
+    const isPastDay = order && order.timestamp && !isSameDayColombia(order.timestamp);
+
+    // Corte 11:59 p. m.: Si el pedido es de una jornada anterior, solo administradores pueden anularlo
+    const requireAdminAuth = (!isAdmin && isPastDay) || (isCajero && state.restaurantData?.cajeroCanCancel === false);
+
+    const title = isPastDay ? 'Anular Pedido Extemporáneo' : 'Anular Pedido';
+    const message = isPastDay
+        ? (isAdmin
+            ? '⚠️ Este pedido pertenece a una jornada anterior (corte 11:59 p. m.). Se registrará como anulación extemporánea en auditoría sin alterar los cierres pasados. Ingresa el motivo:'
+            : '⚠️ Este pedido pertenece a una jornada ya cerrada (corte 11:59 p. m.). Solo un Administrador puede autorizar su anulación:')
+        : 'Por favor, ingresa el motivo de la anulación:';
 
     showPromptModal(
-        'Anular Pedido',
-        'Por favor, ingresa el motivo de la anulación:',
+        title,
+        message,
         'Ej: El cliente canceló la orden...',
-        async (reason) => {
+        async (reason, adminCode) => {
             try {
-                await updateOrder(id, { status: 'Anulado', cancelReason: reason, adminVerified: true });
-                toast("Pedido anulado con éxito", "success");
+                await updateOrder(id, {
+                    status: 'Anulado',
+                    cancelReason: reason,
+                    adminVerified: true,
+                    adminCode: adminCode || undefined
+                });
+                toast(isPastDay ? "Pedido extemporáneo anulado con éxito" : "Pedido anulado con éxito", "success");
                 if (modalToHide) {
                     modalToHide.classList.add('hidden');
                 }
@@ -586,7 +617,9 @@ export function setupAdminListeners() {
 
         const badgeMap = {
             'ORDER_CANCELLED': { label: 'Pedido Anulado', bg: 'bg-red-100 text-red-700 border-red-200' },
+            'ORDER_CANCELLED_EXTEMPORARY': { label: 'Anulación Extemporánea', bg: 'bg-red-200 text-red-900 border-red-300 font-bold' },
             'ORDER_DELETED': { label: 'Pedido Eliminado', bg: 'bg-rose-100 text-rose-700 border-rose-200' },
+            'ORDER_DELETED_EXTEMPORARY': { label: 'Eliminación Extemporánea', bg: 'bg-rose-200 text-rose-900 border-rose-300 font-bold' },
             'ORDERS_CLEANUP': { label: 'Depuración Masiva', bg: 'bg-purple-100 text-purple-700 border-purple-200' },
             'CASH_CLOSING_CREATED': { label: 'Cierre de Caja', bg: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
             'CASH_CLOSINGS_DELETED': { label: 'Cierre Borrado', bg: 'bg-amber-100 text-amber-700 border-amber-200' },
@@ -604,10 +637,13 @@ export function setupAdminListeners() {
 
             let detailText = '';
             const d = l.details || {};
-            if (l.event_type === 'ORDER_CANCELLED') {
-                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) • Motivo: <i>"${d.cancelReason || 'N/A'}"</i>`;
-            } else if (l.event_type === 'ORDER_DELETED') {
-                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) de ${d.client || 'Cliente'}`;
+            if (l.event_type === 'ORDER_CANCELLED' || l.event_type === 'ORDER_CANCELLED_EXTEMPORARY') {
+                const origDateFmt = d.originalDate ? ` • Fecha orig: <b>${new Date(d.originalDate).toLocaleDateString('es-CO')}</b>` : '';
+                const authBy = d.authorizedBy ? ` • Autorizado por: <b>${d.authorizedBy}</b>` : '';
+                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) • Motivo: <i>"${d.cancelReason || 'N/A'}"</i>${origDateFmt}${authBy}`;
+            } else if (l.event_type === 'ORDER_DELETED' || l.event_type === 'ORDER_DELETED_EXTEMPORARY') {
+                const origDateFmt = d.originalDate ? ` • Fecha orig: <b>${new Date(d.originalDate).toLocaleDateString('es-CO')}</b>` : '';
+                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) de ${d.client || 'Cliente'}${origDateFmt}`;
             } else if (l.event_type === 'CASH_CLOSING_CREATED') {
                 detailText = `Cierre <b>#${d.cierreId}</b> • Total: $${Number(d.totalGeneral || 0).toLocaleString('es-CO')} (Efectivo: $${Number(d.ingresoEfectivo || 0).toLocaleString('es-CO')}, Transf: $${Number(d.ingresoTransferencia || 0).toLocaleString('es-CO')})`;
             } else if (l.event_type === 'CASH_CLOSINGS_DELETED') {
@@ -1985,6 +2021,7 @@ window.showOrderDetails = function (orderIdOrObj) {
                 <td class="p-2.5 text-gray-500 font-bold w-12 text-center bg-gray-50/30">${qty}</td>
                 <td class="p-2.5">
                     <div class="font-bold text-gray-800">${escapeHtml(item.name)}</div>
+                    ${item.combo_name ? `<div class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-flex items-center gap-1 mt-0.5 mr-1"><i class="fas fa-tags text-[8px]"></i><span>${escapeHtml(item.combo_name)}</span></div>` : ''}
                     ${item.variant_name ? `<div class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 inline-flex items-center gap-1 mt-0.5 mr-1"><i class="fas fa-layer-group text-[9px]"></i><span>Tamaño: ${escapeHtml(item.variant_name)}</span></div>` : ''}
                     ${toppingsText ? `<div class="text-xs font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/70 inline-flex items-center gap-1 mt-0.5"><i class="fas fa-cookie-bite text-[9px] text-amber-600"></i><span>${escapeHtml(toppingsText)}</span></div>` : ''}
                     ${notesText ? `<div class="text-xs text-orange-600 italic mt-0.5 flex items-center gap-1"><i class="fas fa-comment-alt text-[9px]"></i><span>${escapeHtml(notesText)}</span></div>` : ''}

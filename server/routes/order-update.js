@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const { processProof } = require('../utils/imageProcessor');
 const { logAudit } = require('../utils/auditLogger');
+const { isSameDayOrder } = require('../utils/date-helper');
+const { verifyAdminCode } = require('../utils/admin-verifier');
 
 module.exports = (io) => {
     // PUT /orders/:id - Update existing order (with optional proof upload)
@@ -46,10 +48,32 @@ module.exports = (io) => {
         const payment_details = typeof req.body.payment_details === 'object' ? JSON.stringify(req.body.payment_details) : (req.body.payment_details || null);
 
         const proceedWithOrderUpdate = () => {
+            let approvingAdmin = null;
             // First, get current order to see if there is an old file to delete
-            db.get('SELECT proof, type, waiterId, waiterName FROM orders WHERE id = ?', [id], (err, currentOrder) => {
+            db.get('SELECT proof, type, waiterId, waiterName, timestamp, status FROM orders WHERE id = ?', [id], async (err, currentOrder) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (!currentOrder) return res.status(404).json({ error: 'Order not found' });
+
+                const isSameDay = isSameDayOrder(currentOrder.timestamp);
+
+                // Si se está cambiando el estado a Anulado o Cancelado
+                if (status === 'Anulado' || status === 'Cancelado') {
+                    if (!isSameDay) {
+                        if (req.user?.role === 'admin') {
+                            approvingAdmin = req.user.name;
+                        } else {
+                            const adminCode = req.body?.adminCode || req.headers['x-admin-code'];
+                            const authCheck = await verifyAdminCode(adminCode);
+                            if (authCheck.valid) {
+                                approvingAdmin = authCheck.admin.name;
+                            } else {
+                                return res.status(403).json({
+                                    error: 'Este pedido pertenece a una jornada ya cerrada (corte 11:59 p. m.). Solo un Administrador puede anular pedidos de días anteriores.'
+                                });
+                            }
+                        }
+                    }
+                }
 
             // Handle file deletion
             if ((shouldRemoveProof || shouldReplaceProof) && currentOrder.proof) {
@@ -131,12 +155,18 @@ module.exports = (io) => {
                 }
 
                 // Log audit for order edit
-                logAudit('ORDER_EDITED', req.user?.id || 'unknown', req.ip, {
+                const isExtemp = !isSameDayOrder(currentOrder.timestamp);
+                const auditAction = isExtemp && (status === 'Anulado' || status === 'Cancelado') ? 'ORDER_CANCELLED_EXTEMPORARY' : 'ORDER_EDITED';
+                logAudit(auditAction, req.user?.id || 'unknown', req.ip, {
                     orderId: id,
                     userName: req.user?.name || 'Usuario',
                     userRole: req.user?.role || 'N/A',
                     total: total || updateData.total || 0,
-                    client: client || updateData.client || 'Cliente'
+                    client: client || updateData.client || 'Cliente',
+                    status: status,
+                    extemporary: isExtemp,
+                    originalDate: currentOrder.timestamp,
+                    authorizedBy: approvingAdmin || null
                 });
 
                 res.json({ message: 'Order updated', id });

@@ -77,6 +77,7 @@ const { convertUnit } = require('./unitConverter');
                             ? `(-${ing.quantity * qty} ${ing.recipe_unit} = -${totalAmount} ${ing.supply_unit})`
                             : `(-${totalAmount} ${ing.supply_unit})`;
                         const varLabel = variantName ? ` [${variantName}]` : '';
+                        const comboLabel = item.combo_name ? ` [${item.combo_name}]` : '';
 
                         await dbRun(
                             `INSERT INTO inventory_movements 
@@ -88,7 +89,7 @@ const { convertUnit } = require('./unitConverter');
                                 -totalAmount,
                                 newStock,
                                 orderId,
-                                `Pedido #${orderId} (${item.name || item.product_name || recipe.name || 'Plato'}${varLabel} x${qty} ${unitDetail})`,
+                                `Pedido #${orderId} (${item.name || item.product_name || recipe.name || 'Plato'}${varLabel}${comboLabel} x${qty} ${unitDetail})`,
                                 userName
                             ]
                         );

@@ -162,9 +162,17 @@ function renderRecipesTable() {
             pctBadgeClass = 'bg-amber-100 text-amber-800 font-semibold';
         }
 
-        const ingredientsSummary = items.map(i => 
-            `<span class="inline-block bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 text-[10px] mr-1 mb-1">${escapeHtml(i.supply_name)}: ${i.quantity} ${escapeHtml(i.supply_unit)}</span>`
+        const maxShown = 3;
+        const visibleItems = items.slice(0, maxShown);
+        const hasMore = items.length > maxShown;
+
+        let ingredientsSummary = visibleItems.map(i => 
+            `<span class="inline-flex items-center bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 text-[10px] leading-tight shrink-0">${escapeHtml(i.supply_name)}: ${i.quantity} ${escapeHtml(i.supply_unit || i.unit || '')}</span>`
         ).join('');
+
+        if (hasMore) {
+            ingredientsSummary += `<span onclick="window.viewRecipeDetails('${r.id}')" class="inline-flex items-center bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 rounded px-1.5 py-0.5 text-[10px] font-bold cursor-pointer transition-colors leading-tight shrink-0" title="Clic para ver todos los ingredientes">... (+${items.length - maxShown} más)</span>`;
+        }
 
         return `
             <tr class="hover:bg-gray-50/80 transition-colors">
@@ -179,19 +187,27 @@ function renderRecipesTable() {
                 <td class="p-3.5 text-center">
                     <span class="px-2 py-0.5 rounded-full text-[11px] ${pctBadgeClass}">${foodCostPct}%</span>
                 </td>
-                <td class="p-3.5 max-w-xs">${ingredientsSummary || '<span class="text-gray-400 italic text-[11px]">Sin ingredientes</span>'}</td>
+                <td class="p-3.5 max-w-[280px]">
+                    <div class="flex flex-wrap items-center gap-1 max-h-[46px] overflow-hidden">
+                        ${ingredientsSummary || '<span class="text-gray-400 italic text-[11px]">Sin ingredientes</span>'}
+                    </div>
+                </td>
                 <td class="p-3.5 text-center">
                     <div class="relative inline-block text-left table-action-container">
                         <button type="button" class="table-action-trigger w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none" title="Acciones">
                             <i class="fas fa-ellipsis-v text-xs"></i>
                         </button>
-                        <div class="table-action-menu hidden absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 text-xs font-medium text-left">
-                            <button type="button" onclick="window.openEditRecipeModal('${r.product_id}')" class="w-full text-left px-3 py-2 flex items-center gap-2 text-orange-600 hover:bg-orange-50 transition-colors">
-                                <i class="fas fa-edit w-4 text-center"></i> <span>Editar Receta</span>
-                            </button>
-                            <button type="button" onclick="window.deleteRecipeItem('${r.id}', '${escapeHtml(r.product_name || r.name)}')" class="w-full text-left px-3 py-2 flex items-center gap-2 text-red-600 hover:bg-red-50 transition-colors">
-                                <i class="fas fa-trash-alt w-4 text-center"></i> <span>Eliminar Receta</span>
-                            </button>
+                            <div class="table-action-menu hidden absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 text-xs font-medium text-left">
+                                <button type="button" onclick="window.viewRecipeDetails('${r.id}')" class="w-full text-left px-3 py-2 flex items-center gap-2 text-blue-600 hover:bg-blue-50 transition-colors">
+                                    <i class="fas fa-eye w-4 text-center"></i> <span>Ver Receta</span>
+                                </button>
+                                <button type="button" onclick="window.openEditRecipeModal('${r.product_id}')" class="w-full text-left px-3 py-2 flex items-center gap-2 text-orange-600 hover:bg-orange-50 transition-colors">
+                                    <i class="fas fa-edit w-4 text-center"></i> <span>Editar Receta</span>
+                                </button>
+                                <button type="button" onclick="window.deleteRecipeItem('${r.id}', '${escapeHtml(r.product_name || r.name)}')" class="w-full text-left px-3 py-2 flex items-center gap-2 text-red-600 hover:bg-red-50 transition-colors">
+                                    <i class="fas fa-trash-alt w-4 text-center"></i> <span>Eliminar Receta</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </td>

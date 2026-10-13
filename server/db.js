@@ -419,12 +419,52 @@ function initSchema() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         resolved_at DATETIME
     );
+
+    -- =============================================
+    -- PROMOCIONES Y COMBOS PREESTABLECIDOS
+    -- =============================================
+    CREATE TABLE IF NOT EXISTS promotions_combos (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT DEFAULT 'Combos',
+        img TEXT,
+        type TEXT NOT NULL,
+        combo_price REAL DEFAULT 0,
+        discount_value REAL DEFAULT 0,
+        items_config TEXT NOT NULL,
+        available INTEGER DEFAULT 1,
+        days_of_week TEXT DEFAULT '["1","2","3","4","5","6","7"]',
+        start_time TEXT,
+        end_time TEXT,
+        channels TEXT DEFAULT '["Local","Domicilio","Para Llevar"]',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
     `;
 
     db.exec(schema, (err) => {
         if (err) {
             console.error("Schema initialization failed:", err);
         } else {
+
+            // Migration: Create promotions_combos if missing on older DBs
+            db.run(`CREATE TABLE IF NOT EXISTS promotions_combos (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                category TEXT DEFAULT 'Combos',
+                img TEXT,
+                type TEXT NOT NULL,
+                combo_price REAL DEFAULT 0,
+                discount_value REAL DEFAULT 0,
+                items_config TEXT NOT NULL,
+                available INTEGER DEFAULT 1,
+                days_of_week TEXT DEFAULT '["1","2","3","4","5","6","7"]',
+                start_time TEXT,
+                end_time TEXT,
+                channels TEXT DEFAULT '["Local","Domicilio","Para Llevar"]',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`, (err) => { });
 
             // Migration: Add deliveryDriverId if missing
             db.run("ALTER TABLE orders ADD COLUMN deliveryDriverId TEXT", (err) => { });

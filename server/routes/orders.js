@@ -9,6 +9,9 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { processProof } = require('../utils/imageProcessor');
 const { deductStockForOrder, revertStockForOrder } = require('../utils/inventory-helper');
+const { calculateOrderCombos } = require('../utils/combo-calculator');
+const { isSameDayOrder, getColombiaDateString } = require('../utils/date-helper');
+const { verifyAdminCode } = require('../utils/admin-verifier');
 
 const { logAudit } = require('../utils/auditLogger');
 
@@ -89,9 +92,9 @@ module.exports = (io) => {
             }
         }
 
-        const tip = parseFloat(req.body.tip) || 0;
-        const discount = parseFloat(req.body.discount) || 0;
-        const discount_reason = req.body.discount_reason || "";
+        let tip = parseFloat(req.body.tip) || 0;
+        let discount = parseFloat(req.body.discount) || 0;
+        let discount_reason = req.body.discount_reason || "";
         const delivery_zone = req.body.delivery_zone || "";
         const delivery_fee = parseFloat(req.body.delivery_fee) || 0;
 
@@ -100,14 +103,29 @@ module.exports = (io) => {
             const newId = await generateOrderId(type || 'Domicilio');
             const finalStatus = req.body.status || 'Pendiente';
 
-            // When using FormData, items might be a stringified JSON already or array? 
-            // ApiClient with FormData does: formData.append('items', JSON.stringify(items)).
-            // So req.body.items IS a string.
+            // Parse items to detect combos and ensure valid JSON
+            let parsedItems = [];
             let itemsJson = items;
-            if (typeof items !== 'string') {
-                itemsJson = JSON.stringify(items || []);
+            try {
+                parsedItems = typeof items === 'string' ? JSON.parse(items) : (items || []);
+                itemsJson = JSON.stringify(parsedItems);
+            } catch (e) {
+                parsedItems = [];
+                itemsJson = JSON.stringify([]);
             }
 
+            // Auto-evaluar combos si están presentes en la orden
+            const comboCalc = calculateOrderCombos(parsedItems);
+            if (comboCalc.totalComboDiscount > 0) {
+                if (discount === 0) {
+                    discount = comboCalc.totalComboDiscount;
+                }
+                if (!discount_reason) {
+                    discount_reason = comboCalc.discountReason;
+                } else if (!discount_reason.includes(comboCalc.discountReason)) {
+                    discount_reason = `${discount_reason} (${comboCalc.discountReason})`;
+                }
+            }
 
             const account_id = req.body.account_id ? parseInt(req.body.account_id, 10) : null;
             const cash_amount = parseFloat(req.body.cash_amount) || 0;
@@ -122,9 +140,9 @@ module.exports = (io) => {
             db.run(sql, [newId, client, phone, address, notes, type, payment, finalStatus, total, tip, discount, discount_reason, itemsJson, waiterId, waiterName, table, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details], function (err) {
                 if (err) return res.status(500).json({ error: err.message });
 
-                // Parse items back for response
-                let parsedItems = [];
-                try { parsedItems = JSON.parse(itemsJson); } catch (e) { }
+                if (!parsedItems || parsedItems.length === 0) {
+                    try { parsedItems = JSON.parse(itemsJson); } catch (e) { }
+                }
 
                 const newOrder = {
                     id: newId,
@@ -359,12 +377,18 @@ module.exports = (io) => {
         const { status, chefName, deliveryDriverName } = req.body;
         const { id } = req.params;
 
+        let isExtemporaryCancel = false;
+        let approvingAdmin = null;
+
         // Audit log for cancellations (track who cancelled orders)
-        if (status === 'Anulado') {
-            console.log(`[CANCEL] Order ${id} cancelled by ${req.user.name} (role: ${req.user.role})`);
+        if (status === 'Anulado' || status === 'Cancelado') {
+            console.log(`[CANCEL] Order ${id} cancellation requested by ${req.user.name} (role: ${req.user.role})`);
         }
 
-        const handleUpdateFlow = () => {
+        const handleUpdateFlow = (adminAuthorizer = null, isExtemp = false) => {
+            isExtemporaryCancel = isExtemp;
+            approvingAdmin = adminAuthorizer;
+
             // DELIVERY LOCK: Check if order is already locked by another driver
             if (status === 'En Reparto' || status === 'En ruta') {
                 db.get('SELECT deliveryDriverId, deliveryDriverName FROM orders WHERE id = ?', [id], (err, order) => {
@@ -389,35 +413,66 @@ module.exports = (io) => {
             }
         };
 
-        // Cajero cancellation security check (Strict Mode enforcement)
-        if (status === 'Anulado' && req.user.role === 'cajero') {
-            db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], (cfgErr, cfgRow) => {
-                let cajeroCanCancel = true;
-                if (cfgRow && cfgRow.value) {
-                    try {
-                        const parsed = JSON.parse(cfgRow.value);
-                        if (parsed.cajeroCanCancel === false) cajeroCanCancel = false;
-                    } catch (e) {}
-                }
+        // Verificación de anulación / cancelación
+        if (status === 'Anulado' || status === 'Cancelado') {
+            db.get('SELECT timestamp, client, total, payment FROM orders WHERE id = ?', [id], async (fetchErr, orderRow) => {
+                if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+                if (!orderRow) return res.status(404).json({ error: 'Pedido no encontrado' });
 
-                if (!cajeroCanCancel) {
-                    const isVerified = req.headers['x-admin-verified'] === 'true' || req.body.adminVerified === true;
-                    if (!isVerified) {
-                        return db.get(
-                            "SELECT id FROM order_authorizations WHERE order_id = ? AND type = 'cancel' AND status = 'approved' LIMIT 1",
-                            [id],
-                            (authErr, authRow) => {
-                                if (authErr || !authRow) {
-                                    return res.status(403).json({
-                                        error: 'La anulación de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
-                                    });
-                                }
-                                handleUpdateFlow();
-                            }
-                        );
+                const isSameDay = isSameDayOrder(orderRow.timestamp);
+                let adminAuthName = null;
+
+                // CORTE 11:59 P. M.: Si el pedido es de días anteriores, SOLO ADMINISTRADORES
+                if (!isSameDay) {
+                    if (req.user.role === 'admin') {
+                        adminAuthName = req.user.name;
+                    } else {
+                        const adminCode = req.body.adminCode || req.headers['x-admin-code'];
+                        const authCheck = await verifyAdminCode(adminCode);
+                        if (authCheck.valid) {
+                            adminAuthName = authCheck.admin.name;
+                        } else {
+                            return res.status(403).json({
+                                error: 'Este pedido pertenece a una jornada ya cerrada (corte 11:59 p. m.). Solo un Administrador puede anular pedidos de días anteriores.'
+                            });
+                        }
                     }
                 }
-                handleUpdateFlow();
+
+                // Verificación cajero (modo estricto) dentro de la misma jornada
+                if (req.user.role === 'cajero') {
+                    db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], (cfgErr, cfgRow) => {
+                        let cajeroCanCancel = true;
+                        if (cfgRow && cfgRow.value) {
+                            try {
+                                const parsed = JSON.parse(cfgRow.value);
+                                if (parsed.cajeroCanCancel === false) cajeroCanCancel = false;
+                            } catch (e) {}
+                        }
+
+                        if (!cajeroCanCancel) {
+                            const isVerified = req.headers['x-admin-verified'] === 'true' || req.body.adminVerified === true || adminAuthName;
+                            if (!isVerified) {
+                                return db.get(
+                                    "SELECT id FROM order_authorizations WHERE order_id = ? AND type = 'cancel' AND status = 'approved' LIMIT 1",
+                                    [id],
+                                    (authErr, authRow) => {
+                                        if (authErr || !authRow) {
+                                            return res.status(403).json({
+                                                error: 'La anulación de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
+                                            });
+                                        }
+                                        handleUpdateFlow(adminAuthName, !isSameDay);
+                                    }
+                                );
+                            }
+                        }
+                        handleUpdateFlow(adminAuthName, !isSameDay);
+                    });
+                    return;
+                }
+
+                handleUpdateFlow(adminAuthName, !isSameDay);
             });
             return;
         }
@@ -549,16 +604,20 @@ module.exports = (io) => {
                 } else if (status === 'Anulado' || status === 'Cancelado') {
                     revertStockForOrder(id, req.user?.name || 'Admin', io);
 
-                    // REGISTRO DE AUDITORÍA ANTIFRAUDE: Guarda quién anuló, monto y motivo
-                    db.get("SELECT client, total, payment FROM orders WHERE id = ?", [id], (fetchErr, ordRow) => {
-                        logAudit('ORDER_CANCELLED', req.user?.id || 'unknown', req.ip, {
+                    // REGISTRO DE AUDITORÍA ANTIFRAUDE: Guarda quién anuló, monto, motivo y jornada
+                    db.get("SELECT client, total, payment, timestamp FROM orders WHERE id = ?", [id], (fetchErr, ordRow) => {
+                        const auditAction = isExtemporaryCancel ? 'ORDER_CANCELLED_EXTEMPORARY' : 'ORDER_CANCELLED';
+                        logAudit(auditAction, req.user?.id || 'unknown', req.ip, {
                             orderId: id,
                             client: ordRow?.client || 'Cliente',
                             total: ordRow?.total || 0,
                             payment: ordRow?.payment || 'N/A',
                             cancelReason: req.body.cancelReason || 'Sin motivo especificado',
                             userName: req.user?.name || 'Usuario',
-                            userRole: req.user?.role || 'N/A'
+                            userRole: req.user?.role || 'N/A',
+                            extemporary: isExtemporaryCancel,
+                            originalDate: ordRow?.timestamp || null,
+                            authorizedBy: approvingAdmin || null
                         });
                     });
                 }

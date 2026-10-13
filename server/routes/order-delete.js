@@ -5,6 +5,8 @@ const path = require('path');
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
 const { logAudit } = require('../utils/auditLogger');
+const { isSameDayOrder } = require('../utils/date-helper');
+const { verifyAdminCode } = require('../utils/admin-verifier');
 
 function cleanProofFile(proofPath) {
     if (!proofPath || typeof proofPath !== 'string') return;
@@ -28,16 +30,36 @@ module.exports = (io) => {
         const userId = req.user ? req.user.id : null;
 
         // Check if user is allowed to delete this order
-        db.get('SELECT waiterId, status, proof, total, client FROM orders WHERE id = ?', [id], (findErr, order) => {
+        db.get('SELECT waiterId, status, proof, total, client, timestamp FROM orders WHERE id = ?', [id], async (findErr, order) => {
             if (findErr) return res.status(500).json({ error: findErr.message });
             if (!order) return res.status(404).json({ error: 'Order not found' });
 
-            // Admin, Supervisor, and Cajero can delete any order. Waiters can only delete their own pending orders.
-            const isPrivileged = userRole === 'admin' || userRole === 'supervisor' || userRole === 'cajero';
-            const isOwnerWaiter = (userRole === 'mesero' || userRole === 'waiter') && order.waiterId === userId && order.status === 'Pendiente';
+            const isSameDay = isSameDayOrder(order.timestamp);
+            let approvingAdmin = null;
 
-            if (!isPrivileged && !isOwnerWaiter) {
-                return res.status(403).json({ error: 'No tienes permisos para eliminar este pedido.' });
+            // CORTE 11:59 P. M.: Si el pedido es de días anteriores, SOLO ADMINISTRADORES
+            if (!isSameDay) {
+                if (userRole === 'admin') {
+                    approvingAdmin = req.user.name;
+                } else {
+                    const adminCode = req.body?.adminCode || req.headers['x-admin-code'];
+                    const authCheck = await verifyAdminCode(adminCode);
+                    if (authCheck.valid) {
+                        approvingAdmin = authCheck.admin.name;
+                    } else {
+                        return res.status(403).json({
+                            error: 'Este pedido pertenece a una jornada ya cerrada (corte 11:59 p. m.). Solo un Administrador puede eliminar pedidos de días anteriores.'
+                        });
+                    }
+                }
+            } else {
+                // Admin, Supervisor, and Cajero can delete any order. Waiters can only delete their own pending orders.
+                const isPrivileged = userRole === 'admin' || userRole === 'supervisor' || userRole === 'cajero';
+                const isOwnerWaiter = (userRole === 'mesero' || userRole === 'waiter') && order.waiterId === userId && order.status === 'Pendiente';
+
+                if (!isPrivileged && !isOwnerWaiter) {
+                    return res.status(403).json({ error: 'No tienes permisos para eliminar este pedido.' });
+                }
             }
 
             db.serialize(() => {
@@ -60,12 +82,16 @@ module.exports = (io) => {
                     }
 
                     // Auditoría antifraude: registrar quién eliminó el pedido y de qué monto
-                    logAudit('ORDER_DELETED', req.user?.id || 'unknown', req.ip, {
+                    const auditAction = !isSameDay ? 'ORDER_DELETED_EXTEMPORARY' : 'ORDER_DELETED';
+                    logAudit(auditAction, req.user?.id || 'unknown', req.ip, {
                         orderId: id,
                         client: order.client || 'Cliente',
                         total: order.total || 0,
                         deletedBy: req.user?.name || 'Usuario',
-                        role: userRole
+                        role: userRole,
+                        extemporary: !isSameDay,
+                        originalDate: order.timestamp,
+                        authorizedBy: approvingAdmin || null
                     });
 
                     // Emit Socket.io event for real-time update

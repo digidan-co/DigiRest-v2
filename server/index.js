@@ -240,6 +240,7 @@ const toppingsRouter = require('./routes/toppings')(io);
 const deliveryZonesRouter = require('./routes/delivery-zones')(io);
 const customersRouter = require('./routes/customers')(io);
 const authorizationsRouter = require('./routes/authorizations')(io);
+const promotionsCombosRouter = require('./routes/promotions-combos')(io);
 
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
@@ -247,6 +248,7 @@ app.use('/api', productsRouter);
 app.use('/api', toppingsRouter);
 app.use('/api', deliveryZonesRouter);
 app.use('/api', customersRouter);
+app.use('/api', promotionsCombosRouter);
 app.use('/api', ordersRouter);
 app.use('/api', orderUpdateRouter);
 app.use('/api', orderAddItemRouter);

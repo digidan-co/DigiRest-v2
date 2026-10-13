@@ -45,6 +45,7 @@ export const printOrder = (order) => {
                 <span class="item-name">${item.qty}x ${escapeHtml(item.name)}${item.variant_name ? ` [${escapeHtml(item.variant_name)}]` : ''}</span>
                 <span class="item-price">${formatMoney(item.price * item.qty)}</span>
             </div>
+            ${item.combo_name ? `<div class="item-extra">* Combo: ${escapeHtml(item.combo_name)}</div>` : ''}
             ${item.variant_name ? `<div class="item-extra">* Tamaño: ${escapeHtml(item.variant_name)}</div>` : ''}
             ${toppingsText ? `<div class="item-extra">* Adic: ${escapeHtml(toppingsText)}</div>` : ''}
             ${notesText ? `<div class="item-extra">* Nota: ${escapeHtml(notesText)}</div>` : ''}
@@ -213,7 +214,7 @@ export const printOrder = (order) => {
             <hr class="divider-dashed" />
 
             <div class="totals-section">
-                ${parseFloat(order.discount) > 0 ? `<div class="total-row"><span>Descuento:</span><span>-${formatMoney(order.discount)}</span></div>` : ''}
+                ${parseFloat(order.discount) > 0 ? `<div class="total-row"><span>Descuento${order.discount_reason ? ` (${escapeHtml(order.discount_reason)})` : ''}:</span><span>-${formatMoney(order.discount)}</span></div>` : ''}
                 ${parseFloat(order.tip) > 0 ? `<div class="total-row"><span>Propina:</span><span>+${formatMoney(order.tip)}</span></div>` : ''}
                 ${parseFloat(order.delivery_fee) > 0 ? `<div class="total-row"><span>Domicilio:</span><span>+${formatMoney(order.delivery_fee)}</span></div>` : ''}
                 <div class="total-row total-main">
