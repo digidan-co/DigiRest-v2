@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { verifyToken } = require('./auth');
 const { deductItemsStock } = require('../utils/inventory-helper');
+const { calculateOrderCombos } = require('../utils/combo-calculator');
 
 module.exports = (io) => {
     // POST /orders/:id/items - Add items to existing order
@@ -60,9 +61,22 @@ module.exports = (io) => {
 
             const newItemsJson = JSON.stringify(newItems);
 
-            // Recalculate total
-            const additionalTotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            const newTotal = order.total + additionalTotal;
+            // Recalculate total with combos
+            const comboCalc = calculateOrderCombos(newItems);
+            let discount = parseFloat(order.discount) || 0;
+            let discount_reason = order.discount_reason || '';
+            let newTotal = order.total;
+
+            if (comboCalc.totalComboDiscount > 0) {
+                discount = comboCalc.totalComboDiscount;
+                discount_reason = comboCalc.discountReason;
+                const tip = parseFloat(order.tip) || 0;
+                const delivery_fee = parseFloat(order.delivery_fee) || 0;
+                newTotal = comboCalc.netItemsTotal + tip + delivery_fee;
+            } else {
+                const additionalTotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                newTotal = order.total + additionalTotal;
+            }
 
             // Determine Status Update
             let newStatus = order.status;
@@ -70,21 +84,14 @@ module.exports = (io) => {
 
             // "Si el pedido estaba en estado "terminado" ... automáticamente debe cambiar el estado del pedido a "En preparación"."
             if (order.status === 'Terminado' || order.status === 'Entregado' || order.status === 'Recibido') {
-                // Also if 'Recibido', it makes sense to keep it/move to 'En preparación' if kitchen is working?
-                // Prompt specifically mentioned "Terminado".
                 if (order.status === 'Terminado') {
                     newStatus = 'En preparación';
                     statusChanged = true;
                 }
             }
 
-            // If it was "Pendiente" or "Recibido", maybe move to "En preparación" if it wasn't already?
-            // Let's strictly follow the instruction: "Si ... Terminado ... cambiar a En preparación".
-            // If it's "Pendiente", stay "Pendiente"? Or "Recibido"? 
-            // Usually adding items implies activity. But let's stick to the explicit rule for now.
-
-            let sql = 'UPDATE orders SET items = ?, total = ?';
-            const params = [newItemsJson, newTotal];
+            let sql = 'UPDATE orders SET items = ?, total = ?, discount = ?, discount_reason = ?';
+            const params = [newItemsJson, newTotal, discount, discount_reason];
 
             if (statusChanged) {
                 sql += ', status = ?';

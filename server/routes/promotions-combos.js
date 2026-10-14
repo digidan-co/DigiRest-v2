@@ -41,7 +41,7 @@ module.exports = (io) => {
 
     // --- LIST ALL PROMOTIONS AND COMBOS ---
     router.get('/promotions-combos', (req, res) => {
-        const { active_only } = req.query;
+        const { active_only, channel } = req.query;
         let sql = 'SELECT * FROM promotions_combos';
         const params = [];
 
@@ -52,7 +52,16 @@ module.exports = (io) => {
 
         db.all(sql, params, (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
-            const parsed = (rows || []).map(parseComboRow);
+            let parsed = (rows || []).map(parseComboRow);
+
+            if (channel) {
+                const targetChannel = String(channel).trim().toLowerCase();
+                parsed = parsed.filter(c => {
+                    const cChannels = Array.isArray(c.channels) ? c.channels : [];
+                    return cChannels.some(ch => String(ch).trim().toLowerCase() === targetChannel);
+                });
+            }
+
             res.json(parsed);
         });
     });

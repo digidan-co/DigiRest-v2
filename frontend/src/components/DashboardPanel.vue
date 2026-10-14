@@ -19,25 +19,24 @@ let clockTimer = null;
 function updateClock() {
     const now = new Date();
     // Hora en formato 12 horas sin segunderos
-    currentTime.value = now.toLocaleTimeString('es-CO', {
+    const timeStr = now.toLocaleTimeString('es-CO', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true
     });
-    // Formato exacto: Hoy es: -dia de la semana en texto-, -día del mes en número- de -mes actual en texto
     const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const months = [
         'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
     ];
-    const dayName = days[now.getDay()];
-    const dayNum = now.getDate();
-    const monthName = months[now.getMonth()];
-    currentDate.value = `Hoy es: ${dayName}, ${dayNum} de ${monthName}`;
+    const dateStr = `Hoy es: ${days[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]}`;
 
-    // Sincronizar con los elementos del reloj en el Topbar (Desktop y Mobile)
-    document.querySelectorAll('.clock-display-time').forEach(el => { el.innerText = currentTime.value; });
-    document.querySelectorAll('.clock-display-date').forEach(el => { el.innerText = currentDate.value; });
+    document.querySelectorAll('.clock-display-time').forEach(el => {
+        if (el.innerText !== timeStr) el.innerText = timeStr;
+    });
+    document.querySelectorAll('.clock-display-date').forEach(el => {
+        if (el.innerText !== dateStr) el.innerText = dateStr;
+    });
 }
 
 const isCashier = computed(() => {
@@ -163,7 +162,7 @@ function formatDueDate(d) {
 
 onMounted(() => {
     updateClock();
-    clockTimer = setInterval(updateClock, 1000);
+    clockTimer = setInterval(updateClock, 15000);
 
     if (ApiClient.token || localStorage.getItem('pos_token')) {
         loadStats();

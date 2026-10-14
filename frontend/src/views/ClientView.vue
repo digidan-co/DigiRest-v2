@@ -1,14 +1,17 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { state } from '@/legacy/core/state.js';
-import { addToCart, openDisplayDetail, setupClientToppingsModalListeners } from '@/legacy/views/client-view.js';
+import { addToCart, openDisplayDetail, setupClientToppingsModalListeners, updateCartUI } from '@/legacy/views/client-view.js';
 import { getTopDishes7d } from '@/legacy/services/product-service.js';
+import { getPromotionsCombos, listenToPromotionsCombos } from '@/legacy/services/promotions-service.js';
 import { OfflineDB } from '@/legacy/services/offline-db.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
+import { toast } from '@/legacy/components/ui.js';
 
 const searchTerm = ref('');
 const expandedCats = ref(new Set());
 const offlineQueueCount = ref(0);
+const rawCombos = ref([]);
 
 const restaurantName = computed(() => state.restaurantData.name || 'Restaurante');
 const bannerUrl = computed(() => state.config.banner || '');
@@ -19,6 +22,32 @@ const availableProducts = computed(() => (state.products || []).filter(p => p.av
 const hasPromos = computed(() => availableProducts.value.some(p => p.is_promo));
 const hasRecommended = computed(() => availableProducts.value.some(p => p.is_recommended));
 const hasTopDishes = computed(() => (state.topDishes7d || []).length > 0);
+
+// Filtrar combos disponibles para canales de venta del cliente (Domicilio o Para Llevar)
+const availableClientCombos = computed(() => {
+    return (rawCombos.value || []).filter(c => {
+        if (!c.available) return false;
+        let chs = [];
+        if (Array.isArray(c.channels)) chs = c.channels;
+        else if (typeof c.channels === 'string') {
+            try { chs = JSON.parse(c.channels); } catch (_) {}
+        }
+        return chs.some(ch => {
+            const lower = String(ch).toLowerCase().trim();
+            return lower === 'domicilio' || lower === 'para llevar' || lower === 'recoger';
+        });
+    });
+});
+
+const filteredCombos = computed(() => {
+    const search = searchTerm.value.toLowerCase().trim();
+    if (!search) return availableClientCombos.value;
+    return availableClientCombos.value.filter(c =>
+        (c.name || '').toLowerCase().includes(search) ||
+        (c.description || '').toLowerCase().includes(search) ||
+        (c.items_config || []).some(it => (it.name || '').toLowerCase().includes(search))
+    );
+});
 
 const promoDishes = computed(() => availableProducts.value.filter(p => p.is_promo));
 const recDishes = computed(() => availableProducts.value.filter(p => p.is_recommended));
@@ -51,6 +80,9 @@ const groupedProducts = computed(() => {
 
 const categoryChips = computed(() => {
     const chips = [];
+    if (availableClientCombos.value.length > 0) {
+        chips.push({ id: 'sec-combos', name: '', label: 'Combos ⭐', icon: 'fa-tags', cls: 'filter-chip-promo !bg-amber-500 !text-white !border-amber-600', type: 'featured' });
+    }
     if (hasPromos.value) chips.push({ id: 'sec-promos', name: '', label: 'Promos', icon: 'fa-fire', cls: 'filter-chip-promo', type: 'featured' });
     if (hasRecommended.value) chips.push({ id: 'sec-recommended', name: '', label: 'Recomendados', icon: 'fa-star', cls: 'filter-chip-rec', type: 'featured' });
     if (hasTopDishes.value) chips.push({ id: 'sec-top', name: '', label: 'Más Pedidos', icon: 'fa-trophy', cls: 'filter-chip-top', type: 'featured' });
@@ -120,8 +152,83 @@ function handleAddProduct(id) {
     addToCart(id);
 }
 
+function getComboPricing(combo) {
+    if (!combo) return { basePrice: 0, finalPrice: 0, savings: 0 };
+    const items = Array.isArray(combo.items_config) ? combo.items_config : [];
+    const sumBase = items.reduce((sum, it) => {
+        const p = parseFloat(it.price) || 0;
+        const q = parseFloat(it.qty) || 1;
+        return sum + (p * q);
+    }, 0);
+
+    let finalPrice = sumBase;
+    let savings = 0;
+
+    if (combo.type === 'FIXED_PRICE') {
+        finalPrice = parseFloat(combo.combo_price) || 0;
+        savings = Math.max(0, sumBase - finalPrice);
+    } else if (combo.type === 'PERCENT_DISCOUNT' || combo.type === 'PERCENTAGE_DISCOUNT') {
+        const pct = (parseFloat(combo.discount_value) || 0) / 100;
+        savings = sumBase * pct;
+        finalPrice = Math.max(0, sumBase - savings);
+    } else if (combo.type === 'FIXED_DISCOUNT') {
+        savings = Math.min(sumBase, parseFloat(combo.discount_value) || 0);
+        finalPrice = Math.max(0, sumBase - savings);
+    } else if (combo.type === 'FREE_PRODUCT' || combo.type === 'N_PLUS_M' || combo.type === 'NXM') {
+        savings = items.reduce((sum, it) => it.is_free ? sum + ((parseFloat(it.price) || 0) * (parseFloat(it.qty) || 1)) : sum, 0);
+        finalPrice = Math.max(0, sumBase - savings);
+    }
+
+    return {
+        basePrice: sumBase,
+        finalPrice: Math.round(finalPrice),
+        savings: Math.round(savings)
+    };
+}
+
+function handleAddCombo(combo) {
+    if (!combo || !Array.isArray(combo.items_config) || combo.items_config.length === 0) {
+        toast('El combo seleccionado no tiene productos disponibles', 'warning');
+        return;
+    }
+
+    const instanceId = 'cinst_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+    combo.items_config.forEach(it => {
+        const itemQty = parseFloat(it.qty) || 1;
+        const itemPrice = it.is_free ? 0 : (parseFloat(it.price) || 0);
+        state.cart.push({
+            id: `${it.product_id || 'combo'}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            productId: it.product_id,
+            name: it.name,
+            price: itemPrice,
+            qty: itemQty,
+            combo_instance_id: instanceId,
+            combo_id: combo.id,
+            combo_name: combo.name,
+            combo_price: parseFloat(combo.combo_price) || 0,
+            combo_type: combo.type,
+            discount_value: parseFloat(combo.discount_value) || 0,
+            is_combo_component: true,
+            is_free: !!it.is_free
+        });
+    });
+
+    searchTerm.value = '';
+    updateCartUI();
+    toast(`Combo "${combo.name}" agregado al pedido`, 'success');
+}
+
 onMounted(async () => {
     setupClientToppingsModalListeners();
+    try {
+        rawCombos.value = await getPromotionsCombos(true);
+    } catch (e) {
+        console.error('Error cargando combos en ClientView:', e);
+    }
+    listenToPromotionsCombos((updatedList) => {
+        rawCombos.value = (updatedList || []).filter(c => c.available);
+    });
     if (!state.topDishes7d || state.topDishes7d.length === 0) {
         try { state.topDishes7d = await getTopDishes7d(); } catch (e) { state.topDishes7d = []; }
     }
@@ -216,8 +323,68 @@ onMounted(async () => {
     </div>
 
     <!-- Featured Sections -->
-    <div v-show="!searchTerm.trim() && (promoDishes.length > 0 || recDishes.length > 0 || topDishes.length > 0)" class="space-y-6 mb-8">
-        <div v-if="promoDishes.length > 0" id="sec-promos" class="carousel-container-promos rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #fefce8; border: 1px solid #fef08a;">
+    <div v-show="filteredCombos.length > 0 || (!searchTerm.trim() && (promoDishes.length > 0 || recDishes.length > 0 || topDishes.length > 0))" class="space-y-6 mb-8">
+        <!-- Section Combos y Promociones -->
+        <div v-if="filteredCombos.length > 0" id="sec-combos" class="carousel-container-combos rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #fffbeb; border: 1px solid #fcd34d;">
+            <div class="flex items-center justify-between mb-3 px-1">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-sm shadow-xs"><i class="fas fa-tags"></i></span>
+                    <div>
+                        <h3 class="font-extrabold text-sm text-gray-900 tracking-tight">Combos & Paquetes Especiales</h3>
+                        <p class="text-[10px] text-gray-500">Ahorra ordenando nuestros combos</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" @click="scrollCarousel('combos-carousel', -1)"
+                        class="carousel-nav-btn" title="Anterior" aria-label="Deslizar hacia la izquierda">
+                        <i class="fas fa-chevron-left text-xs pointer-events-none"></i>
+                    </button>
+                    <button type="button" @click="scrollCarousel('combos-carousel', 1)"
+                        class="carousel-nav-btn" title="Siguiente" aria-label="Deslizar hacia la derecha">
+                        <i class="fas fa-chevron-right text-xs pointer-events-none"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="combos-carousel" class="flex gap-2.5 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
+                <div v-for="combo in filteredCombos" :key="combo.id"
+                    class="client-product-card carousel-product-card snap-start bg-white rounded-xl border border-amber-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group">
+                    <div class="aspect-square w-full relative bg-amber-50/50 overflow-hidden shrink-0">
+                        <img :src="combo.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + combo.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                        <span class="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-black text-white shadow-md flex items-center gap-1 border border-black/20"
+                            style="background-color: rgba(17, 24, 39, 0.75); backdrop-filter: blur(4px); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);">
+                            <i class="fas fa-tags text-[8px] text-amber-400"></i>
+                            <span>{{ combo.category || 'Combo' }} ⭐</span>
+                        </span>
+                    </div>
+                    <div class="p-2 sm:p-2.5 flex flex-col flex-1 justify-between min-h-0">
+                        <div>
+                            <h4 class="font-bold text-gray-800 text-xs sm:text-sm leading-snug line-clamp-1" :title="combo.name">{{ combo.name }}</h4>
+                            <p class="text-[10px] text-gray-500 line-clamp-2 mt-0.5 leading-snug" :title="combo.description || (combo.items_config || []).map(i => i.qty + 'x ' + i.name).join(' + ')">
+                                {{ combo.description || (combo.items_config || []).map(i => (i.qty > 1 ? i.qty + 'x ' : '') + i.name).join(' + ') }}
+                            </p>
+                        </div>
+                        <div class="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1.5 shrink-0">
+                            <div>
+                                <div v-if="getComboPricing(combo).savings > 0" class="flex items-baseline gap-1.5">
+                                    <span class="font-black text-amber-600 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(getComboPricing(combo).finalPrice) }}</span>
+                                    <span class="text-[10px] text-gray-400 line-through leading-none">{{ formatMoney(getComboPricing(combo).basePrice) }}</span>
+                                </div>
+                                <span v-else class="font-black text-gray-900 text-sm sm:text-base leading-none tracking-tight">{{ formatMoney(getComboPricing(combo).finalPrice) }}</span>
+                            </div>
+                            <button type="button" @click.stop="handleAddCombo(combo)"
+                                class="w-full py-2 px-3 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm hover:shadow-md active:scale-95 cursor-pointer font-extrabold text-xs sm:text-sm"
+                                style="background-color: #d97706; color: #ffffff;"
+                                title="Añadir Combo al Pedido">
+                                <i class="fas fa-plus text-xs pointer-events-none"></i>
+                                <span class="leading-none">Agregar Combo</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="promoDishes.length > 0 && !searchTerm.trim()" id="sec-promos" class="carousel-container-promos rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #fefce8; border: 1px solid #fef08a;">
             <div class="flex items-center justify-between mb-3 px-1">
                 <div class="flex items-center gap-2.5">
                     <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-sm shadow-xs"><i class="fas fa-fire"></i></span>
@@ -280,7 +447,7 @@ onMounted(async () => {
             </div>
         </div>
 
-        <div v-if="recDishes.length > 0" id="sec-recommended" class="carousel-container-recommended rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #fff7ed; border: 1px solid #fed7aa;">
+        <div v-if="recDishes.length > 0 && !searchTerm.trim()" id="sec-recommended" class="carousel-container-recommended rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #fff7ed; border: 1px solid #fed7aa;">
             <div class="flex items-center justify-between mb-3 px-1">
                 <div class="flex items-center gap-2.5">
                     <span class="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-sm shadow-xs"><i class="fas fa-star"></i></span>
@@ -346,7 +513,7 @@ onMounted(async () => {
             </div>
         </div>
 
-        <div v-if="topDishes.length > 0" id="sec-top" class="carousel-container-top rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #eff6ff; border: 1px solid #bfdbfe;">
+        <div v-if="topDishes.length > 0 && !searchTerm.trim()" id="sec-top" class="carousel-container-top rounded-2xl p-3 sm:p-4 shadow-2xs" style="background-color: #eff6ff; border: 1px solid #bfdbfe;">
             <div class="flex items-center justify-between mb-3 px-1">
                 <div class="flex items-center gap-2.5">
                     <span class="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm shadow-xs"><i class="fas fa-trophy"></i></span>

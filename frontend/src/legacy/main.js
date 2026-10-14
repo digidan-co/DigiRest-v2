@@ -1,6 +1,7 @@
 import { state } from './core/state.js';
 
 import { $, getSafeDate, formatMoney, escapeHtml } from './utils/helpers.js';
+window.$ = $;
 import { ApiClient } from './services/api-client.js';
 import { OfflineDB } from './services/offline-db.js';
 import { toast, showModalAlert, showConfirmModal, showImageModal } from './components/ui.js';
@@ -1774,8 +1775,35 @@ async function checkInactivity() {
 // Global Shortcuts
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        const openModals = document.querySelectorAll('[id$="-modal"]:not(.hidden)');
-        openModals.forEach(m => m.classList.add('hidden'));
+        // 1. Check prompt, confirm, alert modals first (highest priority)
+        const uiModal = document.querySelector('#prompt-modal:not(.hidden), #confirm-modal:not(.hidden), #alert-modal:not(.hidden)');
+        if (uiModal) {
+            const cancelBtn = uiModal.querySelector('.btn-cancel, [data-action="cancel"], button:has(.fa-times), button.btn-secondary');
+            if (cancelBtn) cancelBtn.click();
+            else uiModal.classList.add('hidden');
+            return;
+        }
+
+        // 2. Dispatch custom event so Vue modals can close themselves cleanly
+        window.dispatchEvent(new CustomEvent('app:escape'));
+
+        // 3. Find any open modal in the DOM (legacy, dynamic, and modals starting with modal- or cf-modal)
+        const openModals = Array.from(document.querySelectorAll(
+            '[id$="-modal"]:not(.hidden), [id^="modal-"]:not(.hidden), [id*="-modal-"]:not(.hidden), [id^="cf-modal"]:not(.hidden), .modal:not(.hidden), [role="dialog"]:not(.hidden)'
+        )).filter(el => {
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+        });
+
+        if (openModals.length > 0) {
+            const topModal = openModals[openModals.length - 1];
+            const closeBtn = topModal.querySelector('[id^="btn-close"], .btn-close-modal, .close-modal, button[aria-label="Cerrar"], button[title="Cerrar"], .modal-close-btn, button:has(.fa-times)');
+            if (closeBtn) {
+                closeBtn.click();
+            } else {
+                topModal.classList.add('hidden');
+            }
+        }
     }
 });
 
@@ -2120,9 +2148,21 @@ $('btn-new-product').addEventListener('click', () => {
     sel.innerHTML = state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     $('product-modal').classList.remove('hidden');
 });
-$('btn-cancel-prod').addEventListener('click', () => $('product-modal').classList.add('hidden'));
+$('btn-cancel-prod').addEventListener('click', () => {
+    $('product-modal').classList.add('hidden');
+    $('prod-form')?.reset();
+    resetDishToppingsConfig();
+    resetDishVariantsConfig();
+});
 const btnCloseProd = $('btn-close-prod');
-if (btnCloseProd) btnCloseProd.addEventListener('click', () => $('product-modal').classList.add('hidden'));
+if (btnCloseProd) {
+    btnCloseProd.addEventListener('click', () => {
+        $('product-modal').classList.add('hidden');
+        $('prod-form')?.reset();
+        resetDishToppingsConfig();
+        resetDishVariantsConfig();
+    });
+}
 
 $('prod-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2189,6 +2229,9 @@ $('prod-form').addEventListener('submit', async (e) => {
         toast(id ? "Producto actualizado" : "Producto guardado");
 
         $('product-modal').classList.add('hidden');
+        $('prod-form')?.reset();
+        resetDishToppingsConfig();
+        resetDishVariantsConfig();
         state.products = await getProducts();
         renderAdminProductsPage();
         updateQuotaWidget();

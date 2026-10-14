@@ -452,7 +452,7 @@ async function loadOverviewTab() {
     } catch (_) {}
     const isCashier = userRole === 'cajero';
 
-    if (isCashier && _activePeriod !== 'today' && _activePeriod !== 'week') {
+    if (isCashier) {
         _activePeriod = 'today';
     }
 
@@ -463,8 +463,8 @@ async function loadOverviewTab() {
             <div class="flex flex-wrap items-center gap-2">
                 <div class="inline-flex bg-gray-100 p-1 rounded-xl text-xs gap-2 font-bold" id="cf-period-selector">
                     <button type="button" data-period="today" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'today' ? 'active' : ''}">Hoy</button>
-                    <button type="button" data-period="week" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'week' ? 'active' : ''}">Esta Semana</button>
                     ${!isCashier ? `
+                        <button type="button" data-period="week" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'week' ? 'active' : ''}">Esta Semana</button>
                         <button type="button" data-period="month" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'month' ? 'active' : ''}">Este Mes</button>
                         <button type="button" data-period="custom" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'custom' ? 'active' : ''}">Rango</button>
                     ` : ''}
@@ -688,8 +688,18 @@ async function loadOverviewTab() {
 }
 
 function setupOverviewEvents() {
+    let userRole = 'cajero';
+    try {
+        const u = JSON.parse(localStorage.getItem('pos_user') || '{}');
+        userRole = (u.role || '').toLowerCase();
+    } catch (_) {}
+    const isCashier = userRole === 'cajero';
+
     document.querySelectorAll('.cf-period-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            if (isCashier && btn.dataset.period !== 'today') {
+                return;
+            }
             document.querySelectorAll('.cf-period-btn').forEach(b => {
                 b.classList.remove('active');
             });

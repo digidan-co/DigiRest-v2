@@ -18,6 +18,21 @@ export function setupCloseRegisterListeners() {
         });
     }
 
+    const btnCancelPass = $('btn-cancel-password-confirm');
+    if (btnCancelPass) {
+        btnCancelPass.addEventListener('click', () => {
+            modalPass?.classList.add('hidden');
+        });
+    }
+
+    if (modalPass) {
+        modalPass.addEventListener('click', (e) => {
+            if (e.target === modalPass) {
+                modalPass.classList.add('hidden');
+            }
+        });
+    }
+
     if (btnConfirmPass) {
         btnConfirmPass.addEventListener('click', async () => {
             const code = inputPass.value;

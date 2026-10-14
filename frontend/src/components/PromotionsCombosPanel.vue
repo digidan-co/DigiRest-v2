@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
+import { compressImageAsBlob } from '@/legacy/utils/image-utils.js';
 import {
     getPromotionsCombos,
     savePromotionCombo,
@@ -16,12 +17,21 @@ const loading = ref(false);
 const searchTerm = ref('');
 const filterType = ref('');
 const filterStatus = ref('');
+const filterChannel = ref('');
 
 // Modal State
 const showModal = ref(false);
 const isEditing = ref(false);
 const editingId = ref(null);
 const saving = ref(false);
+
+// View Modal State
+const showViewModal = ref(false);
+const viewingCombo = ref(null);
+function openViewModal(c) {
+    viewingCombo.value = c;
+    showViewModal.value = true;
+}
 
 // Form State
 const form = ref({
@@ -108,6 +118,18 @@ const filteredCombos = computed(() => {
         list = list.filter(c => c.available === isAvail);
     }
 
+    if (filterChannel.value) {
+        const target = filterChannel.value.toLowerCase().trim();
+        list = list.filter(c => {
+            let chs = [];
+            if (Array.isArray(c.channels)) chs = c.channels;
+            else if (typeof c.channels === 'string') {
+                try { chs = JSON.parse(c.channels); } catch (_) {}
+            }
+            return chs.some(ch => String(ch).toLowerCase().trim() === target);
+        });
+    }
+
     const q = searchTerm.value.toLowerCase().trim();
     if (q) {
         list = list.filter(c =>
@@ -176,6 +198,16 @@ function openEditModal(c) {
     imagePreview.value = c.img || '';
     productSearch.value = '';
 
+    let parsedChannels = ['Local', 'Domicilio', 'Para Llevar'];
+    if (Array.isArray(c.channels)) {
+        parsedChannels = [...c.channels];
+    } else if (typeof c.channels === 'string') {
+        try {
+            const p = JSON.parse(c.channels);
+            if (Array.isArray(p)) parsedChannels = p;
+        } catch (_) {}
+    }
+
     form.value = {
         name: c.name,
         description: c.description || '',
@@ -188,7 +220,7 @@ function openEditModal(c) {
         days_of_week: Array.isArray(c.days_of_week) ? [...c.days_of_week] : ['1', '2', '3', '4', '5', '6', '7'],
         start_time: c.start_time || '',
         end_time: c.end_time || '',
-        channels: Array.isArray(c.channels) ? [...c.channels] : ['Local', 'Domicilio', 'Para Llevar']
+        channels: parsedChannels
     };
 
     showModal.value = true;
@@ -214,15 +246,26 @@ function removeProductFromCombo(index) {
     form.value.items_config.splice(index, 1);
 }
 
-function onImageChange(e) {
+async function onImageChange(e) {
     const file = e.target.files?.[0];
     if (file) {
-        selectedImageFile.value = file;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            imagePreview.value = ev.target.result;
-        };
-        reader.readAsDataURL(file);
+        try {
+            const compressed = await compressImageAsBlob(file);
+            selectedImageFile.value = compressed;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                imagePreview.value = ev.target.result;
+            };
+            reader.readAsDataURL(compressed);
+        } catch (err) {
+            console.warn('Compresión en cliente no disponible o fallida, usando archivo original:', err);
+            selectedImageFile.value = file;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                imagePreview.value = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
     }
 }
 
@@ -234,6 +277,11 @@ async function handleSave() {
 
     if (form.value.items_config.length === 0) {
         toast('Debes agregar al menos un plato a la promoción o combo', 'warning');
+        return;
+    }
+
+    if (!form.value.channels || form.value.channels.length === 0) {
+        toast('Debes seleccionar al menos un canal de venta para el combo', 'warning');
         return;
     }
 
@@ -318,6 +366,20 @@ function getTypeBadge(type) {
     }
 }
 
+function getChannelBadge(channel) {
+    const ch = String(channel || '').toLowerCase().trim();
+    if (ch.includes('local') || ch.includes('mesa')) {
+        return { label: 'Local (Mesa)', icon: 'fas fa-chair text-blue-600', class: 'bg-blue-50 text-blue-700 border-blue-200' };
+    }
+    if (ch.includes('domicilio')) {
+        return { label: 'Domicilio', icon: 'fas fa-motorcycle text-orange-600', class: 'bg-orange-50 text-orange-700 border-orange-200' };
+    }
+    if (ch.includes('llevar') || ch.includes('recoger')) {
+        return { label: 'Para Llevar', icon: 'fas fa-shopping-bag text-purple-600', class: 'bg-purple-50 text-purple-700 border-purple-200' };
+    }
+    return { label: channel, icon: 'fas fa-tag text-gray-500', class: 'bg-gray-50 text-gray-700 border-gray-200' };
+}
+
 onMounted(() => {
     loadCombos();
     listenToPromotionsCombos((updatedList) => {
@@ -358,6 +420,15 @@ onMounted(() => {
                     <option value="1">Habilitados</option>
                     <option value="0">Pausados</option>
                 </select>
+                <select
+                    v-model="filterChannel"
+                    class="p-2 border border-gray-200 rounded-xl bg-white outline-none text-xs focus:border-[var(--system-primary)] text-gray-700 cursor-pointer"
+                >
+                    <option value="">Todos los canales</option>
+                    <option value="Local">Local (Mesa)</option>
+                    <option value="Domicilio">Domicilio</option>
+                    <option value="Para Llevar">Para Llevar / Recoger</option>
+                </select>
             </div>
             <div class="flex gap-2 w-full sm:w-auto justify-end">
                 <button
@@ -394,82 +465,96 @@ onMounted(() => {
             </button>
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
             <div
                 v-for="combo in filteredCombos"
                 :key="combo.id"
-                class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow relative"
+                class="bg-white rounded-xl border border-gray-100 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between p-3 relative group"
             >
-                <!-- Card Header with image & badges -->
-                <div class="p-4 border-b border-gray-50 flex gap-3.5">
-                    <img
-                        :src="combo.img || '/img/noimage.png'"
-                        :alt="combo.name"
-                        class="w-18 h-18 rounded-xl object-cover border border-gray-100 shrink-0 bg-gray-50"
-                        onerror="this.src='/img/noimage.png'"
-                    >
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-start justify-between gap-2 mb-1">
-                            <span :class="['px-2 py-0.5 rounded-md text-[10px] font-black border uppercase', getTypeBadge(combo.type).class]">
-                                {{ getTypeBadge(combo.type).label }}
-                            </span>
-                            <!-- Switch disponibilidad -->
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    :checked="combo.available"
-                                    @change="onToggle(combo, $event.target.checked)"
-                                    class="sr-only peer"
-                                >
-                                <div class="w-8 h-4.5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-500"></div>
-                            </label>
+                <div>
+                    <!-- Header: Imagen compacta + Modalidad + Switch -->
+                    <div class="flex gap-2.5 items-start">
+                        <img
+                            :src="combo.img || '/img/noimage.png'"
+                            :alt="combo.name"
+                            class="w-14 h-14 rounded-lg object-cover border border-gray-100 shrink-0 bg-gray-50 shadow-2xs"
+                            onerror="this.src='/img/noimage.png'"
+                        >
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-1 mb-1">
+                                <span :class="['px-1.5 py-0.2 rounded text-[9px] font-black border uppercase tracking-wider truncate', getTypeBadge(combo.type).class]">
+                                    {{ getTypeBadge(combo.type).label }}
+                                </span>
+                                <!-- Switch disponibilidad -->
+                                <label class="relative inline-flex items-center cursor-pointer shrink-0" title="Activar/Desactivar disponibilidad">
+                                    <input
+                                        type="checkbox"
+                                        :checked="combo.available"
+                                        @change="onToggle(combo, $event.target.checked)"
+                                        class="sr-only"
+                                    >
+                                    <div
+                                        class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out p-0.5 flex items-center shadow-inner relative"
+                                        :style="combo.available ? 'background-color: var(--system-primary, #f5b55f) !important;' : 'background-color: #e5e7eb;'"
+                                    >
+                                        <div
+                                            class="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ease-in-out"
+                                            :style="combo.available ? 'transform: translateX(16px);' : 'transform: translateX(0px);'"
+                                        ></div>
+                                    </div>
+                                </label>
+                            </div>
+                            <h4 class="text-xs font-black text-gray-900 truncate leading-snug flex items-center gap-1.5" :title="combo.name">
+                                <i class="fas fa-tags text-[11px] shrink-0" style="color: var(--system-primary, #f5b55f) !important;"></i>
+                                <span class="truncate">{{ combo.name }}</span>
+                            </h4>
+                            <p class="text-[10px] text-gray-500 line-clamp-1 mt-0.5" :title="combo.description || 'Sin descripción'">{{ combo.description || 'Sin descripción' }}</p>
                         </div>
-                        <h4 class="text-sm font-black text-gray-900 truncate leading-tight">{{ combo.name }}</h4>
-                        <p v-if="combo.description" class="text-[11px] text-gray-500 line-clamp-1 mt-0.5">{{ combo.description }}</p>
+                    </div>
+
+                    <!-- Canales de Venta -->
+                    <div class="flex flex-wrap items-center gap-1 mt-2">
+                        <span
+                            v-for="ch in (combo.channels || [])"
+                            :key="ch"
+                            :class="['inline-flex items-center gap-0.5 text-[8px] font-extrabold px-1.5 py-0.2 rounded border', getChannelBadge(ch).class]"
+                        >
+                            <i :class="getChannelBadge(ch).icon" class="text-[7px]"></i>
+                            <span>{{ getChannelBadge(ch).label }}</span>
+                        </span>
+                        <span v-if="!combo.channels || combo.channels.length === 0" class="text-[8px] text-red-500 font-bold bg-red-50 border border-red-200 px-1 py-0.2 rounded">
+                            Sin canales
+                        </span>
                     </div>
                 </div>
 
-                <!-- Products list inside combo -->
-                <div class="px-4 py-3 bg-gray-50/50 flex-1">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-2">Platos incluidos:</span>
-                    <ul class="space-y-1.5">
-                        <li
-                            v-for="(it, idx) in (combo.items_config || [])"
-                            :key="idx"
-                            class="flex items-center justify-between text-xs text-gray-700 bg-white px-2.5 py-1.5 rounded-lg border border-gray-100 shadow-2xs"
-                        >
-                            <span class="font-bold flex items-center gap-1.5 truncate">
-                                <span class="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-black">{{ it.qty }}x</span>
-                                <span class="truncate">{{ it.name }}</span>
-                            </span>
-                            <span v-if="it.is_free" class="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">Cortesía</span>
-                            <span v-else class="text-[11px] text-gray-500 font-semibold shrink-0">{{ formatMoney(it.price * (it.qty || 1)) }}</span>
-                        </li>
-                    </ul>
-                </div>
-
-                <!-- Price and Savings Summary Footer -->
-                <div class="p-4 border-t border-gray-100 bg-white flex items-center justify-between">
+                <!-- Footer: Precio y Barra de Acciones (Ver, Editar, Eliminar) -->
+                <div class="mt-2.5 pt-2 border-t border-gray-50 flex items-center justify-between gap-1">
                     <div>
-                        <div class="flex items-baseline gap-1.5">
-                            <span class="text-base font-black text-gray-900 leading-none">
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-sm font-black text-gray-900 leading-none">
                                 {{ formatMoney(calculateComboSavings(combo).finalPrice) }}
                             </span>
-                            <span v-if="calculateComboSavings(combo).savings > 0" class="text-[11px] text-gray-400 line-through font-medium">
+                            <span v-if="calculateComboSavings(combo).savings > 0" class="text-[10px] text-gray-400 line-through font-medium">
                                 {{ formatMoney(calculateComboSavings(combo).base) }}
                             </span>
                         </div>
-                        <span v-if="calculateComboSavings(combo).savings > 0" class="inline-block mt-0.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                            Ahorro: -{{ formatMoney(calculateComboSavings(combo).savings) }}
-                        </span>
                     </div>
 
-                    <!-- Action buttons -->
-                    <div class="flex items-center gap-1.5">
+                    <!-- Barra de Acciones -->
+                    <div class="flex items-center gap-0.5 shrink-0">
+                        <button
+                            type="button"
+                            @click="openViewModal(combo)"
+                            class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                            title="Ver platos y detalle del combo"
+                        >
+                            <i class="fas fa-eye text-xs"></i>
+                        </button>
                         <button
                             type="button"
                             @click="openEditModal(combo)"
-                            class="p-2 rounded-xl text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                            class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
                             title="Editar combo"
                         >
                             <i class="fas fa-edit text-xs"></i>
@@ -477,7 +562,7 @@ onMounted(() => {
                         <button
                             type="button"
                             @click="handleDelete(combo)"
-                            class="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                            class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                             title="Eliminar combo"
                         >
                             <i class="fas fa-trash-alt text-xs"></i>
@@ -488,29 +573,30 @@ onMounted(() => {
         </div>
 
         <!-- MODAL: Crear / Editar Combo -->
-        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs fade-in">
-            <div class="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden">
-                <!-- Modal Header -->
-                <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                    <div class="flex items-center gap-2.5">
-                        <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
-                            <i class="fas fa-tags text-sm"></i>
+        <Teleport to="body">
+            <div v-if="showModal" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs fade-in" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;">
+                <div class="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+                    <!-- Modal Header -->
+                    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-base shrink-0 shadow-xs" style="background-color: var(--system-primary, #f5b55f); color: var(--system-secondary, #1e2122);">
+                                <i class="fas fa-tags" style="color: var(--system-secondary, #1e2122);"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm sm:text-base font-black text-gray-900 leading-tight">
+                                    {{ isEditing ? 'Editar Promoción o Combo' : 'Crear Promoción o Combo' }}
+                                </h3>
+                                <p class="text-[11px] text-gray-500">Configura platos incluidos y modalidad de cobro</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-sm sm:text-base font-black text-gray-900 leading-tight">
-                                {{ isEditing ? 'Editar Promoción o Combo' : 'Crear Promoción o Combo' }}
-                            </h3>
-                            <p class="text-[11px] text-gray-500">Configura platos incluidos y modalidad de cobro</p>
-                        </div>
+                        <button
+                            type="button"
+                            @click="showModal = false"
+                            class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            <i class="fas fa-times text-sm"></i>
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        @click="showModal = false"
-                        class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                    >
-                        <i class="fas fa-times text-sm"></i>
-                    </button>
-                </div>
 
                 <!-- Modal Body (Scrollable) -->
                 <form @submit.prevent="handleSave" class="overflow-y-auto p-6 space-y-5 flex-1">
@@ -538,7 +624,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Description & Image -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start mb-2">
                         <div class="sm:col-span-2 space-y-1">
                             <label class="text-[11px] font-bold text-gray-700 uppercase">Descripción o Beneficio</label>
                             <textarea
@@ -723,48 +809,61 @@ onMounted(() => {
                         <!-- Dynamic Inputs according to type -->
                         <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                             <div class="w-full sm:w-1/2">
-                                <label v-if="form.type === 'FIXED_PRICE'" class="block text-xs font-bold text-gray-700 mb-1">
-                                    Precio Final del Combo ($)
-                                </label>
-                                <input
-                                    v-if="form.type === 'FIXED_PRICE'"
-                                    type="number"
-                                    v-model.number="form.combo_price"
-                                    min="0"
-                                    step="500"
-                                    placeholder="Ej: 45000"
-                                    class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white font-black text-sm outline-none focus:border-emerald-500"
-                                >
+                                <!-- Precio Fijo -->
+                                <div v-if="form.type === 'FIXED_PRICE'" class="space-y-1">
+                                    <label class="block text-xs font-bold text-gray-700">
+                                        Precio Final del Combo ($)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        v-model.number="form.combo_price"
+                                        min="0"
+                                        step="500"
+                                        placeholder="Ej: 45000"
+                                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white font-black text-sm outline-none focus:border-emerald-500"
+                                    >
+                                </div>
 
-                                <label v-else-if="form.type === 'PERCENT_DISCOUNT'" class="block text-xs font-bold text-gray-700 mb-1">
-                                    Porcentaje de Descuento (%)
-                                </label>
-                                <input
-                                    v-else-if="form.type === 'PERCENT_DISCOUNT'"
-                                    type="number"
-                                    v-model.number="form.discount_value"
-                                    min="1"
-                                    max="100"
-                                    placeholder="Ej: 15"
-                                    class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white font-black text-sm outline-none focus:border-purple-500"
-                                >
+                                <!-- Descuento % Porcentual -->
+                                <div v-else-if="form.type === 'PERCENT_DISCOUNT'" class="space-y-1">
+                                    <label class="block text-xs font-bold text-gray-700">
+                                        Porcentaje de Descuento (%)
+                                    </label>
+                                    <div class="relative">
+                                        <input
+                                            type="number"
+                                            v-model.number="form.discount_value"
+                                            min="1"
+                                            max="100"
+                                            placeholder="Ej: 15"
+                                            class="w-full px-3.5 py-2.5 pr-8 rounded-xl border border-gray-200 bg-white font-black text-sm outline-none focus:border-purple-500"
+                                        >
+                                        <span class="absolute right-3 top-1/2 -translate-y-1/2 font-black text-xs text-purple-600">%</span>
+                                    </div>
+                                </div>
 
-                                <label v-else-if="form.type === 'FIXED_DISCOUNT'" class="block text-xs font-bold text-gray-700 mb-1">
-                                    Valor a Descontar ($)
-                                </label>
-                                <input
-                                    v-else-if="form.type === 'FIXED_DISCOUNT'"
-                                    type="number"
-                                    v-model.number="form.discount_value"
-                                    min="0"
-                                    step="500"
-                                    placeholder="Ej: 5000"
-                                    class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white font-black text-sm outline-none focus:border-blue-500"
-                                >
+                                <!-- Descuento $ Monto Fijo -->
+                                <div v-else-if="form.type === 'FIXED_DISCOUNT'" class="space-y-1">
+                                    <label class="block text-xs font-bold text-gray-700">
+                                        Valor a Descontar ($)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        v-model.number="form.discount_value"
+                                        min="0"
+                                        step="500"
+                                        placeholder="Ej: 5000"
+                                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white font-black text-sm outline-none focus:border-blue-500"
+                                    >
+                                </div>
 
-                                <div v-else-if="form.type === 'FREE_PRODUCT'" class="text-xs text-gray-600">
-                                    <i class="fas fa-info-circle text-amber-500 mr-1"></i>
-                                    Marca arriba con la casilla <strong>"Gratis"</strong> el plato que se bonificará al 100%.
+                                <!-- Plato Cortesía / 2x1 -->
+                                <div v-else-if="form.type === 'FREE_PRODUCT'" class="text-xs text-gray-600 space-y-1">
+                                    <span class="font-bold text-gray-700 block">Plato de Cortesía:</span>
+                                    <p class="text-[11px] text-gray-500">
+                                        <i class="fas fa-info-circle text-amber-500 mr-1"></i>
+                                        Marca en la lista de arriba la casilla <strong>"Gratis"</strong> en el plato que se bonificará al 100%.
+                                    </p>
                                 </div>
                             </div>
 
@@ -827,5 +926,122 @@ onMounted(() => {
                 </div>
             </div>
         </div>
+        </Teleport>
+
+        <!-- MODAL: Ver Detalle del Combo -->
+        <Teleport to="body">
+        <div
+            v-if="showViewModal && viewingCombo"
+            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+            @click.self="showViewModal = false"
+        >
+            <div class="bg-white rounded-2xl w-full max-w-md max-h-[85vh] shadow-2xl overflow-hidden flex flex-col border border-gray-100 animate-scale-up">
+                <!-- Modal Header -->
+                <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-white">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl flex items-center justify-center text-sm shadow-xs font-black shrink-0"
+                             style="background-color: var(--system-primary, #f5b55f); color: var(--system-secondary, #1e2122);">
+                            <i class="fas fa-tags" style="color: var(--system-secondary, #1e2122) !important;"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-black text-sm text-gray-900 tracking-tight leading-tight flex items-center gap-1.5">
+                                <i class="fas fa-tags text-xs shrink-0" style="color: var(--system-primary, #f5b55f) !important;"></i>
+                                <span>{{ viewingCombo.name }}</span>
+                            </h3>
+                            <span :class="['px-1.5 py-0.2 rounded text-[9px] font-black border uppercase tracking-wider inline-block mt-0.5', getTypeBadge(viewingCombo.type).class]">
+                                {{ getTypeBadge(viewingCombo.type).label }}
+                            </span>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showViewModal = false"
+                        class="w-7 h-7 rounded-full bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center cursor-pointer shadow-2xs"
+                    >
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="p-4 overflow-y-auto space-y-4 subtle-scrollbar">
+                    <div class="flex gap-3 items-center">
+                        <img
+                            :src="viewingCombo.img || '/img/noimage.png'"
+                            :alt="viewingCombo.name"
+                            class="w-16 h-16 rounded-xl object-cover border border-gray-100 shrink-0 bg-gray-50 shadow-2xs"
+                            onerror="this.src='/img/noimage.png'"
+                        >
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs text-gray-600 leading-relaxed">{{ viewingCombo.description || 'Sin descripción detallada.' }}</p>
+                            <!-- Canales -->
+                            <div class="flex flex-wrap items-center gap-1 mt-2">
+                                <span
+                                    v-for="ch in (viewingCombo.channels || [])"
+                                    :key="ch"
+                                    :class="['inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded border', getChannelBadge(ch).class]"
+                                >
+                                    <i :class="getChannelBadge(ch).icon"></i>
+                                    <span>{{ getChannelBadge(ch).label }}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Platos Incluidos -->
+                    <div class="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-2">Platos incluidos en la promoción:</span>
+                        <ul class="space-y-1.5">
+                            <li
+                                v-for="(it, idx) in (viewingCombo.items_config || [])"
+                                :key="idx"
+                                class="flex items-center justify-between text-xs text-gray-800 bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-2xs"
+                            >
+                                <span class="font-bold flex items-center gap-2 truncate">
+                                    <span class="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded font-black">{{ it.qty }}x</span>
+                                    <span class="truncate">{{ it.name }}</span>
+                                </span>
+                                <span v-if="it.is_free" class="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase">Cortesía</span>
+                                <span v-else class="text-xs text-gray-600 font-semibold shrink-0">{{ formatMoney(it.price * (it.qty || 1)) }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Resumen Financiero -->
+                    <div class="bg-amber-50/60 rounded-xl p-3 border border-amber-200/60 space-y-1 text-xs">
+                        <div class="flex justify-between text-gray-600">
+                            <span>Suma precio regular de platos:</span>
+                            <span class="font-bold">{{ formatMoney(calculateComboSavings(viewingCombo).base) }}</span>
+                        </div>
+                        <div v-if="calculateComboSavings(viewingCombo).savings > 0" class="flex justify-between text-emerald-600 font-bold">
+                            <span>Ahorro del cliente:</span>
+                            <span>-{{ formatMoney(calculateComboSavings(viewingCombo).savings) }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm font-black text-gray-900 pt-1 border-t border-amber-200/80">
+                            <span>Precio Final a Cobrar:</span>
+                            <span class="text-amber-800">{{ formatMoney(calculateComboSavings(viewingCombo).finalPrice) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="p-3 bg-gray-50/50 border-t border-gray-100 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        @click="showViewModal = false; openEditModal(viewingCombo)"
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    <button
+                        type="button"
+                        @click="showViewModal = false"
+                        class="px-4 py-2 rounded-xl text-xs font-bold bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors cursor-pointer"
+                    >
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+        </Teleport>
     </div>
 </template>

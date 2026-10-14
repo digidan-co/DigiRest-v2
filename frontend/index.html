@@ -312,7 +312,7 @@
             <div class="flex-1 min-w-0 flex flex-col gap-3.5 w-full">
                 <!-- Topbar -->
                 <div
-                    class="flex justify-between items-center bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-gray-100 z-20">
+                    class="flex justify-between items-center bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-gray-100 z-5">
                     <div class="flex items-center gap-3">
                         <div>
                             <h2 class="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Panel de Control</h2>
@@ -327,9 +327,8 @@
                     <div class="flex items-center gap-2.5 sm:gap-3.5">
                         <!-- Reloj en Desktop (Al lado de Notas y Modo GR) -->
                         <div class="topbar-clock-desktop">
-                            <i class="fas fa-clock topbar-clock-icon" style="color: var(--system-primary, #f5b55f);"></i>
                             <div class="flex flex-col items-end">
-                                <span class="clock-display-time" style="color: var(--system-primary, #f5b55f);">--:-- --</span>
+                                <span class="clock-display-time" style="color: var(--system-primary, #f5b55f); font-size: 3rem; font-weight: 400;">--:-- --</span>
                                 <span class="clock-display-date" style="color: var(--system-bg-aside, #052244);">Hoy es: --</span>
                             </div>
                         </div>
@@ -352,15 +351,14 @@
 
                 <!-- Reloj en Mobile (Debajo del contenedor Panel de Control) -->
                 <div class="topbar-clock-mobile">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-clock text-sm" style="color: var(--system-primary, #f5b55f);"></i>
-                        <span class="clock-display-time text-xs" style="color: var(--system-primary, #f5b55f);">--:-- --</span>
-                    </div>
+                    <span class="clock-display-time" style="color: var(--system-primary, #f5b55f);">--:-- --</span>
                     <span class="clock-display-date" style="color: var(--system-bg-aside, #052244);">Hoy es: --</span>
                 </div>
 
                 <script>
                     (function() {
+                        var lastTimeStr = '';
+                        var lastDateStr = '';
                         function updateTopbarClock() {
                             try {
                                 var now = new Date();
@@ -370,14 +368,25 @@
                                 var days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
                                 var months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
                                 var dateStr = 'Hoy es: ' + days[now.getDay()] + ', ' + now.getDate() + ' de ' + months[now.getMonth()];
-                                var times = document.querySelectorAll('.clock-display-time');
-                                for (var i = 0; i < times.length; i++) times[i].innerText = timeStr;
-                                var dates = document.querySelectorAll('.clock-display-date');
-                                for (var j = 0; j < dates.length; j++) dates[j].innerText = dateStr;
+                                
+                                if (timeStr !== lastTimeStr) {
+                                    lastTimeStr = timeStr;
+                                    var times = document.querySelectorAll('.clock-display-time');
+                                    for (var i = 0; i < times.length; i++) {
+                                        if (times[i].innerText !== timeStr) times[i].innerText = timeStr;
+                                    }
+                                }
+                                if (dateStr !== lastDateStr) {
+                                    lastDateStr = dateStr;
+                                    var dates = document.querySelectorAll('.clock-display-date');
+                                    for (var j = 0; j < dates.length; j++) {
+                                        if (dates[j].innerText !== dateStr) dates[j].innerText = dateStr;
+                                    }
+                                }
                             } catch (_) {}
                         }
                         updateTopbarClock();
-                        setInterval(updateTopbarClock, 1000);
+                        setInterval(updateTopbarClock, 10000);
                         window._updateTopbarClock = updateTopbarClock;
                     })();
                 </script>
@@ -2313,6 +2322,10 @@
                     <div class="flex justify-between items-center">
                         <span>Subtotal productos:</span>
                         <span id="cart-subtotal-modal" class="font-semibold text-gray-700">$0</span>
+                    </div>
+                    <div id="cart-combo-row" class="flex justify-between items-center text-emerald-600 hidden font-semibold">
+                        <span id="cart-combo-label" class="flex items-center gap-1"><i class="fas fa-tags text-[10px]"></i> Ahorro Combos:</span>
+                        <span id="cart-combo-discount" class="font-bold">-$0</span>
                     </div>
                     <div id="cart-delivery-row" class="flex justify-between items-center text-orange-600 hidden">
                         <span id="cart-delivery-label" class="flex items-center gap-1"><i class="fas fa-motorcycle text-[10px]"></i> Domicilio:</span>
@@ -4994,8 +5007,9 @@
                     class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-100 outline-none transition-all text-center text-lg tracking-widest">
             </div>
             <div class="flex gap-2">
-                <button onclick="$('password-confirm-modal').classList.add('hidden')"
-                    class="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl transition-colors">Cancelar</button>
+                <button type="button" id="btn-cancel-password-confirm"
+                    onclick="document.getElementById('password-confirm-modal').classList.add('hidden')"
+                    class="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl transition-colors cursor-pointer">Cancelar</button>
                 <button id="btn-confirm-password-action"
                     class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors">Confirmar</button>
             </div>

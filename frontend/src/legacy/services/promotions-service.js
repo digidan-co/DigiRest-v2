@@ -1,8 +1,11 @@
 import { ApiClient } from './api-client.js';
 
-export async function getPromotionsCombos(activeOnly = false) {
-    const url = activeOnly ? '/promotions-combos?active_only=true' : '/promotions-combos';
-    return await ApiClient.get(url);
+export async function getPromotionsCombos(activeOnly = false, channel = null) {
+    const params = new URLSearchParams();
+    if (activeOnly) params.append('active_only', 'true');
+    if (channel) params.append('channel', channel);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return await ApiClient.get(`/promotions-combos${query}`);
 }
 
 export async function getPromotionCombo(id) {

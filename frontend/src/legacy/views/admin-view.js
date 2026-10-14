@@ -1493,12 +1493,16 @@ window.updateDashboardStats = updateDashboardStats;
             const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
             const dateStr = `Hoy es: ${days[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]}`;
 
-            document.querySelectorAll('.clock-display-time').forEach(el => { el.innerText = timeStr; });
-            document.querySelectorAll('.clock-display-date').forEach(el => { el.innerText = dateStr; });
+            document.querySelectorAll('.clock-display-time').forEach(el => {
+                if (el.innerText !== timeStr) el.innerText = timeStr;
+            });
+            document.querySelectorAll('.clock-display-date').forEach(el => {
+                if (el.innerText !== dateStr) el.innerText = dateStr;
+            });
         };
         update();
         if (!window._dashboardClockInterval) {
-            window._dashboardClockInterval = setInterval(update, 1000);
+            window._dashboardClockInterval = setInterval(update, 15000);
         }
     };
     startDashboardClock();

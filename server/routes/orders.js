@@ -114,11 +114,16 @@ module.exports = (io) => {
                 itemsJson = JSON.stringify([]);
             }
 
+            let finalOrderTotal = parseFloat(total) || 0;
+
             // Auto-evaluar combos si están presentes en la orden
             const comboCalc = calculateOrderCombos(parsedItems);
             if (comboCalc.totalComboDiscount > 0) {
                 if (discount === 0) {
                     discount = comboCalc.totalComboDiscount;
+                    if (finalOrderTotal >= comboCalc.subtotalBase) {
+                        finalOrderTotal = Math.max(0, finalOrderTotal - discount);
+                    }
                 }
                 if (!discount_reason) {
                     discount_reason = comboCalc.discountReason;
@@ -137,7 +142,7 @@ module.exports = (io) => {
             const sql = `INSERT INTO orders (id, client, phone, address, notes, type, payment, status, total, tip, discount, discount_reason, items, waiterId, waiterName, tableNum, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-            db.run(sql, [newId, client, phone, address, notes, type, payment, finalStatus, total, tip, discount, discount_reason, itemsJson, waiterId, waiterName, table, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details], function (err) {
+            db.run(sql, [newId, client, phone, address, notes, type, payment, finalStatus, finalOrderTotal, tip, discount, discount_reason, itemsJson, waiterId, waiterName, table, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details], function (err) {
                 if (err) return res.status(500).json({ error: err.message });
 
                 if (!parsedItems || parsedItems.length === 0) {

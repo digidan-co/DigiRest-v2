@@ -3,6 +3,8 @@ import { $, formatMoney, escapeHtml } from '../utils/helpers.js';
 import { toast, setLoading, showConfirmModal, showModalAlert } from '../components/ui.js';
 import { createWaiterOrder, updateWaiterOrder, addItemsToOrder } from '../services/order-service.js';
 import { getProducts, getCategories } from '../services/product-service.js';
+import { getPromotionsCombos } from '../services/promotions-service.js';
+import { calculateOrderCombos } from '../utils/combo-calculator.js';
 import { addOrderNotes, getOrderNotes, deleteOrderNote } from '../services/note-service.js';
 import { compressProof } from '../utils/image-utils.js';
 import { openClientToppingsModal } from './client-view.js';
@@ -98,11 +100,92 @@ export function renderWaiterProducts() {
 
     let html = '';
 
+    // Renderizar combos disponibles para el canal 'Local' al inicio
+    let localCombos = (state.waiterCombos || []).filter(c => {
+        if (!c.available) return false;
+        let chs = [];
+        if (Array.isArray(c.channels)) chs = c.channels;
+        else if (typeof c.channels === 'string') {
+            try { chs = JSON.parse(c.channels); } catch (_) {}
+        }
+        return chs.some(ch => String(ch).toLowerCase().trim() === 'local');
+    });
+
+    if (_waiterSearchQuery) {
+        const q = _waiterSearchQuery.toLowerCase();
+        localCombos = localCombos.filter(c =>
+            (c.name || '').toLowerCase().includes(q) ||
+            (c.description || '').toLowerCase().includes(q) ||
+            (c.items_config || []).some(it => (it.name || '').toLowerCase().includes(q))
+        );
+    }
+
+    if (localCombos.length > 0) {
+        html += `
+            <details class="group w-full bg-amber-50/50 rounded-xl shadow-xs border border-amber-300 overflow-hidden" name="waiter-accordion" open>
+                <summary class="flex justify-between items-center p-3 cursor-pointer list-none bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 transition-colors select-none">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-1.5 h-6 bg-amber-500 rounded-full"></span>
+                        <span class="font-black text-amber-950 text-sm uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fas fa-tags text-amber-600"></i> Combos y Promociones
+                        </span>
+                        <span class="text-[10px] font-black text-amber-900 bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-full">
+                            ${localCombos.length}
+                        </span>
+                    </div>
+                    <i class="fas fa-chevron-down text-amber-700 transition-transform duration-200 group-open:rotate-180"></i>
+                </summary>
+                <div class="p-2 bg-white border-t border-amber-100">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        ${localCombos.map(combo => {
+                            const baseSum = (combo.items_config || []).reduce((s, it) => s + ((parseFloat(it.price) || 0) * (it.qty || 1)), 0);
+                            let finalPrice = baseSum;
+                            if (combo.type === 'FIXED_PRICE') finalPrice = combo.combo_price;
+                            else if (combo.type === 'PERCENT_DISCOUNT' || combo.type === 'PERCENTAGE_DISCOUNT') finalPrice = baseSum * (1 - (combo.discount_value / 100));
+                            else if (combo.type === 'FIXED_DISCOUNT') finalPrice = Math.max(0, baseSum - combo.discount_value);
+                            else if (combo.type === 'FREE_PRODUCT' || combo.type === 'N_PLUS_M' || combo.type === 'NXM') {
+                                const freeSum = (combo.items_config || []).filter(i => i.is_free).reduce((s, i) => s + ((parseFloat(i.price) || 0) * (i.qty || 1)), 0);
+                                finalPrice = Math.max(0, baseSum - freeSum);
+                            }
+                            const savings = Math.max(0, Math.round(baseSum - finalPrice));
+
+                            return `
+                                <div class="waiter-combo-card bg-gradient-to-br from-amber-50/80 to-orange-50/50 border border-amber-200 p-2 rounded-xl shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between active:scale-95 transition-all relative overflow-hidden" data-combo-id="${combo.id}">
+                                    <div class="flex items-start gap-2 mb-1.5">
+                                        <img src="${combo.img || '/img/noimage.png'}" class="w-11 h-11 rounded-lg object-cover border border-amber-200 shrink-0 bg-white" onerror="this.src='/img/noimage.png'">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-1 mb-0.5">
+                                                <span class="text-[8px] font-black uppercase px-1 py-0.2 rounded bg-amber-200 text-amber-900 border border-amber-300">COMBO</span>
+                                                <span class="text-[9px] font-bold text-gray-500 truncate">${escapeHtml(combo.category || 'Combos')}</span>
+                                            </div>
+                                            <h4 class="font-black text-gray-900 text-xs leading-tight truncate">${escapeHtml(combo.name)}</h4>
+                                            <p class="text-[9px] text-gray-500 truncate mt-0.5">${escapeHtml((combo.items_config || []).map(i => `${i.qty}x ${i.name}`).join(' + '))}</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between pt-1 border-t border-amber-200/60 mt-auto">
+                                        <div>
+                                            <span class="font-black text-amber-900 text-xs">${formatMoney(finalPrice)}</span>
+                                            ${savings > 0 ? `<span class="text-[9px] text-emerald-700 font-bold ml-1 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">-${formatMoney(savings)}</span>` : ''}
+                                        </div>
+                                        <button type="button" class="px-2 py-0.5 rounded-md bg-amber-500 text-white text-[9px] font-black pointer-events-none flex items-center gap-1">
+                                            <i class="fas fa-plus text-[7px]"></i> Agregar
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </details>
+        `;
+    }
+
     state.categories.forEach((cat, index) => {
         const catProducts = availableProducts.filter(p => p.category === cat.name);
 
         if (catProducts.length > 0) {
-            const isOpen = _waiterSearchQuery ? 'open' : (index === 0 ? 'open' : '');
+            const isOpen = _waiterSearchQuery ? 'open' : (localCombos.length === 0 && index === 0 ? 'open' : '');
             html += `
                 <details class="group w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" name="waiter-accordion" ${isOpen}>
                     <summary class="flex justify-between items-center p-3 cursor-pointer list-none bg-gray-50 hover:bg-gray-100 active:bg-gray-200 transition-colors select-none">
@@ -141,6 +224,57 @@ export function renderWaiterProducts() {
     document.querySelectorAll('.waiter-prod-card').forEach(card => {
         card.addEventListener('click', () => addToWaiterCart(card.dataset.id));
     });
+
+    document.querySelectorAll('.waiter-combo-card').forEach(card => {
+        card.addEventListener('click', () => addComboToWaiterCart(card.dataset.comboId));
+    });
+}
+
+export function addComboToWaiterCart(comboId) {
+    const combo = (state.waiterCombos || []).find(c => c.id === comboId);
+    if (!combo || !Array.isArray(combo.items_config) || combo.items_config.length === 0) {
+        toast('El combo seleccionado no tiene platos', 'warning');
+        return;
+    }
+
+    const instanceId = 'cinst_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+    // Reset search
+    const searchInput = $('waiter-product-search');
+    if (searchInput && (searchInput.value || _waiterSearchQuery)) {
+        searchInput.value = '';
+        _waiterSearchQuery = '';
+        const clearBtn = $('btn-clear-waiter-search');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        renderWaiterProducts();
+    }
+
+    combo.items_config.forEach(it => {
+        const itemQty = parseFloat(it.qty) || 1;
+        const itemPrice = it.is_free ? 0 : (parseFloat(it.price) || 0);
+
+        waiterCart.push({
+            id: it.product_id,
+            name: it.name,
+            price: itemPrice,
+            qty: itemQty,
+            combo_instance_id: instanceId,
+            combo_id: combo.id,
+            combo_name: combo.name,
+            combo_price: parseFloat(combo.combo_price) || 0,
+            combo_type: combo.type,
+            discount_value: parseFloat(combo.discount_value) || 0,
+            is_combo_component: true,
+            is_free: !!it.is_free
+        });
+    });
+
+    updateFloatingCartButton();
+    toast(`Combo "${combo.name}" agregado al pedido`, 'success');
+
+    if (!$('waiter-review-modal')?.classList.contains('hidden')) {
+        renderReviewCartList();
+    }
 }
 
 export function addToWaiterCart(productId) {
@@ -187,9 +321,12 @@ function updateFloatingCartButton() {
     const badge = $('w-cart-count-badge');
     const totalEl = $('w-fab-total');
 
-    // Calculate total qty and price
+    // Calculate total qty and price with combos
     const totalQty = waiterCart.reduce((acc, item) => acc + item.qty, 0);
-    const totalPrice = waiterCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+    const comboCalc = calculateOrderCombos(waiterCart);
+    const totalPrice = comboCalc.totalComboDiscount > 0
+        ? comboCalc.netItemsTotal
+        : waiterCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
     if (badge) {
         badge.innerText = totalQty;
@@ -271,7 +408,10 @@ function renderReviewCartList() {
         return `
             <div class="flex items-start gap-2 bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm">
                 <div class="flex-1 min-w-0">
-                    <h4 class="font-bold text-gray-800 text-xs leading-tight mb-0.5">${escapeHtml(item.name)}</h4>
+                    <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                        ${item.combo_name ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
+                        <h4 class="font-bold text-gray-800 text-xs leading-tight">${escapeHtml(item.name)}</h4>
+                    </div>
                     ${formatToppingsListHtml(item)}
                     ${item.notes ? `<p class="text-[10px] text-gray-500 italic block mt-1"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>${escapeHtml(item.notes)}</p>` : ''}
                     <span class="text-[10px] text-gray-500 font-bold block mt-1">${formatMoney(item.price)} c/u</span>
@@ -296,7 +436,21 @@ function renderReviewCartList() {
         `;
     }).join('');
 
-    if (totalEl) totalEl.innerText = formatMoney(total);
+    const comboCalc = calculateOrderCombos(waiterCart);
+    if (comboCalc.totalComboDiscount > 0) {
+        list.innerHTML += `
+            <div class="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-xs flex justify-between items-center font-bold mt-2 shadow-2xs">
+                <span class="flex items-center gap-1.5">
+                    <i class="fas fa-tags text-emerald-600"></i>
+                    <span>Descuento Combos (${escapeHtml(comboCalc.discountReason)}):</span>
+                </span>
+                <span class="font-black text-emerald-700">-${formatMoney(comboCalc.totalComboDiscount)}</span>
+            </div>
+        `;
+        if (totalEl) totalEl.innerText = formatMoney(comboCalc.netItemsTotal);
+    } else {
+        if (totalEl) totalEl.innerText = formatMoney(total);
+    }
 
     // Explicitly expose function again to ensure it's available
     window.updateWaiterCartQty = (idx, change) => {
@@ -598,9 +752,14 @@ export async function openWaiterModal() {
     try {
         const freshProducts = await getProducts();
         const freshCategories = await getCategories();
+        let freshCombos = [];
+        try {
+            freshCombos = await getPromotionsCombos(true, 'Local');
+        } catch (_) {}
 
         state.products = freshProducts;
         state.categories = freshCategories;
+        state.waiterCombos = freshCombos || [];
     } catch (err) {
         console.error('❌ Error loading products/categories:', err);
     }
@@ -698,11 +857,18 @@ export async function handleSendWaiterOrder() {
 
         const notesInput = $('w-order-notes');
 
+        const comboCalc = calculateOrderCombos(waiterCart);
+        const finalTotal = comboCalc.totalComboDiscount > 0
+            ? comboCalc.netItemsTotal
+            : waiterCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
         const orderData = {
             id: orderId,
             table: tableNum,
             items: waiterCart,
-            total: waiterCart.reduce((sum, item) => sum + (item.price * item.qty), 0),
+            total: finalTotal,
+            discount: comboCalc.totalComboDiscount || 0,
+            discount_reason: comboCalc.discountReason || '',
             status: 'Recibido',
             waiterId: state.user.id,
             waiterName: state.user.name,
@@ -1014,7 +1180,7 @@ async function handleSaveNotes() {
 let itemsToAdd = [];
 let currentAddOrderId = null;
 
-export function openAddItemModal(orderId) {
+export async function openAddItemModal(orderId) {
     currentAddOrderId = orderId;
     itemsToAdd = [];
 
@@ -1022,6 +1188,12 @@ export function openAddItemModal(orderId) {
     $('wai-order-id').innerText = orderId;
 
     if (!modal) return;
+
+    if (!state.waiterCombos || state.waiterCombos.length === 0) {
+        try {
+            state.waiterCombos = await getPromotionsCombos(true, 'Local');
+        } catch (_) {}
+    }
 
     modal.classList.remove('hidden');
 
@@ -1074,6 +1246,54 @@ function renderWaiProducts(searchTerm = '') {
 
     let html = '';
 
+    // Combos disponibles para 'Local'
+    let localCombos = (state.waiterCombos || []).filter(c => {
+        if (!c.available) return false;
+        let chs = [];
+        if (Array.isArray(c.channels)) chs = c.channels;
+        else if (typeof c.channels === 'string') {
+            try { chs = JSON.parse(c.channels); } catch (_) {}
+        }
+        return chs.some(ch => String(ch).toLowerCase().trim() === 'local');
+    });
+
+    if (searchTerm) {
+        const lowerTerm = searchTerm.toLowerCase();
+        localCombos = localCombos.filter(c =>
+            (c.name || '').toLowerCase().includes(lowerTerm) ||
+            (c.description || '').toLowerCase().includes(lowerTerm)
+        );
+    }
+
+    if (localCombos.length > 0) {
+        html += `
+            <div class="col-span-full mt-2 mb-1">
+                <h5 class="font-bold text-amber-700 text-xs uppercase tracking-wider border-b border-amber-200 pb-1 flex items-center gap-1.5">
+                    <i class="fas fa-tags text-amber-600"></i> Combos y Promociones
+                </h5>
+            </div>
+        `;
+        html += localCombos.map(combo => {
+            const baseSum = (combo.items_config || []).reduce((s, it) => s + ((parseFloat(it.price) || 0) * (it.qty || 1)), 0);
+            let finalPrice = baseSum;
+            if (combo.type === 'FIXED_PRICE') finalPrice = combo.combo_price;
+            else if (combo.type === 'PERCENT_DISCOUNT' || combo.type === 'PERCENTAGE_DISCOUNT') finalPrice = baseSum * (1 - (combo.discount_value / 100));
+            else if (combo.type === 'FIXED_DISCOUNT') finalPrice = Math.max(0, baseSum - combo.discount_value);
+            else if (combo.type === 'FREE_PRODUCT' || combo.type === 'N_PLUS_M' || combo.type === 'NXM') {
+                const freeSum = (combo.items_config || []).filter(i => i.is_free).reduce((s, i) => s + ((parseFloat(i.price) || 0) * (i.qty || 1)), 0);
+                finalPrice = Math.max(0, baseSum - freeSum);
+            }
+
+            return `
+                <div class="wai-combo-card bg-amber-50/70 border border-amber-200 p-2 rounded-xl shadow-xs hover:shadow-md cursor-pointer flex flex-col items-center text-center active:scale-95 transition-all h-24 justify-center relative overflow-hidden group" data-combo-id="${combo.id}">
+                    <span class="w-4 h-4 rounded-md bg-amber-200 text-amber-900 flex items-center justify-center text-[8px] border border-amber-300 shadow-2xs z-20 pointer-events-none" style="position: absolute; top: 4px; left: 4px;" title="Combo"><i class="fas fa-tags"></i></span>
+                    <h4 class="font-bold text-gray-800 text-xs leading-tight line-clamp-2 w-full mb-1">${escapeHtml(combo.name)}</h4>
+                    <span class="font-black text-amber-900 text-xs">${formatMoney(finalPrice)}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
     state.categories.forEach(cat => {
         const catProducts = availableProducts.filter(p => p.category === cat.name);
         if (catProducts.length > 0) {
@@ -1099,6 +1319,37 @@ function renderWaiProducts(searchTerm = '') {
     grid.querySelectorAll('.wai-prod-card').forEach(card => {
         card.onclick = () => addToWaiCart(card.dataset.id);
     });
+
+    grid.querySelectorAll('.wai-combo-card').forEach(card => {
+        card.onclick = () => addComboToWaiCart(card.dataset.comboId);
+    });
+}
+
+function addComboToWaiCart(comboId) {
+    const combo = (state.waiterCombos || []).find(c => c.id === comboId);
+    if (!combo || !Array.isArray(combo.items_config) || combo.items_config.length === 0) return;
+
+    const instanceId = 'cinst_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+    combo.items_config.forEach(it => {
+        itemsToAdd.push({
+            id: it.product_id,
+            name: it.name,
+            price: it.is_free ? 0 : (parseFloat(it.price) || 0),
+            qty: parseFloat(it.qty) || 1,
+            combo_instance_id: instanceId,
+            combo_id: combo.id,
+            combo_name: combo.name,
+            combo_price: parseFloat(combo.combo_price) || 0,
+            combo_type: combo.type,
+            discount_value: parseFloat(combo.discount_value) || 0,
+            is_combo_component: true,
+            is_free: !!it.is_free
+        });
+    });
+
+    updateWaiCart();
+    toast(`Combo "${combo.name}" agregado a la mesa`, 'success');
 }
 
 function addToWaiCart(productId) {

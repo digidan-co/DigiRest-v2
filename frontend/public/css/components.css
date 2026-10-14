@@ -259,14 +259,10 @@
 
 /* Widget de Reloj en Topbar (Desktop y Mobile) */
 .topbar-clock-desktop {
-    display: flex !important;
-    align-items: center;
-    gap: 0.625rem;
-    text-align: right;
-    padding-right: 0.5rem;
+    display: none !important;
 }
 .topbar-clock-mobile {
-    display: none !important;
+    display: flex !important;
     align-items: center;
     justify-content: space-between;
     padding: 0.25rem 0.75rem;
@@ -274,28 +270,31 @@
     margin-top: -0.375rem;
     margin-bottom: 0.25rem;
 }
-@media (max-width: 767px) {
+@media (min-width: 768px) {
     .topbar-clock-desktop {
-        display: none !important;
+        display: flex !important;
+        align-items: center;
+        text-align: right;
+        padding-right: 0.5rem;
     }
     .topbar-clock-mobile {
-        display: flex !important;
+        display: none !important;
     }
 }
-.topbar-clock-icon {
-    font-size: 1.25rem;
-    color: var(--system-primary, #f5b55f) !important;
-}
 .clock-display-time {
-    font-size: 3.1rem;
-    font-weight: 900;
+    font-size: 3rem;
+    font-weight: 400;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     line-height: 1;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.035em;
     color: var(--system-primary, #f5b55f) !important;
 }
+.topbar-clock-mobile .clock-display-time {
+    font-size: 1.25rem;
+    font-weight: 400;
+}
 .clock-display-date {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 700;
     line-height: 1.2;
     text-transform: capitalize;

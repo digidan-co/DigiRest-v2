@@ -3,7 +3,8 @@ import { ref, computed } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import { importProductsCSV, importCategoriesCSV } from '@/legacy/services/product-service.js';
-import { populateDishFormExtensions } from '@/legacy/features/toppings-manager.js';
+import { populateDishFormExtensions, resetDishToppingsConfig } from '@/legacy/features/toppings-manager.js';
+import { resetDishVariantsConfig } from '@/legacy/features/variants-manager.js';
 import { toast } from '@/legacy/components/ui.js';
 
 const activeSubtab = ref('dishes');
@@ -60,6 +61,8 @@ function viewCategoryProducts(c) { if (window.openCategoryProductsModal) window.
 
 function newProduct() {
     const $ = (id) => document.getElementById(id);
+    const form = $('prod-form');
+    if (form) form.reset();
     if ($('p-id')) $('p-id').value = '';
     if ($('p-name')) $('p-name').value = '';
     if ($('p-desc')) $('p-desc').value = '';
@@ -74,8 +77,10 @@ function newProduct() {
     const imgContainer = $('p-current-img-container');
     if (imgContainer) imgContainer.classList.add('hidden');
     if ($('btn-save-prod')) $('btn-save-prod').innerText = 'Guardar';
-    if ($('product-modal')) $('product-modal').classList.remove('hidden');
+    resetDishToppingsConfig();
+    resetDishVariantsConfig();
     populateDishFormExtensions({});
+    if ($('product-modal')) $('product-modal').classList.remove('hidden');
 }
 
 function newCategory() {

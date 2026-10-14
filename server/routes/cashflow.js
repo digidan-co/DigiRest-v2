@@ -70,6 +70,14 @@ module.exports = (io) => {
                 }
             }
 
+            let effStartDate = startDate;
+            let effEndDate = endDate;
+            if (userRole === 'cajero') {
+                const todayStr = new Date(Date.now() - 5 * 3600 * 1000).toISOString().split('T')[0];
+                effStartDate = todayStr;
+                effEndDate = todayStr;
+            }
+
             let orderDateFilter = "";
             let gastoDateFilter = "";
             let manualDateFilter = "";
@@ -77,28 +85,28 @@ module.exports = (io) => {
             const gastoParams = [];
             const manualParams = [];
 
-        if (startDate && endDate) {
-            orderDateFilter = " AND date(timestamp, '-5 hours') BETWEEN date(?) AND date(?)";
-            gastoDateFilter = " AND date(timestamp, '-5 hours') BETWEEN date(?) AND date(?)";
-            manualDateFilter = " AND date(timestamp, '-5 hours') BETWEEN date(?) AND date(?)";
-            orderParams.push(startDate, endDate);
-            gastoParams.push(startDate, endDate);
-            manualParams.push(startDate, endDate);
-        } else if (startDate) {
-            orderDateFilter = " AND date(timestamp, '-5 hours') >= date(?)";
-            gastoDateFilter = " AND date(timestamp, '-5 hours') >= date(?)";
-            manualDateFilter = " AND date(timestamp, '-5 hours') >= date(?)";
-            orderParams.push(startDate);
-            gastoParams.push(startDate);
-            manualParams.push(startDate);
-        } else if (endDate) {
-            orderDateFilter = " AND date(timestamp, '-5 hours') <= date(?)";
-            gastoDateFilter = " AND date(timestamp, '-5 hours') <= date(?)";
-            manualDateFilter = " AND date(timestamp, '-5 hours') <= date(?)";
-            orderParams.push(endDate);
-            gastoParams.push(endDate);
-            manualParams.push(endDate);
-        }
+            if (effStartDate && effEndDate) {
+                orderDateFilter = " AND date(timestamp, '-5 hours') BETWEEN date(?) AND date(?)";
+                gastoDateFilter = " AND date(timestamp, '-5 hours') BETWEEN date(?) AND date(?)";
+                manualDateFilter = " AND date(timestamp, '-5 hours') BETWEEN date(?) AND date(?)";
+                orderParams.push(effStartDate, effEndDate);
+                gastoParams.push(effStartDate, effEndDate);
+                manualParams.push(effStartDate, effEndDate);
+            } else if (effStartDate) {
+                orderDateFilter = " AND date(timestamp, '-5 hours') >= date(?)";
+                gastoDateFilter = " AND date(timestamp, '-5 hours') >= date(?)";
+                manualDateFilter = " AND date(timestamp, '-5 hours') >= date(?)";
+                orderParams.push(effStartDate);
+                gastoParams.push(effStartDate);
+                manualParams.push(effStartDate);
+            } else if (effEndDate) {
+                orderDateFilter = " AND date(timestamp, '-5 hours') <= date(?)";
+                gastoDateFilter = " AND date(timestamp, '-5 hours') <= date(?)";
+                manualDateFilter = " AND date(timestamp, '-5 hours') <= date(?)";
+                orderParams.push(effEndDate);
+                gastoParams.push(effEndDate);
+                manualParams.push(effEndDate);
+            }
 
         // 1. Entradas automáticas por pedidos (Cobrado)
         let orderSql = `

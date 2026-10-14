@@ -14,6 +14,7 @@ import { toast, showModalAlert, setLoading } from '../components/ui.js';
 import { createOrder } from '../services/order-service.js';
 import { compressProof } from '../utils/image-utils.js';
 import { getTopDishes7d } from '../services/product-service.js';
+import { calculateOrderCombos } from '../utils/combo-calculator.js';
 
 let currentDisplayCategory = 'Todos';
 let currentClientCategory = 'Todos';
@@ -1567,7 +1568,9 @@ export function addToCart(id) {
 }
 
 export function updateCheckoutTotals() {
-    const subtotal = state.cart.reduce((a, b) => a + (b.price * b.qty), 0);
+    const comboCalc = calculateOrderCombos(state.cart);
+    const subtotal = comboCalc.subtotalBase;
+    const comboDiscount = comboCalc.totalComboDiscount;
     const orderType = $('c-type')?.value;
     const isDomicilio = orderType === 'Domicilio';
     const zoneId = $('c-zone')?.value;
@@ -1575,6 +1578,9 @@ export function updateCheckoutTotals() {
 
     const breakdownContainer = $('cart-breakdown-container');
     const subtotalEl = $('cart-subtotal-modal');
+    const comboRow = $('cart-combo-row');
+    const comboLabel = $('cart-combo-label');
+    const comboDiscountEl = $('cart-combo-discount');
     const deliveryRow = $('cart-delivery-row');
     const deliveryLabel = $('cart-delivery-label');
     const deliveryFeeEl = $('cart-delivery-fee');
@@ -1586,6 +1592,19 @@ export function updateCheckoutTotals() {
     const minOrderText = $('c-zone-min-order-text');
 
     let deliveryFee = 0;
+
+    // Fila de ahorro por combos
+    if (comboRow && comboDiscountEl) {
+        if (comboDiscount > 0) {
+            comboRow.classList.remove('hidden');
+            comboDiscountEl.textContent = `-${formatMoney(comboDiscount)}`;
+            if (comboLabel && comboCalc.discountReason) {
+                comboLabel.innerHTML = `<i class="fas fa-tags text-[10px]"></i> Ahorro (${escapeHtml(comboCalc.discountReason)}):`;
+            }
+        } else {
+            comboRow.classList.add('hidden');
+        }
+    }
 
     if (isDomicilio) {
         if (selectedZone) {
@@ -1609,7 +1628,7 @@ export function updateCheckoutTotals() {
     } else {
         if (zoneInfo) zoneInfo.classList.add('hidden');
         if (deliveryRow) deliveryRow.classList.add('hidden');
-        if (breakdownContainer && subtotal > 0 && orderType && orderType !== '0') {
+        if (breakdownContainer && (subtotal > 0 || comboDiscount > 0)) {
             breakdownContainer.classList.remove('hidden');
         } else if (breakdownContainer && !isDomicilio) {
             breakdownContainer.classList.add('hidden');
@@ -1617,7 +1636,7 @@ export function updateCheckoutTotals() {
     }
 
     if (subtotalEl) subtotalEl.textContent = formatMoney(subtotal);
-    const grandTotal = subtotal + deliveryFee;
+    const grandTotal = Math.max(0, subtotal - comboDiscount + deliveryFee);
     if (totalEl) totalEl.textContent = formatMoney(grandTotal);
 
     if ($('c-pay')?.value === 'Mixto' && typeof window.updateClientMixedBalance === 'function') {
@@ -1627,7 +1646,10 @@ export function updateCheckoutTotals() {
 
 export function updateCartUI() {
     const qty = state.cart.reduce((a, b) => a + b.qty, 0);
-    const total = state.cart.reduce((a, b) => a + (b.price * b.qty), 0);
+    const comboCalc = calculateOrderCombos(state.cart);
+    const total = comboCalc.totalComboDiscount > 0
+        ? comboCalc.netItemsTotal
+        : state.cart.reduce((a, b) => a + (b.price * b.qty), 0);
     if ($('cart-count')) $('cart-count').innerText = qty;
     if ($('cart-total-float')) $('cart-total-float').innerText = formatMoney(total);
     updateCheckoutTotals();
@@ -1651,7 +1673,10 @@ export function renderCartList() {
             <div class="flex items-start gap-2.5 min-w-0 flex-1">
                 <div class="bg-orange-50 text-orange-600 font-bold w-6 h-6 flex items-center justify-center rounded-lg text-xs shrink-0 mt-0.5">${item.qty}</div>
                 <div class="min-w-0 flex-1">
-                    <p class="font-bold text-xs text-gray-800 leading-tight">${escapeHtml(item.name)}</p>
+                    <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                        ${item.combo_name ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
+                        <p class="font-bold text-xs text-gray-800 leading-tight">${escapeHtml(item.name)}</p>
+                    </div>
                     ${item.variant_name ? `<p class="text-[10px] text-indigo-700 font-bold leading-tight mt-0.5"><i class="fas fa-layer-group text-[8px] mr-1"></i>Tamaño: ${escapeHtml(item.variant_name)}</p>` : ''}
                     ${item.toppings_text ? `<p class="text-[10px] text-amber-700 font-medium leading-tight mt-0.5"><i class="fas fa-cookie-bite mr-1 text-[8px]"></i>${escapeHtml(item.toppings_text)}</p>` : ''}
                     ${item.notes ? `<p class="text-[9px] text-gray-400 italic leading-tight mt-0.5">Nota: ${escapeHtml(item.notes)}</p>` : ''}
@@ -1721,7 +1746,9 @@ export async function handleSendOrder() {
     let selectedZone = null;
     let deliveryFee = 0;
     let deliveryZoneName = '';
-    const cartSubtotal = state.cart.reduce((a, b) => a + (b.price * b.qty), 0);
+    const comboCalc = calculateOrderCombos(state.cart);
+    const cartSubtotal = comboCalc.subtotalBase;
+    const comboDiscount = comboCalc.totalComboDiscount;
 
     if (orderType === 'Domicilio') {
         const zoneId = $('c-zone')?.value;
@@ -1733,7 +1760,7 @@ export async function handleSendOrder() {
         deliveryZoneName = selectedZone.name;
     }
 
-    const totalWithDelivery = cartSubtotal + deliveryFee;
+    const totalWithDelivery = Math.max(0, cartSubtotal - comboDiscount + deliveryFee);
 
     const role = state.user ? state.user.role : null;
     const isStaffOrder = role === 'admin' ||
@@ -1791,6 +1818,8 @@ export async function handleSendOrder() {
         address: orderType === 'Domicilio' ? $('c-address').value : 'N/A',
         delivery_zone: deliveryZoneName,
         delivery_fee: deliveryFee,
+        discount: comboDiscount,
+        discount_reason: comboCalc.discountReason || '',
         items: state.cart,
         total: totalWithDelivery,
         status: 'Pendiente'
@@ -1858,6 +1887,9 @@ export async function handleSendOrder() {
         if (orderType === 'Domicilio' && deliveryZoneName) {
             msg += `\nSubtotal: ${formatMoney(cartSubtotal)}\n`;
             msg += `Domicilio (${deliveryZoneName}): ${formatMoney(deliveryFee)}\n`;
+        }
+        if (comboDiscount > 0) {
+            msg += `Ahorro Combo (${comboCalc.discountReason}): -${formatMoney(comboDiscount)}\n`;
         }
         msg += `\n${dollar} *TOTAL: ${formatMoney(totalWithDelivery)}*\n`;
         msg += `${person} Nombre: ${name}\n${pin} Tipo: ${orderData.type}\n`;
