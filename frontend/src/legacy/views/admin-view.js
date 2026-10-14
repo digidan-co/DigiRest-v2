@@ -625,11 +625,22 @@ export function setupAdminListeners() {
             'CASH_CLOSINGS_DELETED': { label: 'Cierre Borrado', bg: 'bg-amber-100 text-amber-700 border-amber-200' },
             'COUNTERS_RESET': { label: 'Contadores Reiniciados', bg: 'bg-orange-100 text-orange-700 border-orange-200' },
             'MANUAL_BACKUP_CREATED': { label: 'Copia Creada', bg: 'bg-blue-100 text-blue-700 border-blue-200' },
-            'BACKUP_DOWNLOADED': { label: 'Copia Descargada', bg: 'bg-cyan-100 text-cyan-700 border-cyan-200' }
+            'BACKUP_DOWNLOADED': { label: 'Copia Descargada', bg: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+            'AUTHORIZATION_REQUESTED': { label: 'Solicitud de Autorización', bg: 'bg-amber-100 text-amber-800 border-amber-200 font-bold' },
+            'AUTHORIZATION_APPROVED': { label: 'Autorización Aprobada', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold' },
+            'AUTHORIZATION_REJECTED': { label: 'Autorización Rechazada', bg: 'bg-rose-100 text-rose-800 border-rose-200 font-bold' },
+            'FINANCE_ACCOUNT_CREATED': { label: 'Cuenta Creada', bg: 'bg-teal-100 text-teal-800 border-teal-200' },
+            'FINANCE_ACCOUNT_UPDATED': { label: 'Cuenta Editada', bg: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
+            'FINANCE_ACCOUNT_DELETED': { label: 'Cuenta Eliminada', bg: 'bg-red-100 text-red-800 border-red-200' },
+            'FINANCE_TRANSFER': { label: 'Transferencia de Fondos', bg: 'bg-blue-100 text-blue-800 border-blue-200' },
+            'FINANCE_RECONCILE': { label: 'Conciliación de Saldo', bg: 'bg-teal-100 text-teal-800 border-teal-200 font-bold' }
         };
 
         tbody.innerHTML = pageLogs.map(l => {
-            const badge = badgeMap[l.event_type] || { label: l.event_type, bg: 'bg-gray-100 text-gray-700 border-gray-200' };
+            const badge = badgeMap[l.event_type] || { 
+                label: (l.event_type || 'Acción').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), 
+                bg: 'bg-gray-100 text-gray-700 border-gray-200' 
+            };
             const dateObj = new Date(l.timestamp);
             const dateFmt = dateObj.toLocaleString('es-CO', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
@@ -640,10 +651,10 @@ export function setupAdminListeners() {
             if (l.event_type === 'ORDER_CANCELLED' || l.event_type === 'ORDER_CANCELLED_EXTEMPORARY') {
                 const origDateFmt = d.originalDate ? ` • Fecha orig: <b>${new Date(d.originalDate).toLocaleDateString('es-CO')}</b>` : '';
                 const authBy = d.authorizedBy ? ` • Autorizado por: <b>${d.authorizedBy}</b>` : '';
-                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) • Motivo: <i>"${d.cancelReason || 'N/A'}"</i>${origDateFmt}${authBy}`;
+                detailText = `<b>Pedido #${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) • Motivo: <i>"${d.cancelReason || 'N/A'}"</i>${origDateFmt}${authBy}`;
             } else if (l.event_type === 'ORDER_DELETED' || l.event_type === 'ORDER_DELETED_EXTEMPORARY') {
                 const origDateFmt = d.originalDate ? ` • Fecha orig: <b>${new Date(d.originalDate).toLocaleDateString('es-CO')}</b>` : '';
-                detailText = `<b>Pedido ${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) de ${d.client || 'Cliente'}${origDateFmt}`;
+                detailText = `<b>Pedido #${d.orderId}</b> ($${Number(d.total || 0).toLocaleString('es-CO')}) de ${d.client || 'Cliente'}${origDateFmt}`;
             } else if (l.event_type === 'CASH_CLOSING_CREATED') {
                 detailText = `Cierre <b>#${d.cierreId}</b> • Total: $${Number(d.totalGeneral || 0).toLocaleString('es-CO')} (Efectivo: $${Number(d.ingresoEfectivo || 0).toLocaleString('es-CO')}, Transf: $${Number(d.ingresoTransferencia || 0).toLocaleString('es-CO')})`;
             } else if (l.event_type === 'CASH_CLOSINGS_DELETED') {
@@ -652,10 +663,45 @@ export function setupAdminListeners() {
                 detailText = `Depuración de ${d.total} pedidos antiguos (${d.localDeleted} locales, ${d.generalDeleted} generales)`;
             } else if (l.event_type === 'COUNTERS_RESET') {
                 detailText = `${d.message || 'Contadores restablecidos a 0'}`;
+            } else if (d.authId || d.reason || (d.type && (d.type === 'cancel' || d.type === 'edit')) || l.event_type?.startsWith('AUTHORIZATION')) {
+                const opType = d.type === 'cancel' ? 'Anulación de pedido' : (d.type === 'edit' ? 'Modificación de pedido' : (d.type || 'Operación'));
+                const parts = [];
+                if (d.orderId) parts.push(`<b>Pedido #${d.orderId}</b>`);
+                parts.push(`Acción: <b>${opType}</b>`);
+                if (d.reason) parts.push(`Motivo: <i>"${d.reason}"</i>`);
+                if (d.requestedByName) parts.push(`Solicitante: <b>${d.requestedByName}</b>`);
+                if (d.authorizedBy) parts.push(`Aprobado por: <b>${d.authorizedBy}</b>`);
+                if (d.rejectedBy) parts.push(`Rechazado por: <b>${d.rejectedBy}</b>`);
+                detailText = parts.join(' • ');
+            } else if (d.account_name || d.accountName) {
+                const accName = d.account_name || d.accountName;
+                const parts = [`Cuenta: <b>${accName}</b>`];
+                if (d.new_balance !== undefined || d.newBalance !== undefined) {
+                    parts.push(`Nuevo saldo: <b>$${Number(d.new_balance ?? d.newBalance ?? 0).toLocaleString('es-CO')}</b>`);
+                }
+                if (d.diff !== undefined) {
+                    const diffNum = Number(d.diff) || 0;
+                    parts.push(`Ajuste: <b>${diffNum >= 0 ? '+' : ''}$${diffNum.toLocaleString('es-CO')}</b>`);
+                }
+                if (d.reason) parts.push(`Motivo: <i>"${d.reason}"</i>`);
+                detailText = parts.join(' • ');
+            } else if (d.from_account_name || d.to_account_name) {
+                detailText = `Origen: <b>${d.from_account_name || 'Caja'}</b> ➔ Destino: <b>${d.to_account_name || 'Banco'}</b> • Monto: <b>$${Number(d.amount || 0).toLocaleString('es-CO')}</b>${d.notes ? ` • Nota: <i>"${d.notes}"</i>` : ''}`;
             } else if (d.filename) {
                 detailText = `Archivo: <code>${d.filename}</code> ${d.size ? `(${d.size})` : ''}`;
+            } else if (typeof d === 'object' && d !== null) {
+                const entries = Object.entries(d);
+                if (entries.length === 0) {
+                    detailText = 'Sin detalles registrados';
+                } else {
+                    detailText = entries.map(([k, v]) => {
+                        const cleanKey = k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').toLowerCase();
+                        const cleanVal = typeof v === 'object' ? JSON.stringify(v) : v;
+                        return `<span class="inline-block mr-2"><b class="text-gray-700 capitalize">${cleanKey}:</b> ${cleanVal}</span>`;
+                    }).join(' ');
+                }
             } else {
-                detailText = typeof d === 'string' ? d : JSON.stringify(d);
+                detailText = String(d || '-');
             }
 
             const userName = l.user_name || (d.userName || d.user || d.deletedBy) || 'Sistema';
@@ -1396,6 +1442,7 @@ export function renderAdminGastosPage() {
     load();
 }
 export async function updateDashboardStats(allOrders, waiterOrders) {
+window.updateDashboardStats = updateDashboardStats;
     // Filter out Local orders from the first argument to avoid double counting
     const generalOrders = (allOrders || []).filter(o => o.type !== 'Local');
     const localOrders = waiterOrders || [];
@@ -1414,6 +1461,47 @@ export async function updateDashboardStats(allOrders, waiterOrders) {
         const el = $(id);
         if (el) el.innerText = val;
     };
+
+    // Actualizar reloj y aplicar restricciones al cajero
+    const applyCashierDashboardRestrictions = () => {
+        try {
+            const u = JSON.parse(localStorage.getItem('pos_user') || '{}');
+            if ((u.role || '').toLowerCase() === 'cajero') {
+                const revWidget = document.getElementById('widget-stat-revenue-today');
+                const globWidget = document.getElementById('widget-stat-global');
+                const revChart = document.getElementById('widget-chart-revenue-7d');
+                const waitersChart = document.getElementById('widget-chart-waiters-7d');
+                if (revWidget) revWidget.style.display = 'none';
+                if (globWidget) globWidget.style.display = 'none';
+                if (revChart) revChart.style.display = 'none';
+                if (waitersChart) {
+                    waitersChart.classList.remove('lg:col-span-1');
+                    waitersChart.classList.add('lg:col-span-3');
+                }
+            }
+        } catch (_) {}
+    };
+    applyCashierDashboardRestrictions();
+
+    const startDashboardClock = () => {
+        const update = () => {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('es-CO', {
+                hour: '2-digit', minute: '2-digit', hour12: true
+            });
+            const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+            const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const dateStr = `Hoy es: ${days[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]}`;
+
+            document.querySelectorAll('.clock-display-time').forEach(el => { el.innerText = timeStr; });
+            document.querySelectorAll('.clock-display-date').forEach(el => { el.innerText = dateStr; });
+        };
+        update();
+        if (!window._dashboardClockInterval) {
+            window._dashboardClockInterval = setInterval(update, 1000);
+        }
+    };
+    startDashboardClock();
 
     // Attempt to fetch real aggregated metrics directly from SQLite backend
     let realStats = null;
@@ -1864,42 +1952,85 @@ export function renderSevenDayDashboardCharts(generalOrders, localOrders, server
         });
     }
 
-    // 4. Top Dish 7 Days (Plato Estrella)
+    // 4. Top 5 Platos de la Semana
+    const dishesContainer = document.getElementById('weekly-top-dishes-container');
     const dishStats = document.getElementById('weekly-top-dish-name');
     const dishSales = document.getElementById('weekly-top-dish-sales');
 
-    if (dishStats && dishSales) {
-        if (serverStats && serverStats.starDishWeekly) {
-            dishStats.innerText = serverStats.starDishWeekly.name;
-            dishSales.innerText = serverStats.starDishWeekly.count + (serverStats.starDishWeekly.count > 1 ? ' ventas' : ' venta');
-        } else if (!serverStats) {
-            // Fallback calculation from memory
-            const dishMap = new Map();
-            const allOrders = [...(generalOrders || []), ...(localOrders || [])].filter(o => o.status !== 'Anulado');
-            const startOf7Days = Date.now() - 7 * 86400000;
-
-            allOrders.forEach(o => {
-                const orderTime = getSafeDate(o.date || o.timestamp).getTime();
-                if (orderTime >= startOf7Days) {
-                    let items = [];
-                    try { items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []); } catch (e) { }
-                    items.forEach(item => {
-                        const name = item.name || 'Producto';
-                        const qty = Number(item.qty || item.quantity) || 1;
-                        dishMap.set(name, (dishMap.get(name) || 0) + qty);
-                    });
-                }
-            });
-
-            if (dishMap.size > 0) {
-                const sortedDishes = Array.from(dishMap.entries()).sort((a, b) => b[1] - a[1]);
-                const topDish = sortedDishes[0];
-                dishStats.innerText = topDish[0];
-                dishSales.innerText = topDish[1] + (topDish[1] > 1 ? ' ventas' : ' venta');
-            } else {
-                dishStats.innerText = 'Sin ventas aún';
-                dishSales.innerText = '0 ventas';
+    let top5List = [];
+    if (serverStats && serverStats.topDishesWeekly && Array.isArray(serverStats.topDishesWeekly) && serverStats.topDishesWeekly.length > 0) {
+        top5List = serverStats.topDishesWeekly.slice(0, 5);
+    } else if (serverStats && serverStats.starDishWeekly) {
+        top5List = [serverStats.starDishWeekly];
+    } else {
+        const dishMap = new Map();
+        const allOrders = [...(generalOrders || []), ...(localOrders || [])].filter(o => o.status !== 'Anulado');
+        const startOf7Days = Date.now() - 7 * 86400000;
+        allOrders.forEach(o => {
+            const orderTime = getSafeDate(o.date || o.timestamp).getTime();
+            if (orderTime >= startOf7Days) {
+                let items = [];
+                try { items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []); } catch (e) { }
+                items.forEach(item => {
+                    const name = item.name || 'Producto';
+                    const qty = Number(item.qty || item.quantity) || 1;
+                    dishMap.set(name, (dishMap.get(name) || 0) + qty);
+                });
             }
+        });
+        top5List = Array.from(dishMap.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+    }
+
+    if (dishesContainer) {
+        if (top5List.length === 0) {
+            dishesContainer.innerHTML = `
+                <div class="py-8 text-center text-gray-400 text-xs col-span-full">
+                    <i class="fas fa-utensils text-2xl text-gray-300 mb-2 block"></i>
+                    No se han registrado ventas de platos durante los últimos 7 días.
+                </div>
+            `;
+        } else {
+            dishesContainer.innerHTML = top5List.map((dish, index) => {
+                const borderCls = index === 0 ? 'bg-amber-50/50 border-amber-300 shadow-2xs ring-1 ring-amber-300/60' :
+                                  index === 1 ? 'bg-gray-50/70 border-gray-300' :
+                                  index === 2 ? 'bg-orange-50/40 border-orange-200' : 'bg-white border-gray-200';
+                const rankCls = index === 0 ? 'bg-amber-500 text-white' :
+                                index === 1 ? 'bg-gray-400 text-white' :
+                                index === 2 ? 'bg-orange-400 text-white' : 'bg-gray-200 text-gray-700';
+                const pillCls = index === 0 ? 'bg-amber-100 text-amber-800' :
+                                index === 1 ? 'bg-gray-200 text-gray-700' :
+                                index === 2 ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600';
+                return `
+                    <div class="p-3.5 rounded-2xl border transition-all flex flex-col justify-between ${borderCls}">
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <span class="w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shadow-2xs shrink-0 ${rankCls}">
+                                ${index === 0 ? '<i class="fas fa-crown text-[10px]"></i>' : '#' + (index + 1)}
+                            </span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${pillCls}">
+                                ${dish.count} ${dish.count === 1 ? 'venta' : 'ventas'}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-xs text-gray-900 leading-snug line-clamp-2" title="${escapeHtml(dish.name)}">
+                                ${escapeHtml(dish.name)}
+                            </h4>
+                            <p class="text-[10px] text-gray-400 mt-1 font-medium">
+                                ${index === 0 ? 'Plato Estrella' : `Puesto #${index + 1} de la semana`}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    if (dishStats && dishSales) {
+        if (top5List.length > 0) {
+            dishStats.innerText = top5List[0].name;
+            dishSales.innerText = top5List[0].count + (top5List[0].count > 1 ? ' ventas' : ' venta');
         } else {
             dishStats.innerText = 'Sin ventas aún';
             dishSales.innerText = '0 ventas';

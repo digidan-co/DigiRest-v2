@@ -483,6 +483,7 @@ module.exports = (io) => {
                 sevenDaysRevenue,
                 sevenDaysWaiters,
                 starDishWeekly: topDishesWeekly[0] || null,
+                topDishesWeekly: topDishesWeekly.slice(0, 5),
                 topDishesToday: topDishesToday.slice(0, 3)
             };
 

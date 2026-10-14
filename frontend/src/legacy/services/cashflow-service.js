@@ -48,6 +48,10 @@ export async function transferBetweenAccounts(data) {
     return ApiClient.post('/cashflow/accounts/transfer', data);
 }
 
+export async function reconcileAccountBalance(id, data) {
+    return ApiClient.post(`/cashflow/accounts/${id}/reconcile`, data);
+}
+
 // --- Categorías ---
 export async function getCategories(params = {}) {
     const query = new URLSearchParams();

@@ -10,7 +10,7 @@ module.exports = (io) => {
 
 // Get All Users (Admin only) - Sanitized: no password hashes exposed (Excludes master admin)
 router.get('/', verifyToken, requireRole(['admin']), (req, res) => {
-    db.all("SELECT id, name, COALESCE(username, name) as username, role, created_at, work_schedule FROM users WHERE id != 'digidan_master_admin' AND username != 'digidanMasterAdmin' AND name != 'digidanMasterAdmin' ORDER BY name ASC", [], (err, rows) => {
+    db.all("SELECT id, name, COALESCE(username, name) as username, role, created_at, work_schedule, allowed_finance_accounts FROM users WHERE id != 'digidan_master_admin' AND username != 'digidanMasterAdmin' AND name != 'digidanMasterAdmin' ORDER BY name ASC", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
@@ -18,9 +18,10 @@ router.get('/', verifyToken, requireRole(['admin']), (req, res) => {
 
 // Create/Update User (Admin only)
 router.post('/', verifyToken, requireRole(['admin']), validateUser, async (req, res) => {
-    const { id, name, username, code, role, work_schedule } = req.body;
+    const { id, name, username, code, role, work_schedule, allowed_finance_accounts } = req.body;
     const finalUsername = (username && username.trim()) || name.trim();
     const scheduleStr = work_schedule !== undefined ? (typeof work_schedule === 'string' ? work_schedule : JSON.stringify(work_schedule)) : null;
+    const accountsStr = allowed_finance_accounts !== undefined ? (typeof allowed_finance_accounts === 'string' ? allowed_finance_accounts : JSON.stringify(allowed_finance_accounts)) : null;
 
     if (id === 'digidan_master_admin' || id === 'master') {
         return res.status(403).json({ error: 'No se puede modificar el usuario administrador maestro desde esta sección.' });
@@ -37,10 +38,20 @@ router.post('/', verifyToken, requireRole(['admin']), validateUser, async (req, 
             if (code) {
                 // Update with new password
                 hashedCode = await bcrypt.hash(code, 10);
-                const sql = scheduleStr !== null 
-                    ? `UPDATE users SET name = ?, username = ?, code = ?, role = ?, work_schedule = ? WHERE id = ?`
-                    : `UPDATE users SET name = ?, username = ?, code = ?, role = ? WHERE id = ?`;
-                const params = scheduleStr !== null ? [name, finalUsername, hashedCode, role, scheduleStr, id] : [name, finalUsername, hashedCode, role, id];
+                let sql = `UPDATE users SET name = ?, username = ?, code = ?, role = ?`;
+                const params = [name, finalUsername, hashedCode, role];
+
+                if (scheduleStr !== null) {
+                    sql += `, work_schedule = ?`;
+                    params.push(scheduleStr);
+                }
+                if (accountsStr !== null) {
+                    sql += `, allowed_finance_accounts = ?`;
+                    params.push(accountsStr);
+                }
+                sql += ` WHERE id = ?`;
+                params.push(id);
+
                 db.run(sql, params, function (err) {
                     if (err) return res.status(500).json({ error: err.message });
                     io.emit('users_updated');
@@ -48,10 +59,20 @@ router.post('/', verifyToken, requireRole(['admin']), validateUser, async (req, 
                 });
             } else {
                 // Update details only (keep old password)
-                const sql = scheduleStr !== null
-                    ? `UPDATE users SET name = ?, username = ?, role = ?, work_schedule = ? WHERE id = ?`
-                    : `UPDATE users SET name = ?, username = ?, role = ? WHERE id = ?`;
-                const params = scheduleStr !== null ? [name, finalUsername, role, scheduleStr, id] : [name, finalUsername, role, id];
+                let sql = `UPDATE users SET name = ?, username = ?, role = ?`;
+                const params = [name, finalUsername, role];
+
+                if (scheduleStr !== null) {
+                    sql += `, work_schedule = ?`;
+                    params.push(scheduleStr);
+                }
+                if (accountsStr !== null) {
+                    sql += `, allowed_finance_accounts = ?`;
+                    params.push(accountsStr);
+                }
+                sql += ` WHERE id = ?`;
+                params.push(id);
+
                 db.run(sql, params, function (err) {
                     if (err) return res.status(500).json({ error: err.message });
                     io.emit('users_updated');
@@ -64,8 +85,8 @@ router.post('/', verifyToken, requireRole(['admin']), validateUser, async (req, 
 
             hashedCode = await bcrypt.hash(code, 10);
             const newId = uuidv4();
-            const sql = `INSERT INTO users (id, name, username, code, role, work_schedule) VALUES (?, ?, ?, ?, ?, ?)`;
-            db.run(sql, [newId, name, finalUsername, hashedCode, role, scheduleStr], function (err) {
+            const sql = `INSERT INTO users (id, name, username, code, role, work_schedule, allowed_finance_accounts) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            db.run(sql, [newId, name, finalUsername, hashedCode, role, scheduleStr, accountsStr], function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 io.emit('users_updated');
                 res.json({ message: 'User created', id: newId });
@@ -88,6 +109,22 @@ router.post('/:id/schedule', verifyToken, requireRole(['admin']), (req, res) => 
         if (err) return res.status(500).json({ error: err.message });
         io.emit('users_updated');
         res.json({ message: 'Horario actualizado correctamente', id, schedule: scheduleStr });
+    });
+});
+
+// Update User Allowed Finance Accounts (Admin only)
+router.post('/:id/finance-accounts', verifyToken, requireRole(['admin']), (req, res) => {
+    const { id } = req.params;
+    const { allowed_finance_accounts } = req.body;
+
+    const accountsStr = Array.isArray(allowed_finance_accounts)
+        ? JSON.stringify(allowed_finance_accounts)
+        : (typeof allowed_finance_accounts === 'string' ? allowed_finance_accounts : '[]');
+
+    db.run("UPDATE users SET allowed_finance_accounts = ? WHERE id = ?", [accountsStr, id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        io.emit('users_updated');
+        res.json({ message: 'Permisos de cuentas actualizados correctamente', id, allowed_finance_accounts: accountsStr });
     });
 });
 

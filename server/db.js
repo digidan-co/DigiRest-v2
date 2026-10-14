@@ -62,6 +62,8 @@ function initSchema() {
         username TEXT,
         code TEXT NOT NULL,
         role TEXT NOT NULL,
+        work_schedule TEXT,
+        allowed_finance_accounts TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -502,6 +504,9 @@ function initSchema() {
 
             // Migration: Add work_schedule column to users for schedule enforcement
             db.run("ALTER TABLE users ADD COLUMN work_schedule TEXT", (err) => { });
+
+            // Migration: Add allowed_finance_accounts column to users for cashflow privacy
+            db.run("ALTER TABLE users ADD COLUMN allowed_finance_accounts TEXT", (err) => { });
 
             // Migration: Add toppings, recommendations, and promo columns to products
             db.run("ALTER TABLE products ADD COLUMN has_toppings INTEGER DEFAULT 0", (err) => { });

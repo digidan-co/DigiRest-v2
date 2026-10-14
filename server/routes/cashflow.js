@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
-const { verifyToken } = require('./auth');
+const { verifyToken, requireRole } = require('./auth');
 
 module.exports = (io) => {
     const notifyCashflow = (type, data = {}) => {
@@ -12,18 +12,70 @@ module.exports = (io) => {
         }
     };
 
+    // Helper para verificar y obtener IDs de cuentas permitidas para roles operativos (cajero/supervisor)
+    const getUserAllowedAccounts = (userId, userRole, callback) => {
+        if (userRole === 'admin') {
+            return callback(null, 'ALL');
+        }
+        if (!userId) {
+            return callback(null, []);
+        }
+        db.get("SELECT role, allowed_finance_accounts FROM users WHERE id = ?", [userId], (err, row) => {
+            if (err || !row) return callback(err, []);
+            if (row.role === 'admin') return callback(null, 'ALL');
+            let allowed = [];
+            if (row.allowed_finance_accounts) {
+                try {
+                    const parsed = JSON.parse(row.allowed_finance_accounts);
+                    if (Array.isArray(parsed)) {
+                        allowed = parsed.map(x => parseInt(x, 10)).filter(x => !isNaN(x));
+                    }
+                } catch (e) {
+                    console.error('Error parsing allowed_finance_accounts:', e);
+                }
+            }
+            callback(null, allowed);
+        });
+    };
+
     // =========================================================================
     // 1. GET /api/cashflow - RESUMEN CONSOLIDADO Y MOVIMIENTOS
     // =========================================================================
     router.get('/cashflow', verifyToken, (req, res) => {
         const { startDate, endDate, paymentMethod, accountId } = req.query;
+        const userId = req.user?.id;
+        const userRole = req.user?.role;
 
-        let orderDateFilter = "";
-        let gastoDateFilter = "";
-        let manualDateFilter = "";
-        const orderParams = [];
-        const gastoParams = [];
-        const manualParams = [];
+        getUserAllowedAccounts(userId, userRole, (userErr, allowedAccountIds) => {
+            if (userErr) return res.status(500).json({ error: userErr.message });
+
+            // Si es un rol no-admin y no tiene ninguna cuenta asignada, no revelar movimientos
+            if (allowedAccountIds !== 'ALL' && (!allowedAccountIds || allowedAccountIds.length === 0)) {
+                return res.json({
+                    summary: { totalIngresos: 0, totalEgresos: 0, balanceNeto: 0, movimientosCount: 0 },
+                    movements: [],
+                    transactions: [],
+                    pagination: { page: 1, limit: 100, total: 0, totalPages: 1 }
+                });
+            }
+
+            if (allowedAccountIds !== 'ALL' && accountId && accountId !== 'all') {
+                if (!allowedAccountIds.includes(parseInt(accountId, 10))) {
+                    return res.json({
+                        summary: { totalIngresos: 0, totalEgresos: 0, balanceNeto: 0, movimientosCount: 0 },
+                        movements: [],
+                        transactions: [],
+                        pagination: { page: 1, limit: 100, total: 0, totalPages: 1 }
+                    });
+                }
+            }
+
+            let orderDateFilter = "";
+            let gastoDateFilter = "";
+            let manualDateFilter = "";
+            const orderParams = [];
+            const gastoParams = [];
+            const manualParams = [];
 
         if (startDate && endDate) {
             orderDateFilter = " AND date(timestamp, '-5 hours') BETWEEN date(?) AND date(?)";
@@ -127,6 +179,10 @@ module.exports = (io) => {
         if (accountId && accountId !== 'all') {
             manualSql += " AND account_id = ?";
             manualParams.push(parseInt(accountId, 10));
+        } else if (allowedAccountIds !== 'ALL') {
+            const placeholders = allowedAccountIds.map(() => '?').join(',');
+            manualSql += ` AND (account_id IN (${placeholders}))`;
+            manualParams.push(...allowedAccountIds);
         }
 
         manualSql += " ORDER BY timestamp DESC";
@@ -378,6 +434,7 @@ module.exports = (io) => {
             });
         });
     });
+    });
 
     // =========================================================================
     // 2. MOVIMIENTOS MANUALES (POST & DELETE)
@@ -396,13 +453,22 @@ module.exports = (io) => {
             return res.status(400).json({ error: 'El monto debe ser mayor a cero' });
         }
 
-        const id = uuidv4();
-        const pm = payment_method || 'Efectivo';
-        const user = req.user?.name || 'Admin';
+        getUserAllowedAccounts(req.user?.id, req.user?.role, (userErr, allowedAccountIds) => {
+            if (userErr) return res.status(500).json({ error: userErr.message });
+            if (account_id && allowedAccountIds !== 'ALL') {
+                const parsedAccId = parseInt(account_id, 10);
+                if (!allowedAccountIds.includes(parsedAccId)) {
+                    return res.status(403).json({ error: 'No tienes permiso para registrar movimientos en la cuenta seleccionada.' });
+                }
+            }
 
-        // Obtener nombre de cuenta si se pasó account_id
-        const findAccountSql = account_id ? "SELECT name FROM finance_accounts WHERE id = ?" : null;
-        const findCatSql = category_id ? "SELECT name FROM finance_categories WHERE id = ?" : null;
+            const id = uuidv4();
+            const pm = payment_method || 'Efectivo';
+            const user = req.user?.name || 'Admin';
+
+            // Obtener nombre de cuenta si se pasó account_id
+            const findAccountSql = account_id ? "SELECT name FROM finance_accounts WHERE id = ?" : null;
+            const findCatSql = category_id ? "SELECT name FROM finance_categories WHERE id = ?" : null;
 
         const processInsert = (accName, catName) => {
             const sql = `
@@ -460,6 +526,7 @@ module.exports = (io) => {
         } else {
             processInsert(null, category_name);
         }
+        });
     });
 
     router.delete('/cashflow/movement/:id', verifyToken, (req, res) => {
@@ -489,165 +556,183 @@ module.exports = (io) => {
     // =========================================================================
     router.get('/cashflow/accounts', verifyToken, (req, res) => {
         const { type, active } = req.query;
-        let sql = "SELECT * FROM finance_accounts WHERE 1=1";
-        const params = [];
+        const userId = req.user?.id;
+        const userRole = req.user?.role;
 
-        if (type && type !== 'all') {
-            sql += " AND type = ?";
-            params.push(type);
-        }
-        if (active !== undefined && active !== '') {
-            sql += " AND is_active = ?";
-            params.push(active === 'true' || active === '1' ? 1 : 0);
-        }
+        getUserAllowedAccounts(userId, userRole, (userErr, allowedAccountIds) => {
+            if (userErr) return res.status(500).json({ error: userErr.message });
 
-        sql += " ORDER BY type ASC, name ASC";
+            // Privacidad estricta: roles no-admin sin cuentas asignadas no ven fondos
+            if (allowedAccountIds !== 'ALL' && (!allowedAccountIds || allowedAccountIds.length === 0)) {
+                return res.json([]);
+            }
 
-        db.all(sql, params, (err, accounts) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!accounts || accounts.length === 0) return res.json([]);
+            let sql = "SELECT * FROM finance_accounts WHERE 1=1";
+            const params = [];
 
-            // Calcular saldo real acumulado considerando:
-            // 1. Pedidos en estado 'Cobrado' por método de pago y cuentas destino
-            // 2. Gastos registrados directos
-            // 3. Movimientos manuales de flujo de caja
-            // 4. Abonos y pagos de CxP / CxC
-            db.all("SELECT id, total, payment, status, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details FROM orders WHERE status = 'Cobrado'", [], (oErr, orders) => {
-                db.all("SELECT account_id, type, amount FROM cash_movements", [], (mErr, movements) => {
-                    db.all("SELECT account_id, type, amount FROM finance_payments", [], (pErr, payments) => {
-                        db.all("SELECT valor as amount, 'Efectivo' as payment_method FROM gastos_dia", [], (gErr, gastos) => {
-                            const safeOrders = orders || [];
-                            const safeMovements = movements || [];
-                            const safePayments = payments || [];
-                            const safeGastos = gastos || [];
+            if (allowedAccountIds !== 'ALL') {
+                const placeholders = allowedAccountIds.map(() => '?').join(',');
+                sql += ` AND id IN (${placeholders})`;
+                params.push(...allowedAccountIds);
+            }
 
-                            // Cuentas predeterminadas activas por tipo de fondo
-                            const efectivoAcc = accounts.find(a => a.type === 'Efectivo' && a.is_active === 1) || accounts.find(a => a.type === 'Efectivo');
-                            const datafonoAcc = accounts.find(a => a.type === 'Datáfono' && a.is_active === 1) || accounts.find(a => a.type === 'Datáfono');
-                            const transferAcc = accounts.find(a => a.type === 'Transferencia' && a.is_active === 1) || accounts.find(a => a.type === 'Transferencia');
-                            const nequiAcc = accounts.find(a => a.name.toLowerCase().includes('nequi') || (a.bank_name && a.bank_name.toLowerCase().includes('nequi')));
+            if (type && type !== 'all') {
+                sql += " AND type = ?";
+                params.push(type);
+            }
+            if (active !== undefined && active !== '') {
+                sql += " AND is_active = ?";
+                params.push(active === 'true' || active === '1' ? 1 : 0);
+            }
 
-                            const enriched = accounts.map(acc => {
-                                let bal = parseFloat(acc.initial_balance) || 0;
+            sql += " ORDER BY type ASC, name ASC";
 
-                                // 1. Sumar ventas cobradas dirigiendo a las cuentas seleccionadas
-                                safeOrders.forEach(o => {
-                                    const pm = (o.payment || 'Efectivo').toLowerCase();
-                                    const tot = parseFloat(o.total) || 0;
-                                    const isMixed = o.payment === 'Mixto' || pm === 'mixto';
+            db.all(sql, params, (err, accounts) => {
+                if (err) return res.status(500).json({ error: err.message });
+                if (!accounts || accounts.length === 0) return res.json([]);
 
-                                    let splits = null;
-                                    if (o.payment_details) {
-                                        try {
-                                            const pd = typeof o.payment_details === 'string' ? JSON.parse(o.payment_details) : o.payment_details;
-                                            if (pd && Array.isArray(pd.splits) && pd.splits.length > 0) {
-                                                splits = pd.splits;
-                                            }
-                                        } catch (_) {}
-                                    }
+                // Calcular saldo real acumulado considerando:
+                // 1. Pedidos en estado 'Cobrado' por método de pago y cuentas destino
+                // 2. Gastos registrados directos
+                // 3. Movimientos manuales de flujo de caja
+                // 4. Abonos y pagos de CxP / CxC
+                db.all("SELECT id, total, payment, status, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details FROM orders WHERE status = 'Cobrado'", [], (oErr, orders) => {
+                    db.all("SELECT account_id, type, amount FROM cash_movements", [], (mErr, movements) => {
+                        db.all("SELECT account_id, type, amount FROM finance_payments", [], (pErr, payments) => {
+                            db.all("SELECT valor as amount, 'Efectivo' as payment_method FROM gastos_dia", [], (gErr, gastos) => {
+                                const safeOrders = orders || [];
+                                const safeMovements = movements || [];
+                                const safePayments = payments || [];
+                                const safeGastos = gastos || [];
 
-                                    if (splits) {
-                                        splits.forEach(s => {
-                                            const sAmt = parseFloat(s.amount) || 0;
-                                            if (sAmt <= 0) return;
-                                            const sMethod = (s.method || 'Efectivo').toLowerCase();
-                                            const sAccId = s.account_id ? parseInt(s.account_id, 10) : null;
-                                            if (sAccId && acc.id === sAccId) {
-                                                bal += sAmt;
-                                            } else if (!sAccId) {
-                                                if (sMethod.includes('efectivo') && efectivoAcc && acc.id === efectivoAcc.id) {
+                                // Cuentas predeterminadas activas por tipo de fondo
+                                const efectivoAcc = accounts.find(a => a.type === 'Efectivo' && a.is_active === 1) || accounts.find(a => a.type === 'Efectivo');
+                                const datafonoAcc = accounts.find(a => a.type === 'Datáfono' && a.is_active === 1) || accounts.find(a => a.type === 'Datáfono');
+                                const transferAcc = accounts.find(a => a.type === 'Transferencia' && a.is_active === 1) || accounts.find(a => a.type === 'Transferencia');
+                                const nequiAcc = accounts.find(a => a.name.toLowerCase().includes('nequi') || (a.bank_name && a.bank_name.toLowerCase().includes('nequi')));
+
+                                const enriched = accounts.map(acc => {
+                                    let bal = parseFloat(acc.initial_balance) || 0;
+
+                                    // 1. Sumar ventas cobradas dirigiendo a las cuentas seleccionadas
+                                    safeOrders.forEach(o => {
+                                        const pm = (o.payment || 'Efectivo').toLowerCase();
+                                        const tot = parseFloat(o.total) || 0;
+                                        const isMixed = o.payment === 'Mixto' || pm === 'mixto';
+
+                                        let splits = null;
+                                        if (o.payment_details) {
+                                            try {
+                                                const pd = typeof o.payment_details === 'string' ? JSON.parse(o.payment_details) : o.payment_details;
+                                                if (pd && Array.isArray(pd.splits) && pd.splits.length > 0) {
+                                                    splits = pd.splits;
+                                                }
+                                            } catch (_) {}
+                                        }
+
+                                        if (splits) {
+                                            splits.forEach(s => {
+                                                const sAmt = parseFloat(s.amount) || 0;
+                                                if (sAmt <= 0) return;
+                                                const sMethod = (s.method || 'Efectivo').toLowerCase();
+                                                const sAccId = s.account_id ? parseInt(s.account_id, 10) : null;
+                                                if (sAccId && acc.id === sAccId) {
                                                     bal += sAmt;
-                                                } else if ((sMethod.includes('dat') || sMethod.includes('tarjeta') || sMethod.includes('bold') || sMethod.includes('redeban')) && datafonoAcc && acc.id === datafonoAcc.id) {
-                                                    bal += sAmt;
-                                                } else if ((sMethod.includes('nequi') || sMethod.includes('daviplata')) && nequiAcc && acc.id === nequiAcc.id) {
-                                                    bal += sAmt;
-                                                } else if (transferAcc && acc.id === transferAcc.id) {
-                                                    bal += sAmt;
-                                                } else if (efectivoAcc && acc.id === efectivoAcc.id) {
-                                                    bal += sAmt;
+                                                } else if (!sAccId) {
+                                                    if (sMethod.includes('efectivo') && efectivoAcc && acc.id === efectivoAcc.id) {
+                                                        bal += sAmt;
+                                                    } else if ((sMethod.includes('dat') || sMethod.includes('tarjeta') || sMethod.includes('bold') || sMethod.includes('redeban')) && datafonoAcc && acc.id === datafonoAcc.id) {
+                                                        bal += sAmt;
+                                                    } else if ((sMethod.includes('nequi') || sMethod.includes('daviplata')) && nequiAcc && acc.id === nequiAcc.id) {
+                                                        bal += sAmt;
+                                                    } else if (transferAcc && acc.id === transferAcc.id) {
+                                                        bal += sAmt;
+                                                    } else if (efectivoAcc && acc.id === efectivoAcc.id) {
+                                                        bal += sAmt;
+                                                    }
+                                                }
+                                            });
+                                        } else if (isMixed) {
+                                            const cashPart = parseFloat(o.cash_amount) || 0;
+                                            const transferPart = parseFloat(o.transfer_amount) || Math.max(0, tot - cashPart);
+
+                                            // Parte Efectivo -> cuenta seleccionada o caja activa
+                                            if (cashPart > 0) {
+                                                if (o.cash_account_id && acc.id === o.cash_account_id) {
+                                                    bal += cashPart;
+                                                } else if (!o.cash_account_id && efectivoAcc && acc.id === efectivoAcc.id) {
+                                                    bal += cashPart;
                                                 }
                                             }
-                                        });
-                                    } else if (isMixed) {
-                                        const cashPart = parseFloat(o.cash_amount) || 0;
-                                        const transferPart = parseFloat(o.transfer_amount) || Math.max(0, tot - cashPart);
 
-                                        // Parte Efectivo -> cuenta seleccionada o caja activa
-                                        if (cashPart > 0) {
-                                            if (o.cash_account_id && acc.id === o.cash_account_id) {
-                                                bal += cashPart;
-                                            } else if (!o.cash_account_id && efectivoAcc && acc.id === efectivoAcc.id) {
-                                                bal += cashPart;
+                                            // Parte Transferencia -> cuenta seleccionada o banco activo
+                                            if (transferPart > 0) {
+                                                if (o.transfer_account_id && acc.id === o.transfer_account_id) {
+                                                    bal += transferPart;
+                                                } else if (!o.transfer_account_id && transferAcc && acc.id === transferAcc.id) {
+                                                    bal += transferPart;
+                                                }
+                                            }
+                                        } else {
+                                            // Pago Simple: Si el usuario seleccionó una cuenta destino específica, va directo a esa cuenta
+                                            if (o.account_id && acc.id === o.account_id) {
+                                                bal += tot;
+                                            } else if (!o.account_id) {
+                                                // Fallback por tipo de método
+                                                if (pm === 'efectivo') {
+                                                    if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
+                                                } else if (pm.includes('dat') || pm.includes('tarjeta') || pm.includes('bold') || pm.includes('redeban')) {
+                                                    if (datafonoAcc && acc.id === datafonoAcc.id) bal += tot;
+                                                } else if (pm.includes('nequi') || pm.includes('daviplata')) {
+                                                    if (nequiAcc && acc.id === nequiAcc.id) bal += tot;
+                                                    else if (transferAcc && acc.id === transferAcc.id) bal += tot;
+                                                } else {
+                                                    if (transferAcc && acc.id === transferAcc.id) bal += tot;
+                                                    else if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
+                                                }
                                             }
                                         }
+                                    });
 
-                                        // Parte Transferencia -> cuenta seleccionada o banco activo
-                                        if (transferPart > 0) {
-                                            if (o.transfer_account_id && acc.id === o.transfer_account_id) {
-                                                bal += transferPart;
-                                            } else if (!o.transfer_account_id && transferAcc && acc.id === transferAcc.id) {
-                                                bal += transferPart;
-                                            }
+                                    // 2. Restar gastos registrados
+                                    safeGastos.forEach(g => {
+                                        const pm = (g.payment_method || 'Efectivo').toLowerCase();
+                                        const amt = parseFloat(g.amount) || 0;
+                                        if (pm === 'efectivo' && efectivoAcc && acc.id === efectivoAcc.id) {
+                                            bal -= amt;
+                                        } else if ((pm.includes('dat') || pm.includes('tarjeta')) && datafonoAcc && acc.id === datafonoAcc.id) {
+                                            bal -= amt;
+                                        } else if (transferAcc && acc.id === transferAcc.id) {
+                                            bal -= amt;
                                         }
-                                    } else {
-                                        // Pago Simple: Si el usuario seleccionó una cuenta destino específica, va directo a esa cuenta
-                                        if (o.account_id && acc.id === o.account_id) {
-                                            bal += tot;
-                                        } else if (!o.account_id) {
-                                            // Fallback por tipo de método
-                                            if (pm === 'efectivo') {
-                                                if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
-                                            } else if (pm.includes('dat') || pm.includes('tarjeta') || pm.includes('bold') || pm.includes('redeban')) {
-                                                if (datafonoAcc && acc.id === datafonoAcc.id) bal += tot;
-                                            } else if (pm.includes('nequi') || pm.includes('daviplata')) {
-                                                if (nequiAcc && acc.id === nequiAcc.id) bal += tot;
-                                                else if (transferAcc && acc.id === transferAcc.id) bal += tot;
-                                            } else {
-                                                if (transferAcc && acc.id === transferAcc.id) bal += tot;
-                                                else if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
-                                            }
+                                    });
+
+                                    // 3. Movimientos manuales de flujo
+                                    safeMovements.forEach(m => {
+                                        if (m.account_id === acc.id) {
+                                            const amt = parseFloat(m.amount) || 0;
+                                            if (m.type === 'INCOME') bal += amt;
+                                            else if (m.type === 'EXPENSE') bal -= amt;
                                         }
-                                    }
+                                    });
+
+                                    // 4. Pagos y Cobros (CxP / CxC)
+                                    safePayments.forEach(p => {
+                                        if (p.account_id === acc.id) {
+                                            const amt = parseFloat(p.amount) || 0;
+                                            if (p.type === 'RECEIVABLE') bal += amt;
+                                            else if (p.type === 'PAYABLE') bal -= amt;
+                                        }
+                                    });
+
+                                    return {
+                                        ...acc,
+                                        current_balance: bal
+                                    };
                                 });
 
-                                // 2. Restar gastos registrados
-                                safeGastos.forEach(g => {
-                                    const pm = (g.payment_method || 'Efectivo').toLowerCase();
-                                    const amt = parseFloat(g.amount) || 0;
-                                    if (pm === 'efectivo' && efectivoAcc && acc.id === efectivoAcc.id) {
-                                        bal -= amt;
-                                    } else if ((pm.includes('dat') || pm.includes('tarjeta')) && datafonoAcc && acc.id === datafonoAcc.id) {
-                                        bal -= amt;
-                                    } else if (transferAcc && acc.id === transferAcc.id) {
-                                        bal -= amt;
-                                    }
-                                });
-
-                                // 3. Movimientos manuales de flujo
-                                safeMovements.forEach(m => {
-                                    if (m.account_id === acc.id) {
-                                        const amt = parseFloat(m.amount) || 0;
-                                        if (m.type === 'INCOME') bal += amt;
-                                        else if (m.type === 'EXPENSE') bal -= amt;
-                                    }
-                                });
-
-                                // 4. Pagos y Cobros (CxP / CxC)
-                                safePayments.forEach(p => {
-                                    if (p.account_id === acc.id) {
-                                        const amt = parseFloat(p.amount) || 0;
-                                        if (p.type === 'RECEIVABLE') bal += amt;
-                                        else if (p.type === 'PAYABLE') bal -= amt;
-                                    }
-                                });
-
-                                return {
-                                    ...acc,
-                                    current_balance: bal
-                                };
+                                res.json(enriched);
                             });
-
-                            res.json(enriched);
                         });
                     });
                 });
@@ -655,7 +740,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/cashflow/accounts', verifyToken, (req, res) => {
+    router.post('/cashflow/accounts', verifyToken, requireRole(['admin']), (req, res) => {
         const { name, type, account_number, bank_name, initial_balance, description } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ error: 'El nombre de la cuenta es obligatorio' });
@@ -675,7 +760,7 @@ module.exports = (io) => {
         });
     });
 
-    router.put('/cashflow/accounts/:id', verifyToken, (req, res) => {
+    router.put('/cashflow/accounts/:id', verifyToken, requireRole(['admin']), (req, res) => {
         const { id } = req.params;
         const { name, type, account_number, bank_name, description, is_active } = req.body;
 
@@ -697,7 +782,7 @@ module.exports = (io) => {
     });
 
     // Desactivar / Reactivar cuenta
-    router.patch('/cashflow/accounts/:id/toggle', verifyToken, (req, res) => {
+    router.patch('/cashflow/accounts/:id/toggle', verifyToken, requireRole(['admin']), (req, res) => {
         const { id } = req.params;
         db.get("SELECT is_active FROM finance_accounts WHERE id = ?", [id], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -712,7 +797,7 @@ module.exports = (io) => {
     });
 
     // Eliminar cuenta permanentemente (solo si no tiene movimientos asociados)
-    router.delete('/cashflow/accounts/:id', verifyToken, (req, res) => {
+    router.delete('/cashflow/accounts/:id', verifyToken, requireRole(['admin']), (req, res) => {
         const { id } = req.params;
         db.get(`
             SELECT 
@@ -734,6 +819,80 @@ module.exports = (io) => {
         });
     });
 
+    // Conciliación Bancaria / Ajuste de Saldo de Cuenta (Solo Admin)
+    router.post('/cashflow/accounts/:id/reconcile', verifyToken, requireRole(['admin']), (req, res) => {
+        const { id } = req.params;
+        const { new_balance, reason } = req.body;
+        const parsedNewBalance = parseFloat(new_balance);
+
+        if (isNaN(parsedNewBalance)) {
+            return res.status(400).json({ error: 'Debes proporcionar un saldo real numérico válido' });
+        }
+
+        db.get("SELECT * FROM finance_accounts WHERE id = ?", [id], (err, account) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!account) return res.status(404).json({ error: 'Cuenta no encontrada' });
+
+            const oldBalance = parseFloat(account.current_balance) || 0;
+            const diff = parsedNewBalance - oldBalance;
+            const user = req.user?.name || 'Administrador';
+
+            if (Math.abs(diff) < 0.0001) {
+                return res.json({ 
+                    message: 'El saldo ingresado es idéntico al saldo actual de la cuenta. No requiere ajuste.',
+                    current_balance: oldBalance
+                });
+            }
+
+            // Actualizar el saldo directo de la cuenta
+            db.run("UPDATE finance_accounts SET current_balance = ? WHERE id = ?", [parsedNewBalance, id], function (updErr) {
+                if (updErr) return res.status(500).json({ error: updErr.message });
+
+                // Registrar movimiento de auditoría contable (Conciliación)
+                const moveId = uuidv4();
+                const isPositive = diff > 0;
+                const moveType = isPositive ? 'INCOME' : 'EXPENSE';
+                const moveAmount = Math.abs(diff);
+                const concept = isPositive 
+                    ? `Conciliación (+ Sobrante): ${account.name}` 
+                    : `Conciliación (- Faltante): ${account.name}`;
+                const noteText = reason && reason.trim() 
+                    ? reason.trim() 
+                    : `Ajuste de saldo de $${oldBalance.toLocaleString('es-CO')} a $${parsedNewBalance.toLocaleString('es-CO')}`;
+
+                const insertSql = `
+                    INSERT INTO cash_movements (
+                        id, type, concept, category_name, account_id, account_name, payment_method, amount, notes, user_name
+                    )
+                    VALUES (?, ?, ?, 'Conciliación / Ajuste', ?, ?, ?, ?, ?, ?)
+                `;
+
+                db.run(insertSql, [
+                    moveId,
+                    moveType,
+                    concept,
+                    id,
+                    account.name,
+                    account.type || 'Efectivo',
+                    moveAmount,
+                    noteText,
+                    user
+                ], (insErr) => {
+                    if (insErr) {
+                        console.error('Error al registrar movimiento de conciliación:', insErr);
+                    }
+                    notifyCashflow('account_reconciled', { id, newBalance: parsedNewBalance, diff });
+                    res.json({
+                        message: 'Saldo ajustado y conciliado exitosamente',
+                        previous_balance: oldBalance,
+                        new_balance: parsedNewBalance,
+                        difference: diff
+                    });
+                });
+            });
+        });
+    });
+
     // Transferencia entre cuentas
     router.post('/cashflow/accounts/transfer', verifyToken, (req, res) => {
         const { from_account_id, to_account_id, amount, notes } = req.body;
@@ -749,29 +908,41 @@ module.exports = (io) => {
             return res.status(400).json({ error: 'Monto inválido' });
         }
 
-        db.get("SELECT name FROM finance_accounts WHERE id = ?", [from_account_id], (errFrom, rowFrom) => {
-            if (!rowFrom) return res.status(404).json({ error: 'Cuenta de origen no encontrada' });
-            db.get("SELECT name FROM finance_accounts WHERE id = ?", [to_account_id], (errTo, rowTo) => {
-                if (!rowTo) return res.status(404).json({ error: 'Cuenta de destino no encontrada' });
+        getUserAllowedAccounts(req.user?.id, req.user?.role, (allowErr, allowedAccountIds) => {
+            if (allowErr) return res.status(500).json({ error: allowErr.message });
 
-                const user = req.user?.name || 'Admin';
-                const idOut = uuidv4();
-                const idIn = uuidv4();
+            if (allowedAccountIds !== 'ALL') {
+                const fromIdNum = Number(from_account_id);
+                const toIdNum = Number(to_account_id);
+                if (!allowedAccountIds.includes(fromIdNum) || !allowedAccountIds.includes(toIdNum)) {
+                    return res.status(403).json({ error: 'No tienes permiso para transferir fondos desde o hacia una de estas cuentas' });
+                }
+            }
 
-                db.run("UPDATE finance_accounts SET current_balance = current_balance - ? WHERE id = ?", [parsedAmount, from_account_id]);
-                db.run("UPDATE finance_accounts SET current_balance = current_balance + ? WHERE id = ?", [parsedAmount, to_account_id]);
+            db.get("SELECT name FROM finance_accounts WHERE id = ?", [from_account_id], (errFrom, rowFrom) => {
+                if (!rowFrom) return res.status(404).json({ error: 'Cuenta de origen no encontrada' });
+                db.get("SELECT name FROM finance_accounts WHERE id = ?", [to_account_id], (errTo, rowTo) => {
+                    if (!rowTo) return res.status(404).json({ error: 'Cuenta de destino no encontrada' });
 
-                // Registrar movimientos
-                const insertSql = `
-                    INSERT INTO cash_movements (id, type, concept, account_id, account_name, payment_method, amount, notes, user_name)
-                    VALUES (?, ?, ?, ?, ?, 'Transferencia', ?, ?, ?)
-                `;
+                    const user = req.user?.name || 'Admin';
+                    const idOut = uuidv4();
+                    const idIn = uuidv4();
 
-                db.run(insertSql, [idOut, 'EXPENSE', `Transferencia hacia: ${rowTo.name}`, from_account_id, rowFrom.name, parsedAmount, notes || '', user]);
-                db.run(insertSql, [idIn, 'INCOME', `Transferencia desde: ${rowFrom.name}`, to_account_id, rowTo.name, parsedAmount, notes || '', user], (insErr) => {
-                    if (insErr) return res.status(500).json({ error: insErr.message });
-                    notifyCashflow('transfer_completed');
-                    res.json({ message: 'Transferencia realizada con éxito' });
+                    db.run("UPDATE finance_accounts SET current_balance = current_balance - ? WHERE id = ?", [parsedAmount, from_account_id]);
+                    db.run("UPDATE finance_accounts SET current_balance = current_balance + ? WHERE id = ?", [parsedAmount, to_account_id]);
+
+                    // Registrar movimientos
+                    const insertSql = `
+                        INSERT INTO cash_movements (id, type, concept, account_id, account_name, payment_method, amount, notes, user_name)
+                        VALUES (?, ?, ?, ?, ?, 'Transferencia', ?, ?, ?)
+                    `;
+
+                    db.run(insertSql, [idOut, 'EXPENSE', `Transferencia hacia: ${rowTo.name}`, from_account_id, rowFrom.name, parsedAmount, notes || '', user]);
+                    db.run(insertSql, [idIn, 'INCOME', `Transferencia desde: ${rowFrom.name}`, to_account_id, rowTo.name, parsedAmount, notes || '', user], (insErr) => {
+                        if (insErr) return res.status(500).json({ error: insErr.message });
+                        notifyCashflow('transfer_completed');
+                        res.json({ message: 'Transferencia realizada con éxito' });
+                    });
                 });
             });
         });
@@ -915,12 +1086,18 @@ module.exports = (io) => {
 
         if (isNaN(payAmount) || payAmount <= 0) return res.status(400).json({ error: 'Monto de pago inválido' });
 
-        db.get("SELECT * FROM finance_payables WHERE id = ?", [id], (err, payable) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!payable) return res.status(404).json({ error: 'Cuenta por pagar no encontrada' });
-            if (payable.status === 'Pagado') return res.status(400).json({ error: 'Esta cuenta ya está totalmente pagada' });
+        getUserAllowedAccounts(req.user?.id, req.user?.role, (allowErr, allowedAccountIds) => {
+            if (allowErr) return res.status(500).json({ error: allowErr.message });
+            if (account_id && allowedAccountIds !== 'ALL' && !allowedAccountIds.includes(Number(account_id))) {
+                return res.status(403).json({ error: 'No tienes permiso para operar sobre esta cuenta' });
+            }
 
-            const newBalance = Math.max(0, payable.balance_pending - payAmount);
+            db.get("SELECT * FROM finance_payables WHERE id = ?", [id], (err, payable) => {
+                if (err) return res.status(500).json({ error: err.message });
+                if (!payable) return res.status(404).json({ error: 'Cuenta por pagar no encontrada' });
+                if (payable.status === 'Pagado') return res.status(400).json({ error: 'Esta cuenta ya está totalmente pagada' });
+
+                const newBalance = Math.max(0, payable.balance_pending - payAmount);
             const newStatus = newBalance <= 0 ? 'Pagado' : payable.status;
             const pm = payment_method || 'Efectivo';
             const user = req.user?.name || 'Admin';
@@ -967,6 +1144,7 @@ module.exports = (io) => {
             }
         });
     });
+});
 
     router.delete('/cashflow/payables/:id', verifyToken, (req, res) => {
         const { id } = req.params;
@@ -1036,12 +1214,18 @@ module.exports = (io) => {
 
         if (isNaN(collectAmount) || collectAmount <= 0) return res.status(400).json({ error: 'Monto de recaudo inválido' });
 
-        db.get("SELECT * FROM finance_receivables WHERE id = ?", [id], (err, receivable) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!receivable) return res.status(404).json({ error: 'Cuenta por cobrar no encontrada' });
-            if (receivable.status === 'Cobrado') return res.status(400).json({ error: 'Esta cuenta ya está totalmente cobrada' });
+        getUserAllowedAccounts(req.user?.id, req.user?.role, (allowErr, allowedAccountIds) => {
+            if (allowErr) return res.status(500).json({ error: allowErr.message });
+            if (account_id && allowedAccountIds !== 'ALL' && !allowedAccountIds.includes(Number(account_id))) {
+                return res.status(403).json({ error: 'No tienes permiso para operar sobre esta cuenta' });
+            }
 
-            const newBalance = Math.max(0, receivable.balance_pending - collectAmount);
+            db.get("SELECT * FROM finance_receivables WHERE id = ?", [id], (err, receivable) => {
+                if (err) return res.status(500).json({ error: err.message });
+                if (!receivable) return res.status(404).json({ error: 'Cuenta por cobrar no encontrada' });
+                if (receivable.status === 'Cobrado') return res.status(400).json({ error: 'Esta cuenta ya está totalmente cobrada' });
+
+                const newBalance = Math.max(0, receivable.balance_pending - collectAmount);
             const newStatus = newBalance <= 0 ? 'Cobrado' : receivable.status;
             const pm = payment_method || 'Efectivo';
             const user = req.user?.name || 'Admin';
@@ -1087,6 +1271,7 @@ module.exports = (io) => {
             }
         });
     });
+});
 
     router.delete('/cashflow/receivables/:id', verifyToken, (req, res) => {
         const { id } = req.params;

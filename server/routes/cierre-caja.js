@@ -8,8 +8,19 @@ module.exports = function (io) {
 
     // GET all cierres de caja (or paginated)
     router.get('/cierre-caja', verifyToken, (req, res) => {
-        const query = 'SELECT * FROM cierre_cajas ORDER BY id DESC LIMIT 50';
-        db.all(query, [], (err, rows) => {
+        let query = 'SELECT * FROM cierre_cajas';
+        const params = [];
+
+        // Si no es admin (ej. cajero), solo se le muestran los cierres que él mismo ha realizado
+        if (req.user && req.user.role !== 'admin') {
+            const userName = req.user.name || '';
+            const userLogin = req.user.username || '';
+            query += ' WHERE (LOWER(usuario) = LOWER(?) OR LOWER(usuario) = LOWER(?))';
+            params.push(userName, userLogin);
+        }
+
+        query += ' ORDER BY id DESC LIMIT 50';
+        db.all(query, params, (err, rows) => {
             if (err) {
                 console.error('Error fetching cierres de caja:', err);
                 return res.status(500).json({ error: 'Error fetching data' });

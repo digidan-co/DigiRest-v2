@@ -32,6 +32,24 @@ const sections = [
 ];
 
 const forbiddenForCajero = ['products', 'categories', 'users', 'config', 'supplies', 'recipes', 'toppings', 'delivery-zones', 'promotions-combos'];
+const forbiddenForSupervisor = ['users', 'config'];
+
+const userRole = computed(() => {
+    if (state.user?.role) return state.user.role.toLowerCase();
+    try {
+        const u = JSON.parse(localStorage.getItem('pos_user') || '{}');
+        return (u.role || '').toLowerCase();
+    } catch {
+        return '';
+    }
+});
+
+function isForbidden(tab) {
+    const role = userRole.value;
+    if (role === 'cajero' && forbiddenForCajero.includes(tab)) return true;
+    if (role === 'supervisor' && forbiddenForSupervisor.includes(tab)) return true;
+    return false;
+}
 
 const userName = computed(() => state.user?.name || '');
 const businessName = computed(() => state.restaurantData.name || state.config.nombreRestaurante || 'Cargando...');
@@ -41,13 +59,9 @@ const logoUrl = computed(() => state.config.logo || '/img/icon.png');
 const visibleSections = computed(() => {
     return sections.map(s => ({
         ...s,
-        tabs: s.tabs.filter(t => !(state.user?.role === 'cajero' && forbiddenForCajero.includes(t.tab)))
+        tabs: s.tabs.filter(t => !isForbidden(t.tab))
     })).filter(s => s.tabs.length > 0);
 });
-
-function isForbidden(tab) {
-    return state.user?.role === 'cajero' && forbiddenForCajero.includes(tab);
-}
 
 function toggleSection(name) {
     const next = new Set(collapsedSections.value);

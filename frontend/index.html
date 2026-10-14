@@ -324,7 +324,16 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2.5">
+                    <div class="flex items-center gap-2.5 sm:gap-3.5">
+                        <!-- Reloj en Desktop (Al lado de Notas y Modo GR) -->
+                        <div class="topbar-clock-desktop">
+                            <i class="fas fa-clock topbar-clock-icon" style="color: var(--system-primary, #f5b55f);"></i>
+                            <div class="flex flex-col items-end">
+                                <span class="clock-display-time" style="color: var(--system-primary, #f5b55f);">--:-- --</span>
+                                <span class="clock-display-date" style="color: var(--system-bg-aside, #052244);">Hoy es: --</span>
+                            </div>
+                        </div>
+
                         <!-- Modo GR y Notas (Color de realce + fondo gris suave, hover a fondo realce) -->
                         <button type="button" id="btn-sb-notes" aria-label="Ver notas"
                             class="btn-topbar-quick w-14 h-14 sm:w-16 sm:h-16 rounded-xl transition-all shadow-xs flex flex-col items-center justify-center gap-1 group active:scale-95 cursor-pointer"
@@ -341,8 +350,41 @@
                     </div>
                 </div>
 
+                <!-- Reloj en Mobile (Debajo del contenedor Panel de Control) -->
+                <div class="topbar-clock-mobile">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-clock text-sm" style="color: var(--system-primary, #f5b55f);"></i>
+                        <span class="clock-display-time text-xs" style="color: var(--system-primary, #f5b55f);">--:-- --</span>
+                    </div>
+                    <span class="clock-display-date" style="color: var(--system-bg-aside, #052244);">Hoy es: --</span>
+                </div>
+
+                <script>
+                    (function() {
+                        function updateTopbarClock() {
+                            try {
+                                var now = new Date();
+                                var timeStr = now.toLocaleTimeString('es-CO', {
+                                    hour: '2-digit', minute: '2-digit', hour12: true
+                                });
+                                var days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+                                var months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                                var dateStr = 'Hoy es: ' + days[now.getDay()] + ', ' + now.getDate() + ' de ' + months[now.getMonth()];
+                                var times = document.querySelectorAll('.clock-display-time');
+                                for (var i = 0; i < times.length; i++) times[i].innerText = timeStr;
+                                var dates = document.querySelectorAll('.clock-display-date');
+                                for (var j = 0; j < dates.length; j++) dates[j].innerText = dateStr;
+                            } catch (_) {}
+                        }
+                        updateTopbarClock();
+                        setInterval(updateTopbarClock, 1000);
+                        window._updateTopbarClock = updateTopbarClock;
+                    })();
+                </script>
+
                 <!-- TAB: DASHBOARD (Componentes optimizados y compactos) -->
                 <div id="panel-dashboard" class="admin-panel space-y-3.5 fade-in">
+
                     <!-- Dashboard Stats -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3.5">
                         <!-- Orders Today -->
@@ -359,8 +401,8 @@
                             </div>
                         </div>
 
-                        <!-- Daily Revenue -->
-                        <div
+                        <!-- Daily Revenue (Oculto para cajero) -->
+                        <div id="widget-stat-revenue-today"
                             class="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
                             <div class="flex justify-between items-start mb-1.5">
                                 <div class="w-8 h-8 rounded-lg bg-green-50 text-green-500 flex items-center justify-center text-sm"><i
@@ -373,8 +415,8 @@
                             </div>
                         </div>
 
-                        <!-- Global Stats (Advanced) -->
-                        <div class="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+                        <!-- Global Stats (Oculto para cajero) -->
+                        <div id="widget-stat-global" class="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
                             <div class="flex justify-between items-center mb-2">
                                 <h3 class="font-bold text-gray-700 text-xs uppercase tracking-wide">Total Histórico</h3>
                                 <span id="stat-total-global"
@@ -476,8 +518,8 @@
 
                     <!-- Gráficos de 7 días (Compactos) -->
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3.5">
-                        <!-- Gráfico de Líneas (Ingresos) -->
-                        <div
+                        <!-- Gráfico de Líneas (Ingresos - Oculto para cajero) -->
+                        <div id="widget-chart-revenue-7d"
                             class="lg:col-span-2 bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col">
                             <h3 class="font-bold text-gray-700 text-xs sm:text-sm mb-2 flex items-center gap-1.5"><i
                                     class="fas fa-chart-line text-blue-500"></i> Ingresos (Últimos 7 Días)</h3>
@@ -487,7 +529,7 @@
                         </div>
 
                         <!-- Gráfico Circular (Mesas x Mesero) -->
-                        <div class="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+                        <div id="widget-chart-waiters-7d" class="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col">
                             <h3 class="font-bold text-gray-700 text-xs sm:text-sm mb-2 flex items-center gap-1.5 w-full"><i
                                     class="fas fa-users text-purple-500"></i> Mesas Atendidas (7 Días)</h3>
                             <div class="relative w-full flex-1 flex justify-center items-center"
@@ -497,27 +539,25 @@
                         </div>
                     </div>
 
-                    <!-- Plato Estrella 7 días (Banner Compacto) -->
-                    <div class="mb-3.5">
-                        <div
-                            class="bg-[#333333] border-l-4 border-[var(--system-primary)] p-3.5 sm:p-4 rounded-xl shadow-md text-white flex flex-col sm:flex-row items-center gap-4 relative overflow-hidden transition-transform hover:scale-[1.005]">
-                            <div class="absolute right-0 top-0 opacity-10 pointer-events-none">
-                                <i class="fas fa-trophy text-[90px] -mt-4 -mr-3"></i>
+                    <!-- Top 5 Platos Más Vendidos de los Últimos 7 Días -->
+                    <div id="widget-weekly-top-dishes" class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100 mb-3.5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3.5 pb-2.5 border-b border-gray-100">
+                            <div>
+                                <h3 class="font-bold text-sm sm:text-base text-gray-800 flex items-center gap-2">
+                                    <span class="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xs shadow-2xs">
+                                        <i class="fas fa-trophy"></i>
+                                    </span>
+                                    <span>Top 5 Platos Más Vendidos (Últimos 7 Días)</span>
+                                </h3>
+                                <p class="text-[11px] text-gray-400 mt-0.5">Ranking de mayor preferencia comenzando por el más vendido esta semana</p>
                             </div>
-                            <div class="bg-white/20 p-2.5 rounded-full backdrop-blur-md z-10 shrink-0 shadow-inner">
-                                <i class="fas fa-crown text-xl sm:text-2xl text-yellow-300 drop-shadow-md"></i>
-                            </div>
-                            <div class="z-10 flex-1 text-center sm:text-left flex flex-col justify-center">
-                                <h3 class="text-white/80 text-[11px] font-bold uppercase tracking-wider mb-0.5">El Plato
-                                    Estrella (Últimos 7 Días)</h3>
-                                <h2 class="text-lg sm:text-xl font-black mb-1 drop-shadow-sm tracking-tight"
-                                    id="weekly-top-dish-name">Analizando ventas...</h2>
-                                <div>
-                                    <span
-                                        class="text-white font-bold bg-black/30 px-2.5 py-0.5 rounded-full text-xs backdrop-blur-sm border border-white/10"
-                                        id="weekly-top-dish-sales">0 ventas</span>
-                                </div>
-                            </div>
+                            <span class="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 self-start sm:self-auto">
+                                <i class="fas fa-fire text-amber-500"></i> Últimos 7 Días
+                            </span>
+                        </div>
+                        <div id="weekly-top-dishes-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                            <!-- Inyectado por admin-view.js -->
+                            <div class="p-4 text-center text-xs text-gray-400 col-span-full">Cargando platos más vendidos...</div>
                         </div>
                     </div>
 

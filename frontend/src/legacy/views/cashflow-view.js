@@ -445,19 +445,33 @@ async function loadOverviewTab() {
     const area = $('cf-content-area');
     if (!area) return;
 
+    let userRole = '';
+    try {
+        const u = JSON.parse(localStorage.getItem('pos_user') || '{}');
+        userRole = (u.role || '').toLowerCase();
+    } catch (_) {}
+    const isCashier = userRole === 'cajero';
+
+    if (isCashier && _activePeriod !== 'today' && _activePeriod !== 'week') {
+        _activePeriod = 'today';
+    }
+
     area.innerHTML = `
         <!-- Filtros Rápidos de Fecha & Botón Nuevo Movimiento -->
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <!-- Periodos -->
             <div class="flex flex-wrap items-center gap-2">
                 <div class="inline-flex bg-gray-100 p-1 rounded-xl text-xs gap-2 font-bold" id="cf-period-selector">
-                    <button type="button" data-period="today" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all">Hoy</button>
-                    <button type="button" data-period="week" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all">Esta Semana</button>
-                    <button type="button" data-period="month" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all active">Este Mes</button>
-                    <button type="button" data-period="custom" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all">Rango</button>
+                    <button type="button" data-period="today" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'today' ? 'active' : ''}">Hoy</button>
+                    <button type="button" data-period="week" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'week' ? 'active' : ''}">Esta Semana</button>
+                    ${!isCashier ? `
+                        <button type="button" data-period="month" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'month' ? 'active' : ''}">Este Mes</button>
+                        <button type="button" data-period="custom" class="cf-period-btn px-3 py-1.5 rounded-lg transition-all ${_activePeriod === 'custom' ? 'active' : ''}">Rango</button>
+                    ` : ''}
                 </div>
 
-                <!-- Custom Range Inputs -->
+                <!-- Custom Range Inputs (Solo para admin / roles superiores) -->
+                ${!isCashier ? `
                 <div id="cf-custom-range" class="${ _activePeriod === 'custom' ? '' : 'hidden' } flex items-center gap-2 text-xs">
                     <input type="date" id="cf-start-date" class="px-3 py-1.5 rounded-xl border border-gray-200 outline-none focus:border-orange-500 font-mono text-[11px]" value="${_customStartDate}">
                     <span class="text-gray-400">a</span>
@@ -466,6 +480,7 @@ async function loadOverviewTab() {
                         Filtrar
                     </button>
                 </div>
+                ` : ''}
             </div>
 
             <!-- Botón Acción Principal -->

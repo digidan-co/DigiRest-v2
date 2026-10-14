@@ -232,3 +232,24 @@ if (novedadesMount) {
 // Expose for debugging and for future migrated components.
 window.__pinia = pinia;
 window.__uiStore = ui;
+
+// Sincronización continua del Reloj del Topbar (Desktop y Mobile)
+function syncTopbarClock() {
+    try {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-CO', {
+            hour: '2-digit', minute: '2-digit', hour12: true
+        });
+        const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const dateStr = `Hoy es: ${days[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]}`;
+
+        document.querySelectorAll('.clock-display-time').forEach(el => { el.innerText = timeStr; });
+        document.querySelectorAll('.clock-display-date').forEach(el => { el.innerText = dateStr; });
+    } catch (_) {}
+}
+syncTopbarClock();
+if (!window._mainClockInterval) {
+    window._mainClockInterval = setInterval(syncTopbarClock, 1000);
+}
+

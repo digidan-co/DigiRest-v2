@@ -41,11 +41,31 @@ function mergeGastos(resData, gastos) {
 }
 
 const filteredCierres = computed(() => {
-    if (!filterDate.value) return allCierres.value;
+    let list = allCierres.value;
+    if (!isAdmin.value) {
+        let myName = '';
+        let myUser = '';
+        if (state.user) {
+            myName = (state.user.name || '').toLowerCase();
+            myUser = (state.user.username || state.user.user || '').toLowerCase();
+        }
+        if (!myName && !myUser) {
+            try {
+                const u = JSON.parse(localStorage.getItem('pos_user') || '{}');
+                myName = (u.name || '').toLowerCase();
+                myUser = (u.username || u.user || '').toLowerCase();
+            } catch (_) {}
+        }
+        list = list.filter(c => {
+            const u = (c.usuario || '').toLowerCase();
+            return (myName && u === myName) || (myUser && u === myUser);
+        });
+    }
+    if (!filterDate.value) return list;
     const [year, month, day] = filterDate.value.split('-');
     const d = parseInt(day, 10);
     const m = parseInt(month, 10);
-    return allCierres.value.filter(c =>
+    return list.filter(c =>
         c.fecha === `${d}/${m}/${year}` || c.fecha === `${day}/${month}/${year}` || c.fecha === filterDate.value
     );
 });

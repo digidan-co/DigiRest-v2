@@ -70,3 +70,7 @@ export async function changePassword(currentPassword, newPassword) {
     return await ApiClient.post('/auth/change-password', { currentPassword, newPassword });
 }
 
+export async function updateUserFinanceAccounts(userId, allowedAccounts) {
+    return await ApiClient.post(`/users/${userId}/finance-accounts`, { allowed_finance_accounts: allowedAccounts });
+}
+
