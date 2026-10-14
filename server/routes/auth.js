@@ -764,4 +764,13 @@ router.get('/admin-identities', verifyToken, (req, res) => {
     });
 });
 
+// Periodic automatic cleanup for expired blacklisted tokens
+function cleanupExpiredTokens() {
+    db.run("DELETE FROM token_blacklist WHERE expires_at < datetime('now')", [], (err) => {
+        if (err) console.error('[Auth] Error cleaning expired blacklisted tokens:', err.message);
+    });
+}
+cleanupExpiredTokens();
+setInterval(cleanupExpiredTokens, 12 * 60 * 60 * 1000).unref();
+
 module.exports = { router, verifyToken, requireRole, setIo };

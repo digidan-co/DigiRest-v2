@@ -254,7 +254,9 @@ module.exports = (io) => {
                 cierreCount,
                 tasksCount,
                 reservationsCount,
-                notesCount
+                notesCount,
+                proofsCount,
+                productsWithImgCount
             ] = await Promise.all([
                 queryCount("SELECT COUNT(*) as count FROM orders"),
                 queryCount("SELECT COUNT(*) as count FROM products"),
@@ -264,7 +266,9 @@ module.exports = (io) => {
                 queryCount("SELECT COUNT(*) as count FROM cierre_caja"),
                 queryCount("SELECT COUNT(*) as count FROM tasks"),
                 queryCount("SELECT COUNT(*) as count FROM reservations"),
-                queryCount("SELECT COUNT(*) as count FROM order_notes")
+                queryCount("SELECT COUNT(*) as count FROM order_notes"),
+                queryCount("SELECT COUNT(*) as count FROM orders WHERE proof IS NOT NULL AND proof != ''"),
+                queryCount("SELECT COUNT(*) as count FROM products WHERE img IS NOT NULL AND img != ''")
             ]);
 
             const otherRecords = usersCount + gastosCount + cierreCount + tasksCount + reservationsCount + notesCount;
@@ -324,6 +328,11 @@ module.exports = (io) => {
                 || process.env.MAX_RECORDS;
             const maxRecordsLimit = rawRecordsLimit ? (parseInt(String(rawRecordsLimit).replace(/[^0-9]/g, ''), 10) || 15000) : 15000;
 
+            const maxStorageBytes = maxImageStorageMb * 1024 * 1024;
+            const storagePercentUsed = maxStorageBytes > 0 
+                ? parseFloat(Math.min(100, (imgSizeBytes / maxStorageBytes) * 100).toFixed(1)) 
+                : 0;
+
             const stats = {
                 records: {
                     orders: ordersCount,
@@ -341,8 +350,12 @@ module.exports = (io) => {
                     count: imgCount,
                     sizeBytes: imgSizeBytes,
                     sizeFormatted: formatBytes(imgSizeBytes),
+                    sizeMB: parseFloat((imgSizeBytes / (1024 * 1024)).toFixed(2)),
                     limitMB: maxImageStorageMb,
-                    limitBytes: maxImageStorageMb * 1024 * 1024
+                    limitBytes: maxStorageBytes,
+                    percentUsed: storagePercentUsed,
+                    proofsCount: proofsCount,
+                    productsCount: productsWithImgCount
                 },
                 health: 'ok',
                 timestamp: new Date().toISOString()
@@ -353,6 +366,106 @@ module.exports = (io) => {
             res.json(stats);
         } catch (error) {
             console.error('Error in /system/stats:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // ==========================================
+    // PURGE ANCIENT PAYMENT PROOFS (>30 DAYS)
+    // ==========================================
+    router.post('/system/purge-proofs', verifyToken, requireRole(['admin']), async (req, res) => {
+        try {
+            const days = Math.max(1, parseInt(req.body?.days, 10) || 30);
+            const cutoffDate = new Date(Date.now() - (days * 24 * 60 * 60 * 1000)).toISOString();
+
+            db.all(
+                `SELECT id, proof, timestamp, status 
+                 FROM orders 
+                 WHERE proof IS NOT NULL 
+                   AND proof != '' 
+                   AND LOWER(status) IN ('cobrado', 'anulado', 'paid', 'cancelled') 
+                   AND timestamp <= ?`,
+                [cutoffDate],
+                async (err, rows) => {
+                    if (err) {
+                        return res.status(500).json({ error: err.message });
+                    }
+
+                    if (!rows || rows.length === 0) {
+                        return res.json({
+                            success: true,
+                            purgedOrdersCount: 0,
+                            deletedFilesCount: 0,
+                            freedBytes: 0,
+                            freedFormatted: '0 KB',
+                            days,
+                            message: 'No hay comprobantes antiguos pendientes de depuración en pedidos cobrados o anulados.'
+                        });
+                    }
+
+                    let freedBytes = 0;
+                    let deletedFilesCount = 0;
+                    const uploadsDir = path.resolve(__dirname, '../uploads');
+                    const orderIdsToUpdate = [];
+
+                    for (const order of rows) {
+                        orderIdsToUpdate.push(order.id);
+                        if (order.proof && typeof order.proof === 'string') {
+                            const clean = order.proof.startsWith('/') ? order.proof.slice(1) : order.proof;
+                            const fullPath = path.resolve(__dirname, '..', clean);
+                            if (fullPath.startsWith(uploadsDir) && fs.existsSync(fullPath)) {
+                                try {
+                                    const stat = fs.statSync(fullPath);
+                                    if (stat.isFile()) {
+                                        freedBytes += stat.size;
+                                        fs.unlinkSync(fullPath);
+                                        deletedFilesCount++;
+                                    }
+                                } catch (unlinkErr) {
+                                    console.warn('[PURGE-PROOFS] Error al borrar archivo:', fullPath, unlinkErr.message);
+                                }
+                            }
+                        }
+                    }
+
+                    const formatBytes = (bytes) => {
+                        if (!bytes || bytes === 0) return '0 KB';
+                        if (bytes < 1024) return `${bytes} B`;
+                        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+                    };
+
+                    // Nullify proofs in SQLite
+                    const placeholders = orderIdsToUpdate.map(() => '?').join(',');
+                    db.run(
+                        `UPDATE orders SET proof = NULL WHERE id IN (${placeholders})`,
+                        orderIdsToUpdate,
+                        (updErr) => {
+                            if (updErr) {
+                                console.error('[PURGE-PROOFS] Error al actualizar órdenes en BD:', updErr);
+                            }
+
+                            // Invalidate cached system stats
+                            cachedStats = null;
+                            lastStatsFetch = 0;
+
+                            console.log(`🧹 [PURGE-PROOFS] Liberados ${formatBytes(freedBytes)} (${deletedFilesCount} archivos borrados en ${orderIdsToUpdate.length} pedidos)`);
+
+                            res.json({
+                                success: true,
+                                purgedOrdersCount: orderIdsToUpdate.length,
+                                deletedFilesCount,
+                                freedBytes,
+                                freedFormatted: formatBytes(freedBytes),
+                                days,
+                                message: `Se liberaron ${formatBytes(freedBytes)} eliminando ${deletedFilesCount} comprobantes antiguos (> ${days} días).`
+                            });
+                        }
+                    );
+                }
+            );
+        } catch (error) {
+            console.error('Error in /system/purge-proofs:', error);
             res.status(500).json({ error: error.message });
         }
     });

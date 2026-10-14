@@ -173,9 +173,18 @@ app.get('/manifest.json', (req, res) => {
     });
 });
 
-// Static files for uploads (proof images and products)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/server/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static files for uploads (proof images and products) with security headers
+const uploadsStaticOptions = {
+    setHeaders: (res, filePath) => {
+        // Prevent search engines and crawlers from indexing receipts/proofs or uploaded files
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        if (/\.(webp|png|jpg|jpeg|gif)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+    }
+};
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), uploadsStaticOptions));
+app.use('/server/uploads', express.static(path.join(__dirname, 'uploads'), uploadsStaticOptions));
 
 // Shared cache strategy for static assets
 function staticCacheHeaders(res, filePath) {

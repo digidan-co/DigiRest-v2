@@ -211,12 +211,12 @@ watch([() => state.orders, () => state.waiterOrders], () => loadStats());
                         <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div id="cap-reads-bar" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div></div>
                     </div>
                     <div>
-                        <div class="flex justify-between text-[9px] mb-0.5 font-medium text-gray-500"><span>Tamaño en base de datos</span><span id="cap-storage-text">0 KB</span></div>
+                        <div class="flex justify-between text-[9px] mb-0.5 font-medium text-gray-500"><span>Almacenamiento (Archivos)</span><span id="cap-storage-text">0 MB / 50 MB</span></div>
                         <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div id="cap-storage-bar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div></div>
                     </div>
                     <div class="flex justify-between items-center pt-1.5 border-t border-gray-50 mt-0.5">
                         <div class="text-[8px] text-gray-400 font-medium" id="cap-health-status">Estado: OK</div>
-                        <div class="text-[9px] font-bold text-gray-600" id="cap-images-count"><i class="fas fa-images mr-1"></i>0 imgs (0 KB)</div>
+                        <div class="text-[9px] font-bold text-gray-600" id="cap-images-count"><i class="fas fa-images mr-1"></i>0 archivos (0 platos • 0 comp.)</div>
                     </div>
                 </div>
             </div>
@@ -299,12 +299,12 @@ watch([() => state.orders, () => state.waiterOrders], () => loadStats());
                         <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div id="cap-reads-bar" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div></div>
                     </div>
                     <div>
-                        <div class="flex justify-between text-[9px] mb-0.5 font-medium text-gray-500"><span>Tamaño en base de datos</span><span id="cap-storage-text">0 KB</span></div>
+                        <div class="flex justify-between text-[9px] mb-0.5 font-medium text-gray-500"><span>Almacenamiento (Archivos)</span><span id="cap-storage-text">0 MB / 50 MB</span></div>
                         <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div id="cap-storage-bar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div></div>
                     </div>
                     <div class="flex justify-between items-center pt-1.5 border-t border-gray-50 mt-0.5">
                         <div class="text-[8px] text-gray-400 font-medium" id="cap-health-status">Estado: OK</div>
-                        <div class="text-[9px] font-bold text-gray-600" id="cap-images-count"><i class="fas fa-images mr-1"></i>0 imgs (0 KB)</div>
+                        <div class="text-[9px] font-bold text-gray-600" id="cap-images-count"><i class="fas fa-images mr-1"></i>0 archivos (0 platos • 0 comp.)</div>
                     </div>
                 </div>
             </div>

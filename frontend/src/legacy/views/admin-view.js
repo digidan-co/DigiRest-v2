@@ -365,6 +365,41 @@ export function setupAdminListeners() {
         });
     }
 
+    // Purge Ancient Proofs (>30 days) Listener
+    const btnPurgeProofs = $('btn-purge-proofs');
+    if (btnPurgeProofs) {
+        btnPurgeProofs.addEventListener('click', () => {
+            showConfirmModal(
+                'Depurar Comprobantes Antiguos',
+                '¿Deseas depurar las imágenes de transferencias de pedidos ya cobrados o anulados con más de 30 días de antigüedad? Se liberará espacio sin tocar tus platos ni registros contables.',
+                async () => {
+                    const originalText = btnPurgeProofs.innerHTML;
+                    try {
+                        btnPurgeProofs.disabled = true;
+                        btnPurgeProofs.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Liberando espacio...</span>';
+
+                        const res = await ApiClient.post('/admin/system/purge-proofs', { days: 30 });
+                        if (res?.success) {
+                            toast(res.message || 'Comprobantes depurados exitosamente', 'success');
+                            if (modalOpt) modalOpt.classList.add('hidden');
+                            await updateQuotaWidget();
+                        } else {
+                            toast(res?.error || 'No se pudo completar la depuración', 'error');
+                        }
+                    } catch (e) {
+                        console.error('Error purgando comprobantes:', e);
+                        toast(e.message || 'Error al depurar comprobantes', 'error');
+                    } finally {
+                        btnPurgeProofs.disabled = false;
+                        btnPurgeProofs.innerHTML = originalText;
+                    }
+                },
+                null,
+                'Sí, depurar'
+            );
+        });
+    }
+
     // ====================================================================
     // REALTIME ORDER NOTIFICATIONS (Socket.IO)
     // ====================================================================

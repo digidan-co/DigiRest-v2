@@ -220,18 +220,32 @@ export async function updateQuotaWidget() {
     const totalRecords = stats?.records?.total ?? ((state.orders || []).length + (state.products || []).length + (state.categories || []).length);
     const dbSizeFormatted = stats?.database?.sizeFormatted ?? '0 KB';
     const dbSizeBytes = stats?.database?.sizeBytes ?? 0;
-    const DATA_LIMIT_BYTES = (stats?.images?.limitMB ? stats.images.limitMB : 50) * 1024 * 1024;
-    const imgCount = stats?.images?.count ?? 0;
-    const imgSizeFormatted = stats?.images?.sizeFormatted ?? '0 KB';
 
-    // Optimization button display
+    // Storage capacity from Dokploy env variables (MAX_IMAGE_STORAGE_MB)
+    const maxStorageMB = stats?.images?.limitMB || 50;
+    const maxStorageBytes = stats?.images?.limitBytes || (maxStorageMB * 1024 * 1024);
+    const imgCount = stats?.images?.count ?? 0;
+    const imgSizeBytes = stats?.images?.sizeBytes ?? 0;
+    const imgSizeFormatted = stats?.images?.sizeFormatted ?? '0 KB';
+    const proofsCount = stats?.images?.proofsCount ?? 0;
+    const productsImgCount = stats?.images?.productsCount ?? 0;
+
+    // Real Storage percentage (Files / Uploads)
+    const storagePct = stats?.images?.percentUsed !== undefined 
+        ? stats.images.percentUsed 
+        : (maxStorageBytes > 0 ? Math.min((imgSizeBytes / maxStorageBytes) * 100, 100) : 0);
+
+    // Records bar
+    const recordsPct = Math.min((totalRecords / RECORDS_LIMIT) * 100, 100);
+
+    // Optimization button display (alert if records OR storage are near limit)
     const btnOpt = $('btn-open-optimization');
     if (btnOpt) {
         if (state.user?.role === 'cajero') {
             btnOpt.style.display = 'none';
         } else {
             btnOpt.style.display = '';
-            if (totalRecords >= RECORDS_LIMIT * 0.9) {
+            if (recordsPct >= 90 || storagePct >= 90) {
                 btnOpt.classList.add('animate-bounce', 'text-red-500', 'border-red-500');
                 btnOpt.classList.remove('text-gray-400', 'border-gray-200');
             } else {
@@ -241,8 +255,6 @@ export async function updateQuotaWidget() {
         }
     }
 
-    // Records bar
-    const recordsPct = Math.min((totalRecords / RECORDS_LIMIT) * 100, 100);
     const readsBar = document.getElementById('cap-reads-bar');
     const readsText = document.getElementById('cap-reads-text');
 
@@ -252,35 +264,34 @@ export async function updateQuotaWidget() {
     }
     if (readsText) readsText.innerText = `${totalRecords.toLocaleString()} / ${RECORDS_LIMIT.toLocaleString()}`;
 
-    // Database size bar
-    const dataPct = Math.min((dbSizeBytes / DATA_LIMIT_BYTES) * 100, 100);
+    // Storage progress bar (Real MBs used vs Dokploy Limit)
     const storageBar = document.getElementById('cap-storage-bar');
     const storageText = document.getElementById('cap-storage-text');
 
     if (storageBar) {
-        storageBar.style.width = `${dataPct}%`;
-        storageBar.className = `h-1.5 rounded-full transition-all duration-500 ${dataPct > 90 ? 'bg-red-500' : dataPct > 70 ? 'bg-yellow-500' : 'bg-blue-500'}`;
+        storageBar.style.width = `${storagePct}%`;
+        storageBar.className = `h-1.5 rounded-full transition-all duration-500 ${storagePct > 90 ? 'bg-red-500' : storagePct > 70 ? 'bg-yellow-500' : 'bg-blue-500'}`;
     }
     if (storageText) {
-        storageText.innerText = dbSizeFormatted;
+        storageText.innerText = `${imgSizeFormatted} / ${maxStorageMB} MB (${storagePct.toFixed(0)}%)`;
     }
 
     // Health Status
     const healthEl = document.getElementById('cap-health-status');
     if (healthEl) {
-        if (recordsPct > 90 || dataPct > 90) {
+        if (recordsPct > 90 || storagePct > 90) {
             healthEl.innerHTML = '<span class="text-red-500"><i class="fas fa-exclamation-triangle mr-1"></i>Purga recomendada</span>';
-        } else if (recordsPct > 70 || dataPct > 70) {
+        } else if (recordsPct > 70 || storagePct > 70) {
             healthEl.innerHTML = '<span class="text-yellow-600"><i class="fas fa-info-circle mr-1"></i>Monitorear</span>';
         } else {
             healthEl.innerHTML = '<span class="text-emerald-600"><i class="fas fa-check-circle mr-1"></i>Estado: OK</span>';
         }
     }
 
-    // Images count and weight
+    // Files count and breakdown (Dishes vs Receipts)
     const imgText = document.getElementById('cap-images-count');
     if (imgText) {
-        imgText.innerHTML = `<i class="fas fa-images mr-1"></i>${imgCount} imgs (${imgSizeFormatted} / ${stats?.images?.limitMB || 50}MB)`;
+        imgText.innerHTML = `<i class="fas fa-images mr-1"></i>${imgCount} archivos (${productsImgCount} platos • ${proofsCount} comp.)`;
     }
 }
 
