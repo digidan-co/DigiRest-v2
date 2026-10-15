@@ -10,6 +10,10 @@ function isValidUUID(str) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
+function isSafePrefixId(str) {
+    return typeof str === 'string' && /^[a-zA-Z0-9_-]{2,64}$/.test(str);
+}
+
 function sanitizeString(str, maxLen = 255) {
     if (typeof str !== 'string') return '';
     // Trim whitespace, strip HTML tags, limit length
@@ -232,9 +236,17 @@ function validateProduct(req, res, next) {
         }
     }
 
-    if (req.body.category !== undefined && typeof req.body.category === 'string') {
-        if (!isValidUUID(req.body.category) && req.body.category !== '') {
-            errors.push('ID de categoría inválido');
+    if (req.body.category !== undefined) {
+        if (typeof req.body.category === 'string') {
+            const cat = req.body.category.trim();
+            // Category can be empty, a UUID, a safe ID (cat_...), or a valid category name string
+            if (cat !== '' && !isValidUUID(cat) && !isSafePrefixId(cat) && !/^[a-zA-Z0-9_\-\s\u00C0-\u017F()&/.]+$/.test(cat)) {
+                errors.push('ID o nombre de categoría inválido');
+            } else {
+                req.body.category = sanitizeString(cat, 100);
+            }
+        } else {
+            errors.push('Categoría inválida');
         }
     }
 

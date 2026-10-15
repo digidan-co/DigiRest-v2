@@ -1185,7 +1185,8 @@ export function openClientToppingsModal(product, { onConfirm = null } = {}) {
 
 function renderClientToppingsMain() {
     const container = $('ctm-toppings-container');
-    if (!container) return;
+    if (!container || !_currentCustomizingProduct) return;
+    const product = _currentCustomizingProduct;
 
     let html = '';
 

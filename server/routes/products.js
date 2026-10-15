@@ -366,20 +366,14 @@ module.exports = (io) => {
             }
         }
 
-        // Resolve category UUID to category name for DB storage (backward-compatible)
-        // The validator already confirmed it's a valid UUID, now look up the name
+        // Resolve category ID/UUID to category name for DB storage (backward-compatible)
         const resolveCategory = (cb) => {
             if (category === undefined || category === '') return cb(null);
-            // Check if category looks like a UUID
-            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category)) {
-                db.get("SELECT name FROM categories WHERE id = ?", [category], (err, row) => {
-                    if (err) return cb(err);
-                    category = row ? row.name : category;
-                    cb(null);
-                });
-            } else {
+            db.get("SELECT name FROM categories WHERE id = ? OR LOWER(name) = LOWER(?)", [category, category], (err, row) => {
+                if (err) return cb(err);
+                if (row) category = row.name;
                 cb(null);
-            }
+            });
         };
 
         resolveCategory((err) => {

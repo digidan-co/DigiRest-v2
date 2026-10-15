@@ -82,6 +82,106 @@ const top5Dishes = computed(() => {
         .slice(0, 5);
 });
 
+function getTopDishCardStyle(index) {
+    if (index === 0) {
+        return {
+            background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+            borderColor: '#fde68a',
+            boxShadow: '0 2px 8px -2px rgba(245, 158, 11, 0.25)'
+        };
+    }
+    if (index === 1) {
+        return {
+            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+            borderColor: '#cbd5e1',
+            boxShadow: '0 2px 6px -2px rgba(100, 116, 139, 0.2)'
+        };
+    }
+    if (index === 2) {
+        return {
+            background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+            borderColor: '#fed7aa',
+            boxShadow: '0 2px 6px -2px rgba(234, 88, 12, 0.2)'
+        };
+    }
+    return {
+        background: '#ffffff',
+        borderColor: '#e5e7eb'
+    };
+}
+
+function getTopDishRankBadgeStyle(index) {
+    if (index === 0) {
+        return {
+            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            color: '#ffffff',
+            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.35)'
+        };
+    }
+    if (index === 1) {
+        return {
+            background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
+            color: '#ffffff',
+            boxShadow: '0 2px 4px rgba(71, 85, 105, 0.35)'
+        };
+    }
+    if (index === 2) {
+        return {
+            background: 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
+            color: '#ffffff',
+            boxShadow: '0 2px 4px rgba(194, 65, 12, 0.35)'
+        };
+    }
+    return {
+        background: '#e5e7eb',
+        color: '#374151',
+        border: '1px solid #d1d5db'
+    };
+}
+
+function getTopDishSalesBadgeStyle(index) {
+    if (index === 0) {
+        return {
+            backgroundColor: '#fef3c7',
+            color: '#92400e',
+            border: '1px solid #fde68a'
+        };
+    }
+    if (index === 1) {
+        return {
+            backgroundColor: '#e2e8f0',
+            color: '#334155',
+            border: '1px solid #cbd5e1'
+        };
+    }
+    if (index === 2) {
+        return {
+            backgroundColor: '#ffedd5',
+            color: '#9a3412',
+            border: '1px solid #fed7aa'
+        };
+    }
+    return {
+        backgroundColor: '#f3f4f6',
+        color: '#4b5563',
+        border: '1px solid #e5e7eb'
+    };
+}
+
+function getTopDishSubtitle(index) {
+    if (index === 0) return '★ Plato Estrella';
+    if (index === 1) return 'Puesto #2 de la semana';
+    if (index === 2) return 'Puesto #3 de la semana';
+    return `Puesto #${index + 1} de la semana`;
+}
+
+function getTopDishSubtitleStyle(index) {
+    if (index === 0) return { color: '#b45309', fontWeight: '800' };
+    if (index === 1) return { color: '#475569', fontWeight: '700' };
+    if (index === 2) return { color: '#c2410c', fontWeight: '700' };
+    return { color: '#9ca3af', fontWeight: '500' };
+}
+
 const ordersToday = computed(() => Number(todayData.value.today_orders) || 0);
 const revenueToday = computed(() => Number(todayData.value.today_revenue) || 0);
 const cashToday = computed(() => Number(todayData.value.today_cash) || 0);
@@ -352,34 +452,20 @@ watch([() => state.orders, () => state.waiterOrders], () => loadStats());
                 <div 
                     v-for="(dish, index) in top5Dishes" 
                     :key="dish.name + index"
-                    class="p-3.5 rounded-2xl border transition-all flex flex-col justify-between relative group hover:shadow-xs"
-                    :class="[
-                        index === 0 ? 'bg-amber-50/50 border-amber-300 shadow-2xs ring-1 ring-amber-300/60' :
-                        index === 1 ? 'bg-gray-50/70 border-gray-300' :
-                        index === 2 ? 'bg-orange-50/40 border-orange-200' :
-                        'bg-white border-gray-200 hover:border-gray-300'
-                    ]"
+                    class="p-3.5 rounded-2xl border transition-all flex flex-col justify-between relative group hover:shadow-md cursor-default"
+                    :style="getTopDishCardStyle(index)"
                 >
                     <div class="flex items-start justify-between gap-2 mb-2">
                         <span 
-                            class="w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shadow-2xs shrink-0"
-                            :class="[
-                                index === 0 ? 'bg-amber-500 text-white' :
-                                index === 1 ? 'bg-gray-400 text-white' :
-                                index === 2 ? 'bg-orange-400 text-white' :
-                                'bg-gray-200 text-gray-700'
-                            ]"
+                            class="w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shrink-0"
+                            :style="getTopDishRankBadgeStyle(index)"
                         >
-                            <i v-if="index === 0" class="fas fa-crown text-[10px]"></i>
+                            <i v-if="index === 0" class="fas fa-crown text-[11px]"></i>
                             <span v-else>#{{ index + 1 }}</span>
                         </span>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                            :class="[
-                                index === 0 ? 'bg-amber-100 text-amber-800' :
-                                index === 1 ? 'bg-gray-200 text-gray-700' :
-                                index === 2 ? 'bg-orange-100 text-orange-800' :
-                                'bg-gray-100 text-gray-600'
-                            ]"
+                        <span 
+                            class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            :style="getTopDishSalesBadgeStyle(index)"
                         >
                             {{ dish.count }} {{ dish.count === 1 ? 'venta' : 'ventas' }}
                         </span>
@@ -388,8 +474,8 @@ watch([() => state.orders, () => state.waiterOrders], () => loadStats());
                         <h4 class="font-bold text-xs text-gray-900 leading-snug line-clamp-2" :title="dish.name">
                             {{ dish.name }}
                         </h4>
-                        <p class="text-[10px] text-gray-400 mt-1 font-medium">
-                            {{ index === 0 ? 'Plato Estrella' : `Puesto #${index + 1} de la semana` }}
+                        <p class="text-[10px] mt-1" :style="getTopDishSubtitleStyle(index)">
+                            {{ getTopDishSubtitle(index) }}
                         </p>
                     </div>
                 </div>
