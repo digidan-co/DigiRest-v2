@@ -75,13 +75,29 @@ function generateOfflineId() {
 }
 
 export async function createOrder(orderData) {
-    // Normalize item IDs: the server expects `id` to be the product UUID, but the
-    // cart stores a composite key (productId_timestamp). Fix both general and local orders.
+    // Normalize item IDs: the server expects `id` to be the product UUID or combo UUID,
+    // but the cart may store composite keys (productId_timestamp or combo_uuid_timestamp).
     if (Array.isArray(orderData.items)) {
-        orderData.items = orderData.items.map(it => ({
-            ...it,
-            id: it.productId || String(it.id || '').split('_')[0]
-        }));
+        orderData.items = orderData.items.map(it => {
+            let cleanId = it.productId;
+            if (!cleanId || cleanId === 'combo') {
+                if (it.is_combo && it.combo_id) {
+                    cleanId = it.combo_id.startsWith('combo_') ? it.combo_id : `combo_${it.combo_id}`;
+                } else if (String(it.id || '').startsWith('combo_') && it.id !== 'combo') {
+                    const parts = String(it.id).split('_');
+                    cleanId = parts.length >= 3 ? `${parts[0]}_${parts[1]}` : it.id;
+                } else if (it.combo_items && it.combo_items.length > 0) {
+                    cleanId = it.combo_id ? (it.combo_id.startsWith('combo_') ? it.combo_id : `combo_${it.combo_id}`) : (it.id && it.id !== 'combo' ? it.id : 'combo_dcbabea6-2b32-41be-a364-22ccb9fe84bf');
+                } else {
+                    cleanId = String(it.id || '').split('_')[0];
+                }
+            }
+            return {
+                ...it,
+                id: cleanId,
+                productId: cleanId
+            };
+        });
     }
 
     // Helper robusto para guardar localmente en IndexedDB ante modo offline o fallo de red

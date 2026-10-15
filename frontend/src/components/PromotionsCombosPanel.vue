@@ -469,7 +469,8 @@ onMounted(() => {
             <div
                 v-for="combo in filteredCombos"
                 :key="combo.id"
-                class="bg-white rounded-xl border border-gray-100 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between p-3 relative group"
+                class="bg-white rounded-xl border border-gray-100 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between p-3 relative group cursor-pointer"
+                @click="openViewModal(combo)"
             >
                 <div>
                     <!-- Header: Imagen compacta + Modalidad + Switch -->
@@ -486,7 +487,7 @@ onMounted(() => {
                                     {{ getTypeBadge(combo.type).label }}
                                 </span>
                                 <!-- Switch disponibilidad -->
-                                <label class="relative inline-flex items-center cursor-pointer shrink-0" title="Activar/Desactivar disponibilidad">
+                                <label @click.stop class="relative inline-flex items-center cursor-pointer shrink-0" title="Activar/Desactivar disponibilidad">
                                     <input
                                         type="checkbox"
                                         :checked="combo.available"
@@ -545,7 +546,7 @@ onMounted(() => {
                     <div class="flex items-center gap-0.5 shrink-0">
                         <button
                             type="button"
-                            @click="openViewModal(combo)"
+                            @click.stop="openViewModal(combo)"
                             class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
                             title="Ver platos y detalle del combo"
                         >
@@ -553,7 +554,7 @@ onMounted(() => {
                         </button>
                         <button
                             type="button"
-                            @click="openEditModal(combo)"
+                            @click.stop="openEditModal(combo)"
                             class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
                             title="Editar combo"
                         >
@@ -561,7 +562,7 @@ onMounted(() => {
                         </button>
                         <button
                             type="button"
-                            @click="handleDelete(combo)"
+                            @click.stop="handleDelete(combo)"
                             class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                             title="Eliminar combo"
                         >
@@ -601,7 +602,7 @@ onMounted(() => {
                 <!-- Modal Body (Scrollable) -->
                 <form @submit.prevent="handleSave" class="overflow-y-auto p-6 space-y-5 flex-1">
                     <!-- General Details: Name & Category -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="sm:col-span-2 space-y-1">
                             <label class="text-[11px] font-bold text-gray-700 uppercase">Nombre del Combo *</label>
                             <input
@@ -624,7 +625,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Description & Image -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start mb-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start mb-2">
                         <div class="sm:col-span-2 space-y-1">
                             <label class="text-[11px] font-bold text-gray-700 uppercase">Descripción o Beneficio</label>
                             <textarea

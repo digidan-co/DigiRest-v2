@@ -3,7 +3,7 @@ import { $, formatMoney, escapeHtml } from '../utils/helpers.js';
 import { toast, setLoading, showConfirmModal, showModalAlert } from '../components/ui.js';
 import { createWaiterOrder, updateWaiterOrder, addItemsToOrder } from '../services/order-service.js';
 import { getProducts, getCategories } from '../services/product-service.js';
-import { getPromotionsCombos } from '../services/promotions-service.js';
+import { getPromotionsCombos, calculateComboPricing } from '../services/promotions-service.js';
 import { calculateOrderCombos } from '../utils/combo-calculator.js';
 import { addOrderNotes, getOrderNotes, deleteOrderNote } from '../services/note-service.js';
 import { compressProof } from '../utils/image-utils.js';
@@ -237,7 +237,7 @@ export function addComboToWaiterCart(comboId) {
         return;
     }
 
-    const instanceId = 'cinst_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const pricing = calculateComboPricing(combo);
 
     // Reset search
     const searchInput = $('waiter-product-search');
@@ -249,25 +249,38 @@ export function addComboToWaiterCart(comboId) {
         renderWaiterProducts();
     }
 
-    combo.items_config.forEach(it => {
-        const itemQty = parseFloat(it.qty) || 1;
-        const itemPrice = it.is_free ? 0 : (parseFloat(it.price) || 0);
+    const existing = waiterCart.find(i => i.is_combo && i.combo_id === combo.id);
+    if (existing) {
+        existing.qty++;
+    } else {
+        const comboItems = combo.items_config.map(it => ({
+            product_id: it.product_id,
+            name: it.name,
+            qty: parseFloat(it.qty) || 1,
+            price: parseFloat(it.price) || 0,
+            is_free: !!it.is_free
+        }));
+
+        const comboDesc = comboItems.map(it => `${it.qty > 1 ? it.qty + 'x ' : ''}${it.name}${it.is_free ? ' (Gratis)' : ''}`).join(', ');
 
         waiterCart.push({
-            id: it.product_id,
-            name: it.name,
-            price: itemPrice,
-            qty: itemQty,
-            combo_instance_id: instanceId,
+            id: `combo_${combo.id}`,
+            productId: `combo_${combo.id}`,
+            name: combo.name,
+            price: pricing.finalPrice,
+            base_price: pricing.basePrice,
+            discount_amount: pricing.savings,
+            qty: 1,
+            is_combo: true,
             combo_id: combo.id,
             combo_name: combo.name,
-            combo_price: parseFloat(combo.combo_price) || 0,
             combo_type: combo.type,
-            discount_value: parseFloat(combo.discount_value) || 0,
-            is_combo_component: true,
-            is_free: !!it.is_free
+            category: combo.category || 'Combos',
+            img: combo.img || '',
+            combo_items: comboItems,
+            combo_description: comboDesc
         });
-    });
+    }
 
     updateFloatingCartButton();
     toast(`Combo "${combo.name}" agregado al pedido`, 'success');
@@ -406,12 +419,18 @@ function renderReviewCartList() {
     list.innerHTML = waiterCart.map((item, index) => {
         total += item.price * item.qty;
         return `
-            <div class="flex items-start gap-2 bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm">
+            <div class="flex items-start gap-2 bg-white p-2.5 rounded-lg border ${item.is_combo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-sm">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
-                        ${item.combo_name ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
+                        ${item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>COMBO</span>` : ''}
+                        ${item.combo_name && !item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
                         <h4 class="font-bold text-gray-800 text-xs leading-tight">${escapeHtml(item.name)}</h4>
                     </div>
+                    ${item.is_combo && Array.isArray(item.combo_items) && item.combo_items.length > 0 ? `
+                        <div class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-600">
+                            ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[9px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                        </div>
+                    ` : ''}
                     ${formatToppingsListHtml(item)}
                     ${item.notes ? `<p class="text-[10px] text-gray-500 italic block mt-1"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>${escapeHtml(item.notes)}</p>` : ''}
                     <span class="text-[10px] text-gray-500 font-bold block mt-1">${formatMoney(item.price)} c/u</span>
@@ -419,12 +438,12 @@ function renderReviewCartList() {
                 
                 <div class="flex items-center bg-gray-100 rounded-md p-0.5 shrink-0 self-center">
                     <button class="w-8 h-8 bg-white rounded shadow-sm text-gray-600 hover:text-red-500 font-bold text-base flex items-center justify-center active:scale-95 transition-transform" 
-                        onclick="updateWaiterCartQty(${index}, -1)">
+                        onclick="updateWaiterCartQty(${index}, -1)" title="Disminuir / Eliminar combo">
                         -
                     </button>
                     <span class="w-8 text-center font-bold text-gray-800 text-sm">${item.qty}</span>
                     <button class="w-8 h-8 bg-white rounded shadow-sm text-gray-600 hover:text-[var(--system-primary)] font-bold text-base flex items-center justify-center active:scale-95 transition-transform" 
-                        onclick="updateWaiterCartQty(${index}, 1)">
+                        onclick="updateWaiterCartQty(${index}, 1)" title="Aumentar combo">
                         +
                     </button>
                 </div>
@@ -865,7 +884,7 @@ export async function handleSendWaiterOrder() {
         const orderData = {
             id: orderId,
             table: tableNum,
-            items: waiterCart,
+            items: JSON.parse(JSON.stringify(waiterCart)),
             total: finalTotal,
             discount: comboCalc.totalComboDiscount || 0,
             discount_reason: comboCalc.discountReason || '',

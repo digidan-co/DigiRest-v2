@@ -22,7 +22,24 @@ async function deductItemsStock(orderId, items, userName = 'Sistema', io = null)
 
     let totalDeductions = 0;
 
+    // Aplanar items: si es un combo, deducir los insumos de cada uno de sus platos incluidos
+    const itemsToProcess = [];
     for (const item of orderItems) {
+        if (item.is_combo && Array.isArray(item.combo_items) && item.combo_items.length > 0) {
+            const comboQty = parseFloat(item.qty) || 1;
+            for (const ci of item.combo_items) {
+                itemsToProcess.push({
+                    productId: ci.product_id || ci.id,
+                    qty: (parseFloat(ci.qty) || 1) * comboQty,
+                    toppings: ci.toppings || []
+                });
+            }
+        } else {
+            itemsToProcess.push(item);
+        }
+    }
+
+    for (const item of itemsToProcess) {
         const productId = item.productId || item.id;
         const qty = parseFloat(item.qty) || 1;
 

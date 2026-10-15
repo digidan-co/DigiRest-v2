@@ -113,6 +113,21 @@ watch(orders, async () => {
                 <p>{{ o.notes }}</p>
             </div>
 
+            <!-- Resumen de productos/combos para el repartidor -->
+            <div v-if="o.items && o.items.length" class="mb-2.5 p-2 bg-gray-50 rounded-lg border border-gray-100 text-[11px] space-y-1">
+                <div v-for="(it, itIdx) in o.items" :key="itIdx" class="leading-tight">
+                    <div class="font-bold text-gray-800 flex items-center gap-1 flex-wrap">
+                        <span v-if="it.is_combo" class="text-[8px] bg-amber-100 text-amber-900 border border-amber-300 px-1 py-0.2 rounded font-black">COMBO</span>
+                        <span>{{ it.qty }}x {{ it.name }}</span>
+                    </div>
+                    <div v-if="it.combo_items && it.combo_items.length" class="pl-2 border-l-2 border-amber-400 text-[10px] text-gray-600 mt-0.5 space-y-0.5">
+                        <div v-for="(ci, ciIdx) in it.combo_items" :key="ciIdx">
+                            • {{ (parseFloat(ci.qty) || 1) * it.qty }}x {{ ci.name }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div v-if="isLocked(o)" class="bg-gray-200 text-gray-500 h-8 rounded flex items-center justify-center text-xs font-bold">
                 <i class="fas fa-ban mr-2"></i> No disponible
             </div>

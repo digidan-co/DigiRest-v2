@@ -1,4 +1,4 @@
-import{a as e,i as t,n,o as r,r as i,s as a,t as o}from"./index-WIjUOOMk.js";var s=`Locales`,c={Local:{Pendiente:{next:`Recibido`,label:`RECIBIR`,bgColor:`bg-[#FFF8BC]`},Recibido:{next:`En preparación`,label:`A COCINA`,bgColor:`bg-[#FFF8BC]`},"En preparación":{next:`Terminado`,label:`TERMINAR`,bgColor:`bg-sky-100`},Terminado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},Entregado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`}},Recoger:{Pendiente:{next:`Recibido`,label:`RECIBIR`,bgColor:`bg-[#FFF8BC]`},Recibido:{next:`En preparación`,label:`A COCINA`,bgColor:`bg-[#FFF8BC]`},"En preparación":{next:`Terminado`,label:`TERMINAR`,bgColor:`bg-sky-100`},Terminado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},Entregado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`}},Domicilio:{Pendiente:{next:`Recibido`,label:`RECIBIR`,bgColor:`bg-[#FFF8BC]`},Recibido:{next:`En preparación`,label:`A COCINA`,bgColor:`bg-[#FFF8BC]`},"En preparación":{next:`Terminado`,label:`TERMINAR`,bgColor:`bg-sky-100`},Terminado:{next:`En Reparto`,label:`A REPARTO`,bgColor:`bg-amber-100`},"En Reparto":{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},"En ruta":{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},Entregado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`}}};window.switchGRTab=f,window.renderRapidManagement=p,window.addEventListener(`orders-updated`,()=>{let e=i(`rapid-management-view`);e&&!e.classList.contains(`hidden`)&&p()}),window.openGRNotes=e=>{window.openViewNotesModal?window.openViewNotesModal(e):window.dispatchEvent(new CustomEvent(`request-open-notes`,{detail:{orderId:e}}))},window.printOrderFromGR=(e,t)=>{let n=[...a.orders||[],...a.waiterOrders||[]].find(t=>t.id==e);n&&o(t?{...n,isWaiterOrder:!0}:n)};function l(){}function u(){let e=i(`rapid-management-view`);e&&(e.classList.remove(`hidden`),p())}function d(){let e=i(`rapid-management-view`);e&&e.classList.add(`hidden`)}function f(e){s=e;let t=i(`btn-gr-tab-locales`),n=i(`btn-gr-tab-generales`);e===`Locales`?(t.className=`gr-tab-btn active flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`,n.className=`gr-tab-btn flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`):(n.className=`gr-tab-btn active flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`,t.className=`gr-tab-btn flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`);let r=i(`fab-gr-local`),a=i(`fab-gr-general`);r&&a&&(e===`Locales`?(r.classList.remove(`hidden`),a.classList.add(`hidden`)):(a.classList.remove(`hidden`),r.classList.add(`hidden`))),typeof window.clearOrderNotification==`function`&&window.clearOrderNotification(e===`Locales`?`local`:`general`),p()}function p(){let e=i(`gr-orders-container`),t=i(`gr-header-date`),n=i(`gr-header-admin`);if(t&&(t.textContent=new Date().toLocaleDateString(`es-CO`,{weekday:`long`,year:`numeric`,month:`long`,day:`numeric`})),n&&(n.textContent=a.user?.name||`Administrador`),!e)return;let o={Pendiente:1,Recibido:2,"En preparación":3,Terminado:4,"En Reparto":4.5,Entregado:5,Cobrado:6},c=e=>{let t=new Date(e);return t.setHours(t.getHours()-2),t.toLocaleDateString(`es-CO`)},l=c(new Date),u=[...a.orders||[],...a.waiterOrders||[]].filter(e=>{let t=e.status!==`Anulado`&&e.status!==`Eliminado`&&e.status!==`Cancelado`,n=c(r(e.timestamp||e.date))===l,i=s===`Locales`?e.type===`Local`:e.type!==`Local`;return t&&n&&i}),d=Array.from(new Map(u.map(e=>[e.id,e])).values());d.sort((e,t)=>{let n=o[e.status]||99,r=o[t.status]||99;return n===r?e.id-t.id:n-r}),e.innerHTML=d.map(e=>m(e)).join(``),setTimeout(g,100)}function m(n){let r=n.type===`Local`,i=(n.client||n.customerName||`Cliente General`).toUpperCase(),a;a=r?(n.waiterName||`Staff`).toUpperCase():n.deliveryAddress||n.address||`Recoge en Local`;let o=h(n),s=n.payment===`Transferencia`&&n.proof,c=n.unsolved_notes_count>0?`
+import{a as e,i as t,n,o as r,r as i,s as a,t as o}from"./index-CMxE14d_.js";var s=`Locales`,c={Local:{Pendiente:{next:`Recibido`,label:`RECIBIR`,bgColor:`bg-[#FFF8BC]`},Recibido:{next:`En preparación`,label:`A COCINA`,bgColor:`bg-[#FFF8BC]`},"En preparación":{next:`Terminado`,label:`TERMINAR`,bgColor:`bg-sky-100`},Terminado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},Entregado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`}},Recoger:{Pendiente:{next:`Recibido`,label:`RECIBIR`,bgColor:`bg-[#FFF8BC]`},Recibido:{next:`En preparación`,label:`A COCINA`,bgColor:`bg-[#FFF8BC]`},"En preparación":{next:`Terminado`,label:`TERMINAR`,bgColor:`bg-sky-100`},Terminado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},Entregado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`}},Domicilio:{Pendiente:{next:`Recibido`,label:`RECIBIR`,bgColor:`bg-[#FFF8BC]`},Recibido:{next:`En preparación`,label:`A COCINA`,bgColor:`bg-[#FFF8BC]`},"En preparación":{next:`Terminado`,label:`TERMINAR`,bgColor:`bg-sky-100`},Terminado:{next:`En Reparto`,label:`A REPARTO`,bgColor:`bg-amber-100`},"En Reparto":{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},"En ruta":{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`},Entregado:{next:`Cobrado`,label:`COBRAR`,bgColor:`bg-teal-100`}}};window.switchGRTab=f,window.renderRapidManagement=p,window.addEventListener(`orders-updated`,()=>{let e=i(`rapid-management-view`);e&&!e.classList.contains(`hidden`)&&p()}),window.openGRNotes=e=>{window.openViewNotesModal?window.openViewNotesModal(e):window.dispatchEvent(new CustomEvent(`request-open-notes`,{detail:{orderId:e}}))},window.printOrderFromGR=(e,t)=>{let n=[...a.orders||[],...a.waiterOrders||[]].find(t=>t.id==e);n&&o(t?{...n,isWaiterOrder:!0}:n)};function l(){}function u(){let e=i(`rapid-management-view`);e&&(e.classList.remove(`hidden`),p())}function d(){let e=i(`rapid-management-view`);e&&e.classList.add(`hidden`)}function f(e){s=e;let t=i(`btn-gr-tab-locales`),n=i(`btn-gr-tab-generales`);e===`Locales`?(t.className=`gr-tab-btn active flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`,n.className=`gr-tab-btn flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`):(n.className=`gr-tab-btn active flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`,t.className=`gr-tab-btn flex-1 py-2 rounded-xl text-sm font-bold shadow-xs transition-all cursor-pointer`);let r=i(`fab-gr-local`),a=i(`fab-gr-general`);r&&a&&(e===`Locales`?(r.classList.remove(`hidden`),a.classList.add(`hidden`)):(a.classList.remove(`hidden`),r.classList.add(`hidden`))),typeof window.clearOrderNotification==`function`&&window.clearOrderNotification(e===`Locales`?`local`:`general`),p()}function p(){let e=i(`gr-orders-container`),t=i(`gr-header-date`),n=i(`gr-header-admin`);if(t&&(t.textContent=new Date().toLocaleDateString(`es-CO`,{weekday:`long`,year:`numeric`,month:`long`,day:`numeric`})),n&&(n.textContent=a.user?.name||`Administrador`),!e)return;let o={Pendiente:1,Recibido:2,"En preparación":3,Terminado:4,"En Reparto":4.5,Entregado:5,Cobrado:6},c=e=>{let t=new Date(e);return t.setHours(t.getHours()-2),t.toLocaleDateString(`es-CO`)},l=c(new Date),u=[...a.orders||[],...a.waiterOrders||[]].filter(e=>{let t=e.status!==`Anulado`&&e.status!==`Eliminado`&&e.status!==`Cancelado`,n=c(r(e.timestamp||e.date))===l,i=s===`Locales`?e.type===`Local`:e.type!==`Local`;return t&&n&&i}),d=Array.from(new Map(u.map(e=>[e.id,e])).values());d.sort((e,t)=>{let n=o[e.status]||99,r=o[t.status]||99;return n===r?e.id-t.id:n-r}),e.innerHTML=d.map(e=>m(e)).join(``),setTimeout(g,100)}function m(n){let r=n.type===`Local`,i=(n.client||n.customerName||`Cliente General`).toUpperCase(),a;a=r?(n.waiterName||`Staff`).toUpperCase():n.deliveryAddress||n.address||`Recoge en Local`;let o=h(n),s=n.payment===`Transferencia`&&n.proof,c=n.unsolved_notes_count>0?`
         <button onclick="window.openGRNotes('${n.id}')" class="relative group p-1 w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-orange-500 hover:text-orange-600 bell-ring-container ml-2 mr-2" title="Ver Notas">
             <div class="bell-pulse-ring"></div>
             <i class="fas fa-bell animate-jump-spin relative z-10 text-lg"></i>
@@ -12,32 +12,25 @@ import{a as e,i as t,n,o as r,r as i,s as a,t as o}from"./index-WIjUOOMk.js";var
         
         <!-- Main Content (Left) -->
         <div class="flex-1 flex flex-col justify-between min-w-0 pr-2">
-            <!-- Header -->
+        <!-- Header -->
         <div class="flex items-center justify-between mb-1 bg-gray-50 rounded-[0.8rem] p-1.5 px-3">
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-0 mr-2">
                 <span class="text-[9px] text-gray-400 font-bold uppercase tracking-wider leading-none mb-0.5">ID PEDIDO</span>
-                <span class="text-xl font-black text-gray-800 leading-none">#${n.id}</span>
+                <span class="text-base font-black text-gray-800 leading-none truncate max-w-[140px] sm:max-w-[160px]" title="#${n.id}">#${n.id}</span>
             </div>
             
-            <div class="flex items-center">
+            <div class="flex items-center gap-1.5 shrink-0">
                 ${c}
-                
-                ${n.phone?`
-                <button onclick="window.openWhatsApp('${n.id}')"
-                    class="text-green-500 mr-[10px] hover:text-green-700 p-1 w-8 h-8 flex items-center justify-center rounded-full hover:bg-green-50 transition-colors"
-                    title="Enviar WhatsApp">
-                    <i class="fab fa-whatsapp text-[14px]"></i>
-                </button>
-                `:``}
 
-               ${s?`
+                ${s?`
                 <button onclick="window.showImageModal('${n.proof}')"
-                    class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-800 transition-all shadow-sm">
-                    <i class="fas fa-image text-xs"></i>
+                    class="w-7 h-7 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-800 transition-all shadow-sm"
+                    title="Ver Comprobante">
+                    <i class="fas fa-image text-[10px]"></i>
                 </button>
                 `:`
-                <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-300">
-                    <i class="fas fa-image text-xs"></i>
+                <div class="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-gray-300" title="Sin Comprobante">
+                    <i class="fas fa-image text-[10px]"></i>
                 </div>
                 `}
             </div>
@@ -121,17 +114,24 @@ import{a as e,i as t,n,o as r,r as i,s as a,t as o}from"./index-WIjUOOMk.js";var
         </div>
 
         <!-- Actions Column (Right) -->
-        <div class="flex flex-col gap-2 justify-center items-center border-l border-gray-100 pl-2 shrink-0">
-            <button onclick="window.showOrderDetails('${n.id}')" class="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50 transition-colors" title="Ver Detalles">
+        <div class="flex flex-col gap-1.5 justify-center items-center border-l border-gray-100 pl-2 shrink-0">
+            ${n.phone?`
+            <button onclick="window.openWhatsApp('${n.id}')"
+                class="text-emerald-500 hover:text-emerald-700 p-1.5 rounded-full hover:bg-emerald-50 transition-colors"
+                title="Enviar WhatsApp">
+                <i class="fab fa-whatsapp text-[14px]"></i>
+            </button>
+            `:``}
+            <button onclick="window.showOrderDetails('${n.id}')" class="text-blue-500 hover:text-blue-700 p-1.5 rounded-full hover:bg-blue-50 transition-colors" title="Ver Detalles">
                 <i class="fas fa-eye text-[14px]"></i>
             </button>
-            <button onclick="window.printOrderFromGR('${n.id}', ${u})" class="text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-50 transition-colors" title="Imprimir Ticket">
+            <button onclick="window.printOrderFromGR('${n.id}', ${u})" class="text-gray-600 hover:text-gray-900 p-1.5 rounded-full hover:bg-gray-50 transition-colors" title="Imprimir Ticket">
                 <i class="fas fa-file-invoice text-[14px]"></i>
             </button>
-            <button onclick="if(window.openOrderEditModal) window.openOrderEditModal('${n.id}', ${u})" class="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50 transition-colors" title="Editar Pedido">
+            <button onclick="if(window.openOrderEditModal) window.openOrderEditModal('${n.id}', ${u})" class="text-blue-500 hover:text-blue-700 p-1.5 rounded-full hover:bg-blue-50 transition-colors" title="Editar Pedido">
                 <i class="fas fa-edit text-[14px]"></i>
             </button>
-            <button onclick="window.promptCancelOrder('${n.id}')" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors" title="Anular Pedido">
+            <button onclick="window.promptCancelOrder('${n.id}')" class="text-red-500 hover:text-red-700 p-1.5 rounded-full hover:bg-red-50 transition-colors" title="Anular Pedido">
                 <i class="fas fa-trash-alt text-[14px]"></i>
             </button>
         </div>

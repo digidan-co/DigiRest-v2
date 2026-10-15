@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { state } from '@/legacy/core/state.js';
-import { addToCart, openDisplayDetail, setupClientToppingsModalListeners, updateCartUI } from '@/legacy/views/client-view.js';
+import { addToCart, openDisplayDetail, openComboDisplayDetail, setupClientToppingsModalListeners, updateCartUI } from '@/legacy/views/client-view.js';
 import { getTopDishes7d } from '@/legacy/services/product-service.js';
-import { getPromotionsCombos, listenToPromotionsCombos } from '@/legacy/services/promotions-service.js';
+import { getPromotionsCombos, listenToPromotionsCombos, calculateComboPricing } from '@/legacy/services/promotions-service.js';
 import { OfflineDB } from '@/legacy/services/offline-db.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import { toast } from '@/legacy/components/ui.js';
@@ -147,43 +147,18 @@ function handleSelectProduct(id) {
     openDisplayDetail(id);
 }
 
+function handleSelectCombo(combo) {
+    searchTerm.value = '';
+    openComboDisplayDetail(combo, (c) => handleAddCombo(c));
+}
+
 function handleAddProduct(id) {
     searchTerm.value = '';
     addToCart(id);
 }
 
 function getComboPricing(combo) {
-    if (!combo) return { basePrice: 0, finalPrice: 0, savings: 0 };
-    const items = Array.isArray(combo.items_config) ? combo.items_config : [];
-    const sumBase = items.reduce((sum, it) => {
-        const p = parseFloat(it.price) || 0;
-        const q = parseFloat(it.qty) || 1;
-        return sum + (p * q);
-    }, 0);
-
-    let finalPrice = sumBase;
-    let savings = 0;
-
-    if (combo.type === 'FIXED_PRICE') {
-        finalPrice = parseFloat(combo.combo_price) || 0;
-        savings = Math.max(0, sumBase - finalPrice);
-    } else if (combo.type === 'PERCENT_DISCOUNT' || combo.type === 'PERCENTAGE_DISCOUNT') {
-        const pct = (parseFloat(combo.discount_value) || 0) / 100;
-        savings = sumBase * pct;
-        finalPrice = Math.max(0, sumBase - savings);
-    } else if (combo.type === 'FIXED_DISCOUNT') {
-        savings = Math.min(sumBase, parseFloat(combo.discount_value) || 0);
-        finalPrice = Math.max(0, sumBase - savings);
-    } else if (combo.type === 'FREE_PRODUCT' || combo.type === 'N_PLUS_M' || combo.type === 'NXM') {
-        savings = items.reduce((sum, it) => it.is_free ? sum + ((parseFloat(it.price) || 0) * (parseFloat(it.qty) || 1)) : sum, 0);
-        finalPrice = Math.max(0, sumBase - savings);
-    }
-
-    return {
-        basePrice: sumBase,
-        finalPrice: Math.round(finalPrice),
-        savings: Math.round(savings)
-    };
+    return calculateComboPricing(combo);
 }
 
 function handleAddCombo(combo) {
@@ -192,27 +167,40 @@ function handleAddCombo(combo) {
         return;
     }
 
-    const instanceId = 'cinst_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const pricing = calculateComboPricing(combo);
+    const existing = state.cart.find(i => i.is_combo && i.combo_id === combo.id);
 
-    combo.items_config.forEach(it => {
-        const itemQty = parseFloat(it.qty) || 1;
-        const itemPrice = it.is_free ? 0 : (parseFloat(it.price) || 0);
-        state.cart.push({
-            id: `${it.product_id || 'combo'}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            productId: it.product_id,
+    if (existing) {
+        existing.qty++;
+    } else {
+        const comboItems = combo.items_config.map(it => ({
+            product_id: it.product_id,
             name: it.name,
-            price: itemPrice,
-            qty: itemQty,
-            combo_instance_id: instanceId,
+            qty: parseFloat(it.qty) || 1,
+            price: parseFloat(it.price) || 0,
+            is_free: !!it.is_free
+        }));
+
+        const comboDesc = comboItems.map(it => `${it.qty > 1 ? it.qty + 'x ' : ''}${it.name}${it.is_free ? ' (Gratis)' : ''}`).join(', ');
+
+        state.cart.push({
+            id: `combo_${combo.id}`,
+            productId: `combo_${combo.id}`,
+            name: combo.name,
+            price: pricing.finalPrice,
+            base_price: pricing.basePrice,
+            discount_amount: pricing.savings,
+            qty: 1,
+            is_combo: true,
             combo_id: combo.id,
             combo_name: combo.name,
-            combo_price: parseFloat(combo.combo_price) || 0,
             combo_type: combo.type,
-            discount_value: parseFloat(combo.discount_value) || 0,
-            is_combo_component: true,
-            is_free: !!it.is_free
+            category: combo.category || 'Combos',
+            img: combo.img || '',
+            combo_items: comboItems,
+            combo_description: comboDesc
         });
-    });
+    }
 
     searchTerm.value = '';
     updateCartUI();
@@ -347,7 +335,8 @@ onMounted(async () => {
             </div>
             <div id="combos-carousel" class="flex gap-2.5 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
                 <div v-for="combo in filteredCombos" :key="combo.id"
-                    class="client-product-card carousel-product-card snap-start bg-white rounded-xl border border-amber-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group">
+                    class="client-product-card carousel-product-card snap-start bg-white rounded-xl border border-amber-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group cursor-pointer"
+                    @click="handleSelectCombo(combo)">
                     <div class="aspect-square w-full relative bg-amber-50/50 overflow-hidden shrink-0">
                         <img :src="combo.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + combo.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span class="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-black text-white shadow-md flex items-center gap-1 border border-black/20"

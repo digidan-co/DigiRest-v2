@@ -37,15 +37,25 @@ export const printOrder = (order) => {
     }
 
     const itemsHtml = (order.items || []).map(item => {
+        const isCombo = item.is_combo || (Array.isArray(item.combo_items) && item.combo_items.length > 0);
         const toppingsText = item.toppings_text || (Array.isArray(item.toppings) ? item.toppings.map(t => t.name || t).filter(Boolean).join(', ') : '');
         const notesText = item.notes || item.note || '';
 
+        let comboItemsHtml = '';
+        if (isCombo && Array.isArray(item.combo_items) && item.combo_items.length > 0) {
+            comboItemsHtml = item.combo_items.map(ci => {
+                const ciQty = (parseFloat(ci.qty) || 1) * (parseFloat(item.qty) || 1);
+                return `<div class="item-extra" style="padding-left: 10px; font-weight: 500;">• ${ciQty}x ${escapeHtml(ci.name)}${ci.is_free ? ' (Cortesía)' : ''}</div>`;
+            }).join('');
+        }
+
         return `
             <div class="item-row">
-                <span class="item-name">${item.qty}x ${escapeHtml(item.name)}${item.variant_name ? ` [${escapeHtml(item.variant_name)}]` : ''}</span>
+                <span class="item-name">${isCombo ? '[COMBO] ' : ''}${item.qty}x ${escapeHtml(item.name)}${item.variant_name ? ` [${escapeHtml(item.variant_name)}]` : ''}</span>
                 <span class="item-price">${formatMoney(item.price * item.qty)}</span>
             </div>
-            ${item.combo_name ? `<div class="item-extra">* Combo: ${escapeHtml(item.combo_name)}</div>` : ''}
+            ${comboItemsHtml}
+            ${item.combo_name && !isCombo ? `<div class="item-extra">* Combo: ${escapeHtml(item.combo_name)}</div>` : ''}
             ${item.variant_name ? `<div class="item-extra">* Tamaño: ${escapeHtml(item.variant_name)}</div>` : ''}
             ${toppingsText ? `<div class="item-extra">* Adic: ${escapeHtml(toppingsText)}</div>` : ''}
             ${notesText ? `<div class="item-extra">* Nota: ${escapeHtml(notesText)}</div>` : ''}

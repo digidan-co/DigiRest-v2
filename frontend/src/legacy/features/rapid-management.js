@@ -220,32 +220,25 @@ function createOrderCard(order) {
         
         <!-- Main Content (Left) -->
         <div class="flex-1 flex flex-col justify-between min-w-0 pr-2">
-            <!-- Header -->
+        <!-- Header -->
         <div class="flex items-center justify-between mb-1 bg-gray-50 rounded-[0.8rem] p-1.5 px-3">
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-0 mr-2">
                 <span class="text-[9px] text-gray-400 font-bold uppercase tracking-wider leading-none mb-0.5">ID PEDIDO</span>
-                <span class="text-xl font-black text-gray-800 leading-none">#${order.id}</span>
+                <span class="text-base font-black text-gray-800 leading-none truncate max-w-[140px] sm:max-w-[160px]" title="#${order.id}">#${order.id}</span>
             </div>
             
-            <div class="flex items-center">
+            <div class="flex items-center gap-1.5 shrink-0">
                 ${bellHtml}
-                
-                ${order.phone ? `
-                <button onclick="window.openWhatsApp('${order.id}')"
-                    class="text-green-500 mr-[10px] hover:text-green-700 p-1 w-8 h-8 flex items-center justify-center rounded-full hover:bg-green-50 transition-colors"
-                    title="Enviar WhatsApp">
-                    <i class="fab fa-whatsapp text-[14px]"></i>
-                </button>
-                ` : ''}
 
-               ${hasProof ? `
+                ${hasProof ? `
                 <button onclick="window.showImageModal('${order.proof}')"
-                    class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-800 transition-all shadow-sm">
-                    <i class="fas fa-image text-xs"></i>
+                    class="w-7 h-7 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-800 transition-all shadow-sm"
+                    title="Ver Comprobante">
+                    <i class="fas fa-image text-[10px]"></i>
                 </button>
                 ` : `
-                <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-300">
-                    <i class="fas fa-image text-xs"></i>
+                <div class="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-gray-300" title="Sin Comprobante">
+                    <i class="fas fa-image text-[10px]"></i>
                 </div>
                 `}
             </div>
@@ -329,17 +322,24 @@ function createOrderCard(order) {
         </div>
 
         <!-- Actions Column (Right) -->
-        <div class="flex flex-col gap-2 justify-center items-center border-l border-gray-100 pl-2 shrink-0">
-            <button onclick="window.showOrderDetails('${order.id}')" class="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50 transition-colors" title="Ver Detalles">
+        <div class="flex flex-col gap-1.5 justify-center items-center border-l border-gray-100 pl-2 shrink-0">
+            ${order.phone ? `
+            <button onclick="window.openWhatsApp('${order.id}')"
+                class="text-emerald-500 hover:text-emerald-700 p-1.5 rounded-full hover:bg-emerald-50 transition-colors"
+                title="Enviar WhatsApp">
+                <i class="fab fa-whatsapp text-[14px]"></i>
+            </button>
+            ` : ''}
+            <button onclick="window.showOrderDetails('${order.id}')" class="text-blue-500 hover:text-blue-700 p-1.5 rounded-full hover:bg-blue-50 transition-colors" title="Ver Detalles">
                 <i class="fas fa-eye text-[14px]"></i>
             </button>
-            <button onclick="window.printOrderFromGR('${order.id}', ${isWaiterOrder})" class="text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-50 transition-colors" title="Imprimir Ticket">
+            <button onclick="window.printOrderFromGR('${order.id}', ${isWaiterOrder})" class="text-gray-600 hover:text-gray-900 p-1.5 rounded-full hover:bg-gray-50 transition-colors" title="Imprimir Ticket">
                 <i class="fas fa-file-invoice text-[14px]"></i>
             </button>
-            <button onclick="if(window.openOrderEditModal) window.openOrderEditModal('${order.id}', ${isWaiterOrder})" class="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50 transition-colors" title="Editar Pedido">
+            <button onclick="if(window.openOrderEditModal) window.openOrderEditModal('${order.id}', ${isWaiterOrder})" class="text-blue-500 hover:text-blue-700 p-1.5 rounded-full hover:bg-blue-50 transition-colors" title="Editar Pedido">
                 <i class="fas fa-edit text-[14px]"></i>
             </button>
-            <button onclick="window.promptCancelOrder('${order.id}')" class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors" title="Anular Pedido">
+            <button onclick="window.promptCancelOrder('${order.id}')" class="text-red-500 hover:text-red-700 p-1.5 rounded-full hover:bg-red-50 transition-colors" title="Anular Pedido">
                 <i class="fas fa-trash-alt text-[14px]"></i>
             </button>
         </div>

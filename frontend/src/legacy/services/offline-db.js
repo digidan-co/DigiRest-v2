@@ -51,12 +51,18 @@ export const OfflineDB = {
 
     async enqueueRequest(requestObj) {
         const db = await this.ensureDb();
+        let cleanObj;
+        try {
+            cleanObj = JSON.parse(JSON.stringify(requestObj));
+        } catch (_) {
+            cleanObj = { ...requestObj };
+        }
         return new Promise((resolve, reject) => {
             const transaction = db.transaction([STORE_QUEUE], 'readwrite');
             const store = transaction.objectStore(STORE_QUEUE);
             // requestObj should have: url, method, headers, body, timestamp
             const request = store.add({
-                ...requestObj,
+                ...cleanObj,
                 timestamp: Date.now()
             });
 

@@ -218,12 +218,22 @@ watch([generalOrders, waiterOrders], async () => {
                     <div v-for="(item, itemIndex) in o.items" :key="itemIndex" class="flex flex-col py-1.5 border-b border-gray-50 last:border-0 pl-1 pr-1">
                         <div class="flex justify-between items-start w-full gap-2">
                             <label class="flex-1 cursor-pointer select-none mt-0.5">
-                                <span class="text-sm font-bold" :class="itemCheckedQty(item) >= item.qty ? 'line-through text-gray-400' : 'text-gray-800'">
-                                    {{ item.qty }}x {{ item.name }}
-                                    <span v-if="item.variant_name" class="ml-1.5 inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                                        <i class="fas fa-layer-group text-[9px]"></i>{{ item.variant_name }}
+                                <div class="flex items-center gap-1 flex-wrap mb-0.5">
+                                    <span v-if="item.is_combo" class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                                        <i class="fas fa-tags text-[8px]"></i>COMBO
                                     </span>
-                                </span>
+                                    <span class="text-sm font-bold" :class="itemCheckedQty(item) >= item.qty ? 'line-through text-gray-400' : 'text-gray-800'">
+                                        {{ item.qty }}x {{ item.name }}
+                                        <span v-if="item.variant_name" class="ml-1.5 inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                            <i class="fas fa-layer-group text-[9px]"></i>{{ item.variant_name }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div v-if="item.combo_items && item.combo_items.length" class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-700 bg-amber-50/50 py-1 pr-2 rounded-r">
+                                    <div v-for="(ci, ciIdx) in item.combo_items" :key="ciIdx" class="font-medium">
+                                        • {{ (parseFloat(ci.qty) || 1) * item.qty }}x {{ ci.name }}
+                                    </div>
+                                </div>
                                 <div v-if="toppingsText(item)" class="mt-1 flex flex-wrap gap-1">
                                     <span class="inline-flex items-center text-[11px] font-semibold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
                                         <i class="fas fa-cookie-bite mr-1 text-[9px] text-amber-600"></i>{{ toppingsText(item) }}
@@ -301,12 +311,22 @@ watch([generalOrders, waiterOrders], async () => {
                     <div v-for="(item, itemIndex) in o.items" :key="itemIndex" class="flex flex-col py-1.5 border-b border-gray-50 last:border-0 pl-1 pr-1">
                         <div class="flex justify-between items-start w-full gap-2">
                             <label class="flex-1 cursor-pointer select-none mt-0.5">
-                                <span class="text-sm font-bold" :class="itemCheckedQty(item) >= item.qty ? 'line-through text-gray-400' : 'text-gray-800'">
-                                    {{ item.qty }}x {{ item.name }}
-                                    <span v-if="item.variant_name" class="ml-1.5 inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                                        <i class="fas fa-layer-group text-[9px]"></i>{{ item.variant_name }}
+                                <div class="flex items-center gap-1 flex-wrap mb-0.5">
+                                    <span v-if="item.is_combo" class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                                        <i class="fas fa-tags text-[8px]"></i>COMBO
                                     </span>
-                                </span>
+                                    <span class="text-sm font-bold" :class="itemCheckedQty(item) >= item.qty ? 'line-through text-gray-400' : 'text-gray-800'">
+                                        {{ item.qty }}x {{ item.name }}
+                                        <span v-if="item.variant_name" class="ml-1.5 inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                            <i class="fas fa-layer-group text-[9px]"></i>{{ item.variant_name }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div v-if="item.combo_items && item.combo_items.length" class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-700 bg-amber-50/50 py-1 pr-2 rounded-r">
+                                    <div v-for="(ci, ciIdx) in item.combo_items" :key="ciIdx" class="font-medium">
+                                        • {{ (parseFloat(ci.qty) || 1) * item.qty }}x {{ ci.name }}
+                                    </div>
+                                </div>
                                 <div v-if="toppingsText(item)" class="mt-1 flex flex-wrap gap-1">
                                     <span class="inline-flex items-center text-[11px] font-semibold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
                                         <i class="fas fa-cookie-bite mr-1 text-[9px] text-amber-600"></i>{{ toppingsText(item) }}

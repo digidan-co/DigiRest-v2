@@ -46,3 +46,37 @@ export function listenToPromotionsCombos(callback) {
         socket.off('promotions_combos_updated', onUpdate);
     };
 }
+
+export function calculateComboPricing(combo) {
+    if (!combo) return { basePrice: 0, finalPrice: 0, savings: 0 };
+    const items = Array.isArray(combo.items_config) ? combo.items_config : [];
+    const sumBase = items.reduce((sum, it) => {
+        const p = parseFloat(it.price) || 0;
+        const q = parseFloat(it.qty) || 1;
+        return sum + (p * q);
+    }, 0);
+
+    let finalPrice = sumBase;
+    let savings = 0;
+
+    if (combo.type === 'FIXED_PRICE') {
+        finalPrice = parseFloat(combo.combo_price) || 0;
+        savings = Math.max(0, sumBase - finalPrice);
+    } else if (combo.type === 'PERCENT_DISCOUNT' || combo.type === 'PERCENTAGE_DISCOUNT') {
+        const pct = (parseFloat(combo.discount_value) || 0) / 100;
+        savings = sumBase * pct;
+        finalPrice = Math.max(0, sumBase - savings);
+    } else if (combo.type === 'FIXED_DISCOUNT') {
+        savings = Math.min(sumBase, parseFloat(combo.discount_value) || 0);
+        finalPrice = Math.max(0, sumBase - savings);
+    } else if (combo.type === 'FREE_PRODUCT' || combo.type === 'N_PLUS_M' || combo.type === 'NXM') {
+        savings = items.reduce((sum, it) => it.is_free ? sum + ((parseFloat(it.price) || 0) * (parseFloat(it.qty) || 1)) : sum, 0);
+        finalPrice = Math.max(0, sumBase - savings);
+    }
+    return {
+        basePrice: sumBase,
+        finalPrice: Math.round(finalPrice),
+        savings: Math.round(savings)
+    };
+}
+

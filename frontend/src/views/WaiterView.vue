@@ -233,10 +233,18 @@ onUnmounted(() => {
                     <div class="space-y-0.5 mb-2.5 flex-1 overflow-y-auto max-h-[190px]">
                         <div v-for="(i, idx) in o.items" :key="idx" class="flex flex-col text-xs sm:text-[13px] py-0.5 border-b border-gray-50 last:border-0" :class="itemStyle(i)">
                             <div class="flex justify-between items-start">
-                                <span>
+                                <span class="flex items-center gap-1 flex-wrap">
                                     <i v-if="itemCheckedQty(i) > 0" class="fas fa-check-circle text-xs mr-1" :class="iconColor(i)" :title="itemCheckedQty(i) + '/' + (i.qty || 1) + ' listos'"></i>
-                                    {{ displayQty(i) }}{{ i.name }}
+                                    <span v-if="i.is_combo" class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1 py-0.2 rounded inline-flex items-center gap-0.5">
+                                        <i class="fas fa-tags text-[8px]"></i>COMBO
+                                    </span>
+                                    <span class="font-bold">{{ displayQty(i) }}{{ i.name }}</span>
                                 </span>
+                            </div>
+                            <div v-if="i.combo_items && i.combo_items.length" class="mt-0.5 mb-0.5 pl-2 border-l-2 border-amber-400 space-y-0.5 text-[11px] text-gray-600">
+                                <div v-for="(ci, ciIdx) in i.combo_items" :key="ciIdx">
+                                    • {{ (parseFloat(ci.qty) || 1) * (parseFloat(i.qty) || 1) }}x {{ ci.name }}
+                                </div>
                             </div>
                             <span v-if="i.variant_name" class="inline-flex items-center gap-1 text-[10px] text-indigo-700 font-bold pl-2 leading-tight">
                                 <i class="fas fa-layer-group text-[8px]"></i> Tamaño: {{ i.variant_name }}
@@ -344,10 +352,18 @@ onUnmounted(() => {
                     <div class="space-y-0.5 mb-2.5 flex-1 overflow-y-auto max-h-[190px]">
                         <div v-for="(i, idx) in o.items" :key="idx" class="flex flex-col text-xs sm:text-[13px] py-0.5 border-b border-gray-50 last:border-0" :class="itemStyle(i)">
                             <div class="flex justify-between items-start">
-                                <span>
+                                <span class="flex items-center gap-1 flex-wrap">
                                     <i v-if="itemCheckedQty(i) > 0" class="fas fa-check-circle text-xs mr-1 text-orange-500" :title="itemCheckedQty(i) + '/' + (i.qty || 1) + ' listos'"></i>
-                                    {{ displayQty(i) }}{{ i.name }}
+                                    <span v-if="i.is_combo" class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1 py-0.2 rounded inline-flex items-center gap-0.5">
+                                        <i class="fas fa-tags text-[8px]"></i>COMBO
+                                    </span>
+                                    <span class="font-bold">{{ displayQty(i) }}{{ i.name }}</span>
                                 </span>
+                            </div>
+                            <div v-if="i.combo_items && i.combo_items.length" class="mt-0.5 mb-0.5 pl-2 border-l-2 border-amber-400 space-y-0.5 text-[11px] text-gray-600">
+                                <div v-for="(ci, ciIdx) in i.combo_items" :key="ciIdx">
+                                    • {{ (parseFloat(ci.qty) || 1) * (parseFloat(i.qty) || 1) }}x {{ ci.name }}
+                                </div>
                             </div>
                             <span v-if="i.variant_name" class="inline-flex items-center gap-1 text-[10px] text-indigo-700 font-bold pl-2 leading-tight">
                                 <i class="fas fa-layer-group text-[8px]"></i> Tamaño: {{ i.variant_name }}

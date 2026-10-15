@@ -15,6 +15,7 @@ import { createOrder } from '../services/order-service.js';
 import { compressProof } from '../utils/image-utils.js';
 import { getTopDishes7d } from '../services/product-service.js';
 import { calculateOrderCombos } from '../utils/combo-calculator.js';
+import { calculateComboPricing } from '../services/promotions-service.js';
 
 let currentDisplayCategory = 'Todos';
 let currentClientCategory = 'Todos';
@@ -262,6 +263,10 @@ export function openDisplayDetail(id, cardElement) {
     const modalCard = $('display-detail-card');
     if (!modal || !modalCard) return;
 
+    // Hide combo-specific items container if previously opened
+    const comboContainer = $('display-combo-items-container');
+    if (comboContainer) comboContainer.classList.add('hidden');
+
     const imgEl = $('display-img');
     const hasImage = Boolean(product.img && product.img.trim() && product.img !== 'img/placeholder-dish.svg');
 
@@ -356,6 +361,163 @@ export function openDisplayDetail(id, cardElement) {
         } else {
             addBtn.classList.add('hidden');
         }
+    }
+
+    modal.classList.remove('hidden');
+    void modal.offsetWidth;
+    modal.classList.remove('opacity-0');
+
+    modalCard.classList.remove('scale-90', 'opacity-0');
+    modalCard.classList.add('scale-100', 'opacity-100');
+
+    const closeBtn = $('btn-close-display');
+    if (closeBtn) closeBtn.onclick = closeHandler;
+    modal.onclick = (e) => {
+        if (e.target === modal) closeHandler();
+    };
+}
+
+/**
+ * Abre el modal de detalle para un combo o promoción, mostrando su imagen,
+ * nombre, descripción, precio y el listado de todos los platos incluidos.
+ */
+export function openComboDisplayDetail(combo, onAddCallback) {
+    if (!combo) return;
+
+    const modal = $('display-detail-modal');
+    const modalCard = $('display-detail-card');
+    if (!modal || !modalCard) return;
+
+    const imgEl = $('display-img');
+    const hasImage = Boolean(combo.img && combo.img.trim() && combo.img !== 'img/placeholder-dish.svg');
+
+    if (imgEl) {
+        imgEl.src = combo.img || '/img/placeholder-dish.svg';
+        if (!hasImage) {
+            imgEl.classList.add('opacity-40');
+        } else {
+            imgEl.classList.remove('opacity-40');
+        }
+    }
+
+    $('display-title').innerText = combo.name;
+    $('display-category').innerText = combo.category || 'Combo Especial ⭐';
+
+    const badgeExtra = $('display-badge-extra');
+    if (badgeExtra) {
+        let badgeLabel = 'Combo Especial';
+        let badgeClass = 'text-amber-900 bg-amber-100 border border-amber-200';
+        let badgeIcon = 'fa-tags';
+
+        if (combo.type === 'FIXED_PRICE') {
+            badgeLabel = 'Precio Especial';
+        } else if (combo.type === 'PERCENT_DISCOUNT' || combo.type === 'PERCENTAGE_DISCOUNT') {
+            badgeLabel = `${combo.discount_value}% Descuento`;
+            badgeClass = 'text-red-700 bg-red-100 border border-red-200';
+            badgeIcon = 'fa-percent';
+        } else if (combo.type === 'FIXED_DISCOUNT') {
+            badgeLabel = `${formatMoney(combo.discount_value)} Descuento`;
+            badgeClass = 'text-red-700 bg-red-100 border border-red-200';
+            badgeIcon = 'fa-tag';
+        } else if (combo.type === 'FREE_PRODUCT' || combo.type === 'N_PLUS_M' || combo.type === 'NXM') {
+            badgeLabel = 'Promoción Cortesía';
+            badgeClass = 'text-emerald-800 bg-emerald-100 border border-emerald-200';
+            badgeIcon = 'fa-gift';
+        }
+
+        badgeExtra.className = `inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-full ${badgeClass}`;
+        badgeExtra.innerHTML = `<i class="fas ${badgeIcon} text-[10px]"></i> ${badgeLabel}`;
+        badgeExtra.classList.remove('hidden');
+    }
+
+    $('display-desc').innerText = combo.description || "Deliciosa combinación de nuestros mejores platos a un precio especial.";
+
+    // Renderizar platos incluidos en el combo
+    const comboContainer = $('display-combo-items-container');
+    const comboList = $('display-combo-items-list');
+    const comboCountBadge = $('display-combo-total-items');
+    const savingsBar = $('display-combo-savings-bar');
+    const savingsAmount = $('display-combo-savings-amount');
+
+    const pricing = calculateComboPricing(combo);
+
+    if (comboContainer && comboList) {
+        comboContainer.classList.remove('hidden');
+        const items = Array.isArray(combo.items_config) ? combo.items_config : [];
+        if (comboCountBadge) {
+            comboCountBadge.innerText = `${items.length} ${items.length === 1 ? 'plato' : 'platos'}`;
+        }
+
+        if (items.length > 0) {
+            comboList.innerHTML = items.map(it => {
+                const qty = parseFloat(it.qty) || 1;
+                const price = parseFloat(it.price) || 0;
+                return `
+                    <li class="flex items-center justify-between text-xs py-1.5 border-b border-amber-100/70 last:border-0 gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-6 h-6 rounded-lg bg-amber-200 text-amber-950 font-black flex items-center justify-center text-[10px] shrink-0 shadow-2xs">
+                                ${qty}x
+                            </span>
+                            <span class="font-bold text-gray-800 truncate text-xs sm:text-sm">${escapeHtml(it.name)}</span>
+                        </div>
+                        ${it.is_free 
+                            ? '<span class="text-[9px] font-black text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full uppercase shrink-0">¡Cortesía!</span>' 
+                            : `<span class="text-gray-500 font-semibold shrink-0 text-xs">${formatMoney(price * qty)}</span>`
+                        }
+                    </li>
+                `;
+            }).join('');
+        } else {
+            comboList.innerHTML = '<li class="text-xs text-gray-400 italic py-1">No hay platos configurados en este combo</li>';
+        }
+
+        if (pricing.savings > 0 && savingsBar && savingsAmount) {
+            savingsBar.classList.remove('hidden');
+            savingsAmount.innerText = `-${formatMoney(pricing.savings)}`;
+        } else if (savingsBar) {
+            savingsBar.classList.add('hidden');
+        }
+    }
+
+    // Precio
+    const priceContainer = $('display-price');
+    if (priceContainer) {
+        if (pricing.savings > 0) {
+            priceContainer.innerHTML = `
+                <div class="flex items-baseline gap-2">
+                    <span class="text-2xl sm:text-3xl font-extrabold text-amber-600">${formatMoney(pricing.finalPrice)}</span>
+                    <span class="text-xs sm:text-sm text-gray-400 line-through">${formatMoney(pricing.basePrice)}</span>
+                </div>
+            `;
+        } else {
+            priceContainer.innerText = formatMoney(pricing.finalPrice);
+        }
+    }
+
+    const closeHandler = () => {
+        modalCard.classList.remove('scale-100', 'opacity-100');
+        modalCard.classList.add('scale-90', 'opacity-0');
+        modal.classList.add('opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            if (comboContainer) comboContainer.classList.add('hidden');
+        }, 300);
+    };
+
+    // Client ordering button inside detail modal
+    const addBtn = $('btn-display-modal-add');
+    const addText = $('btn-display-modal-add-text');
+    if (addBtn) {
+        addBtn.classList.remove('hidden');
+        if (addText) {
+            addText.innerText = 'Agregar Combo';
+        }
+        addBtn.onclick = () => {
+            closeHandler();
+            if (typeof onAddCallback === 'function') {
+                onAddCallback(combo);
+            }
+        };
     }
 
     modal.classList.remove('hidden');
@@ -1669,14 +1831,20 @@ export function renderCartList() {
     }
 
     list.innerHTML = state.cart.map(item => `
-        <div class="flex justify-between items-start bg-white p-3 rounded-2xl border border-gray-100 shadow-xs">
+        <div class="flex justify-between items-start bg-white p-3 rounded-2xl border ${item.is_combo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-xs">
             <div class="flex items-start gap-2.5 min-w-0 flex-1">
                 <div class="bg-orange-50 text-orange-600 font-bold w-6 h-6 flex items-center justify-center rounded-lg text-xs shrink-0 mt-0.5">${item.qty}</div>
                 <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
-                        ${item.combo_name ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
+                        ${item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>COMBO</span>` : ''}
+                        ${item.combo_name && !item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
                         <p class="font-bold text-xs text-gray-800 leading-tight">${escapeHtml(item.name)}</p>
                     </div>
+                    ${item.is_combo && Array.isArray(item.combo_items) && item.combo_items.length > 0 ? `
+                        <div class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-[11px] text-gray-600">
+                            ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[9px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                        </div>
+                    ` : ''}
                     ${item.variant_name ? `<p class="text-[10px] text-indigo-700 font-bold leading-tight mt-0.5"><i class="fas fa-layer-group text-[8px] mr-1"></i>Tamaño: ${escapeHtml(item.variant_name)}</p>` : ''}
                     ${item.toppings_text ? `<p class="text-[10px] text-amber-700 font-medium leading-tight mt-0.5"><i class="fas fa-cookie-bite mr-1 text-[8px]"></i>${escapeHtml(item.toppings_text)}</p>` : ''}
                     ${item.notes ? `<p class="text-[9px] text-gray-400 italic leading-tight mt-0.5">Nota: ${escapeHtml(item.notes)}</p>` : ''}
@@ -1685,7 +1853,7 @@ export function renderCartList() {
             </div>
             <div class="flex items-center gap-2 shrink-0 ml-2">
                 <span class="font-bold text-xs text-gray-900">${formatMoney(item.price * item.qty)}</span>
-                <button class="text-gray-300 hover:text-red-500 remove-item-btn p-1 cursor-pointer transition-colors" data-id="${item.id}" aria-label="Eliminar del carrito"><i class="fas fa-trash text-xs"></i></button>
+                <button class="text-gray-300 hover:text-red-500 remove-item-btn p-1 cursor-pointer transition-colors" data-id="${item.id}" aria-label="Eliminar del carrito" title="Eliminar combo"><i class="fas fa-trash text-xs"></i></button>
             </div>
         </div>
     `).join('');
@@ -1820,7 +1988,7 @@ export async function handleSendOrder() {
         delivery_fee: deliveryFee,
         discount: comboDiscount,
         discount_reason: comboCalc.discountReason || '',
-        items: state.cart,
+        items: JSON.parse(JSON.stringify(state.cart)),
         total: totalWithDelivery,
         status: 'Pendiente'
     };

@@ -160,7 +160,11 @@ function validateOrderInput(req, res, next) {
         } else {
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
-                if (!item.id || !isValidUUID(item.id)) {
+                const isValidId = isValidUUID(item.id) ||
+                                  (item.is_combo && (isValidUUID(item.combo_id) || isValidUUID(String(item.id).replace(/^combo_/, '')))) ||
+                                  (typeof item.id === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(item.id));
+
+                if (!item.id || !isValidId) {
                     errors.push(`Item #${i + 1}: ID de producto inválido`);
                 }
                 if (!item.name || typeof item.name !== 'string') {

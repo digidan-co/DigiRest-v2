@@ -2945,21 +2945,35 @@ function renderEditItems() {
     currentEditingOrder.items.forEach((item, index) => {
         const itemTotal = item.price * item.qty;
         total += itemTotal;
+        const isCombo = item.is_combo || (Array.isArray(item.combo_items) && item.combo_items.length > 0);
+
+        let comboItemsHtml = '';
+        if (isCombo && Array.isArray(item.combo_items) && item.combo_items.length > 0) {
+            comboItemsHtml = `
+                <div class="mt-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-600 bg-amber-50/50 py-1 pr-2 rounded-r">
+                    ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[10px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                </div>
+            `;
+        }
 
         const div = document.createElement('div');
-        div.className = 'flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-3 bg-white p-2 rounded-lg border border-gray-100 shadow-sm';
+        div.className = `flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-3 bg-white p-2 rounded-lg border ${isCombo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-sm`;
         div.innerHTML = `
             <div class="flex-1">
-                <div class="font-bold text-gray-800 text-sm">${escapeHtml(item.name)}</div>
-                <div class="text-xs text-gray-400">${formatMoney(item.price)} c/u</div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    ${isCombo ? '<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded"><i class="fas fa-tags text-[8px] mr-1"></i>COMBO</span>' : ''}
+                    <div class="font-bold text-gray-800 text-sm">${escapeHtml(item.name)}</div>
+                </div>
+                ${comboItemsHtml}
+                <div class="text-xs text-gray-400 mt-0.5">${formatMoney(item.price)} c/u</div>
             </div>
             <div class="flex items-center justify-between md:justify-end gap-3">
                 <div class="flex items-center bg-gray-50 rounded-lg border border-gray-200">
-                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, -1)">-</button>
+                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, -1)" title="Disminuir / Eliminar combo">-</button>
                     <span class="w-10 text-center font-bold text-sm text-gray-700">${item.qty}</span>
-                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, 1)">+</button>
+                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, 1)" title="Aumentar combo">+</button>
                 </div>
-                <button type="button" class="text-red-400 hover:text-red-600 w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors" onclick="removeEditItem(${index})">
+                <button type="button" class="text-red-400 hover:text-red-600 w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors" onclick="removeEditItem(${index})" title="Eliminar combo">
                     <i class="fas fa-trash-alt"></i>
                 </button>
             </div>
@@ -3032,17 +3046,23 @@ function toggleEditFields() {
     }
 
     const accountContainer = $('oe-account-container');
+    const typeContainer = $('oe-type-container');
     const mixedContainer = $('oe-mixed-container');
+    const proofWrapper = $('oe-proof-wrapper');
     const proofContainer = $('oe-proof-container');
     const noProofMsg = $('oe-no-proof');
     const currentProofImg = $('oe-current-proof');
 
+    const hasProof = !!currentEditingOrder.proof;
+
     if (pay === 'Mixto') {
         if (accountContainer) accountContainer.classList.add('hidden');
+        if (typeContainer) { typeContainer.classList.remove('col-span-1'); typeContainer.classList.add('col-span-2'); }
         if (mixedContainer) mixedContainer.classList.remove('hidden');
+        if (proofWrapper) proofWrapper.classList.remove('hidden');
         if (proofContainer) proofContainer.classList.remove('hidden');
         if (currentProofImg) {
-            if (currentEditingOrder.proof) {
+            if (hasProof) {
                 currentProofImg.classList.remove('hidden');
                 if (noProofMsg) noProofMsg.classList.add('hidden');
             } else {
@@ -3052,10 +3072,12 @@ function toggleEditFields() {
         }
     } else if (pay === 'Transferencia') {
         if (accountContainer) accountContainer.classList.remove('hidden');
+        if (typeContainer) { typeContainer.classList.remove('col-span-2'); typeContainer.classList.add('col-span-1'); }
         if (mixedContainer) mixedContainer.classList.add('hidden');
+        if (proofWrapper) proofWrapper.classList.remove('hidden');
         if (proofContainer) proofContainer.classList.remove('hidden');
         if (currentProofImg) {
-            if (currentEditingOrder.proof) {
+            if (hasProof) {
                 currentProofImg.classList.remove('hidden');
                 if (noProofMsg) noProofMsg.classList.add('hidden');
             } else {
@@ -3066,15 +3088,17 @@ function toggleEditFields() {
     } else {
         // Efectivo, Datáfono, etc.
         if (accountContainer) accountContainer.classList.remove('hidden');
+        if (typeContainer) { typeContainer.classList.remove('col-span-2'); typeContainer.classList.add('col-span-1'); }
         if (mixedContainer) mixedContainer.classList.add('hidden');
-        if (proofContainer) proofContainer.classList.add('hidden');
-        if (noProofMsg) noProofMsg.classList.add('hidden');
-        if (currentProofImg) {
-            if (currentEditingOrder.proof) {
-                currentProofImg.classList.remove('hidden');
-            } else {
-                currentProofImg.classList.add('hidden');
-            }
+
+        // Si es efectivo y NO tiene comprobante adjunto, ocultar completamente el bloque y su label
+        if (!hasProof) {
+            if (proofWrapper) proofWrapper.classList.add('hidden');
+        } else {
+            if (proofWrapper) proofWrapper.classList.remove('hidden');
+            if (proofContainer) proofContainer.classList.add('hidden');
+            if (currentProofImg) currentProofImg.classList.remove('hidden');
+            if (noProofMsg) noProofMsg.classList.add('hidden');
         }
     }
 }

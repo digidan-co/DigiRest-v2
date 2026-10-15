@@ -397,6 +397,52 @@ export const ApiClient = {
         }
         this._isSyncing = true;
         try {
+            // Verificar si hay órdenes offline huérfanas en IndexedDB sin petición pendiente en cola
+            try {
+                const currentQueue = await OfflineDB.getQueue();
+                const offlineOrders = await OfflineDB.getOfflineOrders();
+                const queuedOfflineIds = new Set(currentQueue.filter(q => q._offlineId).map(q => q._offlineId));
+
+                for (const offOrder of offlineOrders) {
+                    if (offOrder.id && String(offOrder.id).startsWith('OFF-') && !queuedOfflineIds.has(offOrder.id)) {
+                        console.log(`♻️ [Sync] Re-encolando orden offline huérfana detectada: ${offOrder.id}`);
+                        let items = offOrder.items;
+                        if (typeof items === 'string') {
+                            try { items = JSON.parse(items); } catch (e) { }
+                        }
+                        if (Array.isArray(items)) {
+                            items = items.map(it => {
+                                let cleanId = it.productId;
+                                if (!cleanId || cleanId === 'combo') {
+                                    if (it.is_combo && it.combo_id) {
+                                        cleanId = it.combo_id.startsWith('combo_') ? it.combo_id : `combo_${it.combo_id}`;
+                                    } else if (String(it.id || '').startsWith('combo_') && it.id !== 'combo') {
+                                        const parts = String(it.id).split('_');
+                                        cleanId = parts.length >= 3 ? `${parts[0]}_${parts[1]}` : it.id;
+                                    } else if (it.combo_items && it.combo_items.length > 0) {
+                                        cleanId = it.combo_id ? (it.combo_id.startsWith('combo_') ? it.combo_id : `combo_${it.combo_id}`) : (it.id && it.id !== 'combo' ? it.id : 'combo_dcbabea6-2b32-41be-a364-22ccb9fe84bf');
+                                    } else {
+                                        cleanId = String(it.id || '').split('_')[0];
+                                    }
+                                }
+                                return { ...it, id: cleanId, productId: cleanId };
+                            });
+                        }
+                        const { id, _offline, _synced, _createdAt, timestamp, ...body } = offOrder;
+                        body.items = items;
+                        await OfflineDB.enqueueRequest({
+                            url: '/orders',
+                            method: 'POST',
+                            body: body,
+                            _offlineId: offOrder.id
+                        });
+                        queuedOfflineIds.add(offOrder.id);
+                    }
+                }
+            } catch (errOrphan) {
+                console.warn('⚠️ Error al escanear órdenes huérfanas:', errOrphan);
+            }
+
             const queue = await OfflineDB.getQueue();
             if (queue.length === 0) return 0;
 
@@ -515,6 +561,10 @@ export const ApiClient = {
                                         };
                                         updateStateArray(state.orders);
                                         updateStateArray(state.waiterOrders);
+                                        if (typeof window !== 'undefined') {
+                                            window.dispatchEvent(new CustomEvent('orders-updated'));
+                                            window.dispatchEvent(new CustomEvent('offline-sync-complete', { detail: { oldId, realId } }));
+                                        }
                                     }
                                 }
                             } catch (e) {
@@ -543,13 +593,17 @@ export const ApiClient = {
                         }
                     } else if (res.status === 401 || res.status === 400 || res.status === 404) {
                         // Si el error es un bad request o no autorizado, removerlo de la cola para no bloquear
-                        console.error("Failed offline request permanently:", req);
+                        const errorBody = await res.text().catch(() => '');
+                        console.error("Failed offline request permanently:", req, "Status:", res.status, "Body:", errorBody);
                         await OfflineDB.removeFromQueue(req.id);
                     }
                 } catch (error) {
                     console.error("Retrying offline request failed. Still offline?", error);
                     break; // Stop syncing if we hit a network error again
                 }
+            }
+            if (syncedCount > 0 && typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('orders-updated'));
             }
             return syncedCount;
         } finally {

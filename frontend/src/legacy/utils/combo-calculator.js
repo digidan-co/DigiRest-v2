@@ -18,6 +18,8 @@ export function calculateOrderCombos(items = []) {
     }
 
     let subtotalBase = 0;
+    let totalComboDiscount = 0;
+    const comboCounts = {}; // { 'Combo Duo': 2, 'Combo Infantil': 1 }
     const comboGroups = {};
     const regularItems = [];
 
@@ -28,11 +30,17 @@ export function calculateOrderCombos(items = []) {
         const toppingsPrice = (Array.isArray(item.toppings) ? item.toppings : []).reduce(
             (sum, top) => sum + (parseFloat(top.price) || 0), 0
         );
-        const itemTotal = (itemPrice + toppingsPrice) * qty;
 
-        subtotalBase += itemTotal;
-
-        if (item.combo_instance_id) {
+        if (item.is_combo) {
+            const discountPerUnit = parseFloat(item.discount_amount) || 0;
+            const baseUnit = parseFloat(item.base_price) || (itemPrice + discountPerUnit);
+            subtotalBase += (baseUnit * qty);
+            totalComboDiscount += (discountPerUnit * qty);
+            const cName = item.name || 'Combo';
+            comboCounts[cName] = (comboCounts[cName] || 0) + qty;
+        } else if (item.combo_instance_id) {
+            const itemTotal = (itemPrice + toppingsPrice) * qty;
+            subtotalBase += itemTotal;
             const instanceId = item.combo_instance_id;
             if (!comboGroups[instanceId]) {
                 comboGroups[instanceId] = {
@@ -50,14 +58,13 @@ export function calculateOrderCombos(items = []) {
             comboGroups[instanceId].baseItemsTotal += (itemPrice * qty);
             comboGroups[instanceId].toppingsTotal += (toppingsPrice * qty);
         } else {
+            const itemTotal = (itemPrice + toppingsPrice) * qty;
+            subtotalBase += itemTotal;
             regularItems.push(item);
         }
     });
 
-    let totalComboDiscount = 0;
-    const comboCounts = {}; // { 'Combo Duo': 2, 'Combo Infantil': 1 }
-
-    // 2. Procesar cada instancia de combo
+    // 2. Procesar cada instancia de combo legacy (con combo_instance_id)
     Object.values(comboGroups).forEach(group => {
         const cName = group.combo_name;
         comboCounts[cName] = (comboCounts[cName] || 0) + 1;

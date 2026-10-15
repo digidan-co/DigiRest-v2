@@ -36,7 +36,7 @@
     <script src="/socket.io/socket.io.js" defer></script>
     <link rel="stylesheet" href="style.css?v=2.9">
     <link rel="stylesheet" href="css/sidebar.css">
-  <script type="module" crossorigin src="/assets/index-WIjUOOMk.js"></script>
+  <script type="module" crossorigin src="/assets/index-CMxE14d_.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-BR8Oi8zV.css">
 </head>
 
@@ -3849,10 +3849,21 @@
                     </div>
                 </div>
 
-                <!-- Contenedor opcional para cuenta destino en pago simple -->
-                <div id="oe-account-container" class="hidden">
-                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Cuenta Destino</label>
-                    <select id="oe-account" class="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none text-xs"></select>
+                <!-- Fila 2: Cuenta Destino y Tipo de Entrega juntos en 2 columnas -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div id="oe-account-container" class="hidden">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Cuenta Destino</label>
+                        <select id="oe-account" class="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none text-xs"></select>
+                    </div>
+                    <div id="oe-type-container" class="col-span-2">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Tipo de Entrega</label>
+                        <select id="oe-type"
+                            class="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none text-xs">
+                            <option value="Local">Local</option>
+                            <option value="Recoger">Para Recoger</option>
+                            <option value="Domicilio">A Domicilio</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Contenedor opcional para desglose en Pago Mixto -->
@@ -3879,51 +3890,39 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div>
-                        <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Tipo de
-                            Entrega</label>
-                        <select id="oe-type"
-                            class="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none text-xs">
-                            <option value="Local">Local</option>
-                            <option value="Recoger">Para Recoger</option>
-                            <option value="Domicilio">A Domicilio</option>
-                        </select>
+                <!-- Contenedor de Comprobante: oculto por defecto si el pago es Efectivo -->
+                <div id="oe-proof-wrapper" class="hidden">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Comprobante</label>
+                    <img id="oe-current-proof" alt="Comprobante actual"
+                        class="w-full h-32 object-cover rounded-lg mb-2 hidden cursor-pointer hover:opacity-90 transition-opacity"
+                        onclick="showImageModal(this.src)">
+                    <div id="oe-proof-container" class="hidden">
+                        <input type="file" id="oe-proof" accept="image/*"
+                            class="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
+                        <p id="oe-proof-msg" class="text-[10px] text-orange-500 mt-1 hidden">
+                            Comprimiendo...</p>
                     </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-400 uppercase ml-1">Comprobante</label>
-                        <img id="oe-current-proof" alt="Comprobante actual"
-                            class="w-full h-32 object-cover rounded-lg mb-2 hidden cursor-pointer hover:opacity-90 transition-opacity"
-                            onclick="showImageModal(this.src)">
-                        <div id="oe-proof-container" class="hidden">
-                            <input type="file" id="oe-proof" accept="image/*"
-                                class="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
-                            <p id="oe-proof-msg" class="text-[10px] text-orange-500 mt-1 hidden">
-                                Comprimiendo...</p>
-                        </div>
-                        <p id="oe-no-proof" class="text-xs text-gray-300 italic mt-2">No requerido</p>
-                    </div>
+                    <p id="oe-no-proof" class="text-xs text-gray-300 italic mt-1">No requerido</p>
                 </div>
 
-
+                <!-- Cliente y Teléfono en una sola fila (2 columnas) -->
                 <div class="grid grid-cols-2 gap-2">
-                    <div>
+                    <div id="oe-client-container">
                         <label id="oe-label-client"
                             class="text-[10px] font-bold text-gray-400 uppercase ml-1">Cliente</label>
                         <input type="text" id="oe-client" required
                             class="w-full p-2 border border-gray-200 rounded-lg outline-none text-xs">
                     </div>
-                    <div id="oe-table-container" class="hidden">
+                    <div id="oe-phone-container">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Teléfono</label>
+                        <input type="text" id="oe-phone" required
+                            class="w-full p-2 border border-gray-200 rounded-lg outline-none text-xs">
+                    </div>
+                    <div id="oe-table-container" class="hidden col-span-2">
                         <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Mesa</label>
                         <input type="number" id="oe-table"
                             class="w-full p-2 border border-gray-200 rounded-lg outline-none text-xs">
                     </div>
-                </div>
-
-                <div id="oe-phone-container">
-                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Teléfono</label>
-                    <input type="text" id="oe-phone" required
-                        class="w-full p-2 border border-gray-200 rounded-lg outline-none text-xs">
                 </div>
 
                 <!-- Items Section -->
@@ -4963,7 +4962,22 @@
                     <span id="display-badge-extra" class="hidden text-xs font-bold px-2.5 py-0.5 rounded-full"></span>
                 </div>
 
-                <p id="display-desc" class="text-gray-600 text-sm sm:text-base leading-relaxed mb-6 font-normal"></p>
+                <p id="display-desc" class="text-gray-600 text-sm sm:text-base leading-relaxed mb-4 font-normal"></p>
+
+                <!-- Combo Items Container (Solo visible para Combos y Promociones) -->
+                <div id="display-combo-items-container" class="hidden mb-5 p-3.5 bg-amber-50/80 rounded-2xl border border-amber-200/80 text-left">
+                    <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-amber-200/60">
+                        <span class="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                            <i class="fas fa-utensils text-amber-600"></i> Platos incluidos en este combo:
+                        </span>
+                        <span id="display-combo-total-items" class="text-[10px] font-extrabold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full shadow-2xs">0 platos</span>
+                    </div>
+                    <ul id="display-combo-items-list" class="space-y-1.5 max-h-48 overflow-y-auto custom-scroll pr-1"></ul>
+                    <div id="display-combo-savings-bar" class="hidden mt-2.5 pt-2 border-t border-amber-200/80 flex justify-between items-center text-xs">
+                        <span class="text-gray-600 font-medium">Ahorras en este combo:</span>
+                        <span id="display-combo-savings-amount" class="font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs"></span>
+                    </div>
+                </div>
 
                 <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
                     <div>

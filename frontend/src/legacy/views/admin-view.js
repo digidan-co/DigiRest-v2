@@ -2182,6 +2182,16 @@ window.showOrderDetails = function (orderIdOrObj) {
     items.forEach(item => {
         // Fix for undefined quantity (use item.qty which matches DB)
         const qty = item.qty || item.quantity || 1;
+        const isCombo = item.is_combo || (Array.isArray(item.combo_items) && item.combo_items.length > 0);
+
+        let comboItemsHtml = '';
+        if (isCombo && Array.isArray(item.combo_items) && item.combo_items.length > 0) {
+            comboItemsHtml = `
+                <div class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-600 bg-amber-50/50 py-1 pr-2 rounded-r">
+                    ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[10px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                </div>
+            `;
+        }
 
         const toppingsText = item.toppings_text || (Array.isArray(item.toppings) ? item.toppings.map(t => t.name).join(', ') : '');
         const notesText = item.notes || item.note || '';
@@ -2190,8 +2200,12 @@ window.showOrderDetails = function (orderIdOrObj) {
             <tr class="border-b border-gray-50 last:border-0">
                 <td class="p-2.5 text-gray-500 font-bold w-12 text-center bg-gray-50/30">${qty}</td>
                 <td class="p-2.5">
-                    <div class="font-bold text-gray-800">${escapeHtml(item.name)}</div>
-                    ${item.combo_name ? `<div class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-flex items-center gap-1 mt-0.5 mr-1"><i class="fas fa-tags text-[8px]"></i><span>${escapeHtml(item.combo_name)}</span></div>` : ''}
+                    <div class="font-bold text-gray-800 flex items-center gap-1.5 flex-wrap">
+                        ${isCombo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>COMBO</span>` : ''}
+                        <span>${escapeHtml(item.name)}</span>
+                    </div>
+                    ${comboItemsHtml}
+                    ${item.combo_name && !isCombo ? `<div class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-flex items-center gap-1 mt-0.5 mr-1"><i class="fas fa-tags text-[8px]"></i><span>${escapeHtml(item.combo_name)}</span></div>` : ''}
                     ${item.variant_name ? `<div class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 inline-flex items-center gap-1 mt-0.5 mr-1"><i class="fas fa-layer-group text-[9px]"></i><span>Tamaño: ${escapeHtml(item.variant_name)}</span></div>` : ''}
                     ${toppingsText ? `<div class="text-xs font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/70 inline-flex items-center gap-1 mt-0.5"><i class="fas fa-cookie-bite text-[9px] text-amber-600"></i><span>${escapeHtml(toppingsText)}</span></div>` : ''}
                     ${notesText ? `<div class="text-xs text-orange-600 italic mt-0.5 flex items-center gap-1"><i class="fas fa-comment-alt text-[9px]"></i><span>${escapeHtml(notesText)}</span></div>` : ''}
