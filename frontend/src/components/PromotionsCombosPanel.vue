@@ -472,7 +472,7 @@ onMounted(() => {
                 class="bg-white rounded-xl border border-gray-100 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between p-3 relative group cursor-pointer"
                 @click="openViewModal(combo)"
             >
-                <div>
+                <div class="mb-2">
                     <!-- Header: Imagen compacta + Modalidad + Switch -->
                     <div class="flex gap-2.5 items-start">
                         <img
@@ -505,25 +505,24 @@ onMounted(() => {
                                     </div>
                                 </label>
                             </div>
-                            <h4 class="text-xs font-black text-gray-900 truncate leading-snug flex items-center gap-1.5" :title="combo.name">
-                                <i class="fas fa-tags text-[11px] shrink-0" style="color: var(--system-primary, #f5b55f) !important;"></i>
-                                <span class="truncate">{{ combo.name }}</span>
+                            <h4 class="text-sm font-black text-gray-900 truncate leading-snug" :title="combo.name">
+                                {{ combo.name }}
                             </h4>
                             <p class="text-[10px] text-gray-500 line-clamp-1 mt-0.5" :title="combo.description || 'Sin descripción'">{{ combo.description || 'Sin descripción' }}</p>
                         </div>
                     </div>
 
                     <!-- Canales de Venta -->
-                    <div class="flex flex-wrap items-center gap-1 mt-2">
+                    <div class="flex flex-wrap items-center gap-1 mt-2 mb-2">
                         <span
                             v-for="ch in (combo.channels || [])"
                             :key="ch"
-                            :class="['inline-flex items-center gap-0.5 text-[8px] font-extrabold px-1.5 py-0.2 rounded border', getChannelBadge(ch).class]"
+                            :class="['inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded border', getChannelBadge(ch).class]"
                         >
-                            <i :class="getChannelBadge(ch).icon" class="text-[7px]"></i>
+                            <i :class="getChannelBadge(ch).icon" class="text-[8px]"></i>
                             <span>{{ getChannelBadge(ch).label }}</span>
                         </span>
-                        <span v-if="!combo.channels || combo.channels.length === 0" class="text-[8px] text-red-500 font-bold bg-red-50 border border-red-200 px-1 py-0.2 rounded">
+                        <span v-if="!combo.channels || combo.channels.length === 0" class="text-[10px] text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
                             Sin canales
                         </span>
                     </div>
