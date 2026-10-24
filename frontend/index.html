@@ -1036,19 +1036,21 @@
                 <div id="panel-supplies" class="admin-panel hidden space-y-4 fade-in">
                     <!-- Sub-Tabs Insumos vs Kardex -->
                     <div class="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex-wrap gap-3">
-                        <div class="inline-flex bg-gray-100/90 p-1 rounded-xl text-xs font-semibold gap-1.5" id="supplies-subtabs">
-                            <button type="button" id="tab-btn-supplies-stock" class="px-3.5 py-1.5 rounded-lg transition-all btn-system-primary text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer">
-                                <i class="fas fa-boxes-stacked"></i>
-                                <span>Insumos y Stock</span>
-                            </button>
-                            <button type="button" id="tab-btn-supplies-kardex" class="px-3.5 py-1.5 rounded-lg transition-all text-gray-600 hover:text-gray-900 hover:bg-white flex items-center gap-1.5 cursor-pointer text-xs font-bold">
-                                <i class="fas fa-history text-xs"></i>
-                                <span>Kárdex / Movimientos</span>
-                            </button>
-                            <button type="button" id="tab-btn-supplies-recipes" class="px-3.5 py-1.5 rounded-lg transition-all text-gray-600 hover:text-gray-900 hover:bg-white flex items-center gap-1.5 cursor-pointer text-xs font-bold">
-                                <i class="fas fa-book-open text-xs"></i>
-                                <span>Recetas de Platos</span>
-                            </button>
+                        <div class="w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 custom-scroll">
+                            <div class="inline-flex bg-gray-100/90 p-1 rounded-xl text-xs font-semibold gap-1.5 flex-nowrap min-w-max" id="supplies-subtabs">
+                                <button type="button" id="tab-btn-supplies-stock" class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-lg transition-all btn-system-primary text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer">
+                                    <i class="fas fa-boxes-stacked"></i>
+                                    <span>Insumos y Stock</span>
+                                </button>
+                                <button type="button" id="tab-btn-supplies-kardex" class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-lg transition-all text-gray-600 hover:text-gray-900 hover:bg-white flex items-center gap-1.5 cursor-pointer text-xs font-bold">
+                                    <i class="fas fa-history text-xs"></i>
+                                    <span>Kárdex / Movimientos</span>
+                                </button>
+                                <button type="button" id="tab-btn-supplies-recipes" class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-lg transition-all text-gray-600 hover:text-gray-900 hover:bg-white flex items-center gap-1.5 cursor-pointer text-xs font-bold">
+                                    <i class="fas fa-book-open text-xs"></i>
+                                    <span>Recetas de Platos</span>
+                                </button>
+                            </div>
                         </div>
                         <div id="supplies-top-actions" class="flex items-center gap-2">
                             <button id="btn-new-supply"
@@ -3028,8 +3030,8 @@
 
     <!-- Recipe Modal (Escandallo) -->
     <div id="recipe-modal"
-        class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
-        <div class="glass-panel p-4 sm:p-6 rounded-3xl w-full max-w-2xl relative scale-in bg-white shadow-2xl max-h-[92vh] flex flex-col">
+        class="fixed inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-2 sm:p-4 backdrop-blur-sm overflow-y-auto">
+        <div class="glass-panel p-4 sm:p-6 rounded-3xl w-full max-w-2xl relative scale-in bg-white shadow-2xl max-h-[90vh] sm:max-h-[92vh] max-h-[90dvh] flex flex-col overflow-hidden my-auto">
             <div class="flex justify-between items-center border-b pb-3 shrink-0">
                 <div>
                     <h3 id="recipe-modal-title" class="font-bold text-xl text-gray-800">Escandallo / Receta del Plato</h3>
@@ -3040,7 +3042,7 @@
                 </button>
             </div>
 
-            <form id="recipe-form" class="space-y-4 overflow-y-auto flex-1 pt-4 pr-1">
+            <form id="recipe-form" class="space-y-4 overflow-y-auto flex-1 min-h-0 pt-4 pr-1 pb-2 overscroll-contain">
                 <input type="hidden" id="rec-id">
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -3111,9 +3113,9 @@
                         class="w-full p-2.5 border border-gray-200 rounded-xl h-16 outline-none focus:border-orange-500 text-xs"></textarea>
                 </div>
 
-                <div class="flex gap-2 pt-2 shrink-0">
+                <div class="flex gap-2 pt-3 pb-2 shrink-0 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-gray-100 mt-2 z-10">
                     <button type="button" id="btn-cancel-recipe"
-                        class="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold hover:bg-gray-200 text-xs transition-colors">Cancelar</button>
+                        class="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold hover:bg-gray-200 text-xs transition-colors cursor-pointer">Cancelar</button>
                     <button type="submit" id="btn-save-recipe"
                         class="flex-1 btn-system-primary py-2.5 rounded-xl font-bold shadow-lg text-xs transition-all cursor-pointer">Guardar Receta</button>
                 </div>

@@ -356,10 +356,12 @@ watch(() => state.user, (u) => {
 <template>
     <!-- Sub-Tabs -->
     <div class="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex-wrap gap-3">
-        <div class="inline-flex bg-gray-100/90 p-1 rounded-xl text-xs font-semibold gap-1.5">
-            <button type="button" @click="switchSubtab('stock')" class="px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'stock' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-boxes-stacked"></i><span>Insumos y Stock</span></button>
-            <button type="button" @click="switchSubtab('kardex')" class="px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'kardex' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-history text-xs"></i><span>Kárdex / Movimientos</span></button>
-            <button type="button" @click="switchSubtab('recipes')" class="px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'recipes' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-book-open text-xs"></i><span>Recetas de Platos</span></button>
+        <div class="w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1 custom-scroll">
+            <div class="inline-flex bg-gray-100/90 p-1 rounded-xl text-xs font-semibold gap-1.5 flex-nowrap min-w-max">
+                <button type="button" @click="switchSubtab('stock')" class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'stock' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-boxes-stacked"></i><span>Insumos y Stock</span></button>
+                <button type="button" @click="switchSubtab('kardex')" class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'kardex' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-history text-xs"></i><span>Kárdex / Movimientos</span></button>
+                <button type="button" @click="switchSubtab('recipes')" class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer" :class="activeSubtab === 'recipes' ? 'btn-system-primary' : 'text-gray-600 hover:text-gray-900 hover:bg-white'"><i class="fas fa-book-open text-xs"></i><span>Recetas de Platos</span></button>
+            </div>
         </div>
         <div v-if="activeSubtab === 'stock'" class="flex items-center gap-2 flex-wrap">
             <input type="file" ref="fileSuppliesRef" id="file-import-supplies" accept=".csv" class="hidden" @change="onImportSupplies">
@@ -605,13 +607,13 @@ watch(() => state.user, (u) => {
     <!-- MODAL: VER DETALLE COMPLETO DE RECETA (FICHA TÉCNICA) -->
     <Teleport to="body">
         <div v-if="selectedRecipeForView" 
-             class="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 z-[100] flex justify-center items-center p-4 sm:p-6 md:p-8 backdrop-blur-xs fade-in"
+             class="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 z-[100] flex justify-center items-center p-3 sm:p-6 md:p-8 backdrop-blur-xs fade-in overflow-y-auto"
              style="margin: 0;"
              @click.self="closeViewRecipeModal">
-            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 scale-in">
+            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] max-h-[90dvh] flex flex-col overflow-hidden border border-gray-100 scale-in my-auto">
                 
                 <!-- Header -->
-                <div class="p-6 sm:px-8 py-5 sm:py-6 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/50 border-b border-gray-100 flex items-center justify-between gap-4">
+                <div class="p-4 sm:px-8 py-4 sm:py-6 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/50 border-b border-gray-100 flex items-center justify-between gap-4 shrink-0">
                     <div class="flex items-center gap-3.5">
                         <div class="w-12 h-12 rounded-2xl bg-[var(--system-primary)] text-[var(--system-secondary)] flex items-center justify-center text-xl shadow-sm font-bold shrink-0">
                             <i class="fas fa-book-open"></i>
@@ -640,7 +642,7 @@ watch(() => state.user, (u) => {
                 </div>
 
                 <!-- Body con más padding y holgura -->
-                <div class="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1 custom-scroll">
+                <div class="p-4 sm:p-8 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scroll overscroll-contain">
                     
                     <!-- KPI Cards de Rentabilidad / Escandallo -->
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -742,7 +744,7 @@ watch(() => state.user, (u) => {
                 </div>
 
                 <!-- Footer -->
-                <div class="px-6 sm:px-8 py-4 sm:py-5 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between gap-3">
+                <div class="px-6 sm:px-8 py-4 sm:py-5 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between gap-3 shrink-0">
                     <button type="button" 
                             @click="editRecipeFromView" 
                             class="px-4 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 transition-all flex items-center gap-2 shadow-2xs cursor-pointer">

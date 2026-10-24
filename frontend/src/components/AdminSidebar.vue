@@ -111,9 +111,8 @@ function switchTab(tab, event) {
     resetAllScrolls();
 
     // Close sidebar on mobile after selection
-    const sidebar = document.getElementById('admin-sidebar');
-    if (window.innerWidth < 768 && sidebar && !sidebar.classList.contains('-translate-x-full') && window.toggleAdminSidebar) {
-        window.toggleAdminSidebar();
+    if (window.innerWidth < 768) {
+        closeSidebar();
     }
 
     if (tab === 'flujocaja') {
@@ -140,8 +139,33 @@ function logout() {
 }
 
 function closeSidebar() {
-    if (typeof window !== 'undefined' && window.toggleAdminSidebar) {
-        window.toggleAdminSidebar();
+    if (typeof window !== 'undefined' && typeof window.closeAdminSidebar === 'function') {
+        window.closeAdminSidebar();
+        return;
+    }
+    if (typeof window !== 'undefined' && typeof window.toggleAdminSidebar === 'function') {
+        const sidebar = document.getElementById('admin-sidebar');
+        if (sidebar && !sidebar.classList.contains('-translate-x-full')) {
+            window.toggleAdminSidebar();
+            return;
+        }
+    }
+    // Direct DOM fallback to guarantee immediate closing
+    const sidebar = document.getElementById('admin-sidebar');
+    const overlay = document.getElementById('admin-sidebar-overlay');
+    const adminView = document.getElementById('admin-view');
+    const adminWrapper = document.getElementById('admin-sidebar-wrapper');
+    if (sidebar) {
+        sidebar.classList.remove('translate-x-0');
+        sidebar.classList.add('-translate-x-full');
+    }
+    if (overlay) {
+        overlay.classList.add('opacity-0');
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            if (adminView) adminView.classList.remove('z-[100]');
+            if (adminWrapper) adminWrapper.classList.remove('z-[70]');
+        }, 300);
     }
 }
 
@@ -253,8 +277,8 @@ onUnmounted(() => {
     <!-- Sidebar Header -->
     <div class="mb-1 px-1 relative flex flex-col items-center text-center mt-1 md:mt-0 shrink-0">
         <button type="button" aria-label="Cerrar menú lateral"
-            class="sidebar-close-btn md:hidden absolute right-0 top-0 transition-opacity p-2 text-xl cursor-pointer"
-            @click="closeSidebar">
+            class="sidebar-close-btn md:hidden absolute right-1 top-1 z-30 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white transition-all text-lg cursor-pointer"
+            @click.stop="closeSidebar">
             <i class="fas fa-times"></i>
         </button>
         <img :src="logoUrl" alt="Logo del negocio"

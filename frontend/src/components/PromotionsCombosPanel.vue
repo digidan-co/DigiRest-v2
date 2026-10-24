@@ -393,7 +393,7 @@ onMounted(() => {
         <!-- Top Toolbar: Controls, Search, Filter & New Button -->
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-gray-100">
             <div class="flex flex-1 flex-wrap items-center gap-2.5 w-full sm:w-auto">
-                <div class="relative flex-1 sm:w-64 min-w-[200px]">
+                <div class="relative w-full sm:w-64 sm:flex-initial">
                     <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
                     <input
                         type="text"
@@ -404,7 +404,7 @@ onMounted(() => {
                 </div>
                 <select
                     v-model="filterType"
-                    class="p-2 border border-gray-200 rounded-xl bg-white outline-none text-xs focus:border-[var(--system-primary)] text-gray-700 cursor-pointer"
+                    class="flex-1 sm:flex-initial p-2 border border-gray-200 rounded-xl bg-white outline-none text-xs focus:border-[var(--system-primary)] text-gray-700 cursor-pointer min-w-[130px]"
                 >
                     <option value="">Todos los tipos</option>
                     <option value="FIXED_PRICE">Precio Fijo</option>
@@ -414,7 +414,7 @@ onMounted(() => {
                 </select>
                 <select
                     v-model="filterStatus"
-                    class="p-2 border border-gray-200 rounded-xl bg-white outline-none text-xs focus:border-[var(--system-primary)] text-gray-700 cursor-pointer"
+                    class="flex-1 sm:flex-initial p-2 border border-gray-200 rounded-xl bg-white outline-none text-xs focus:border-[var(--system-primary)] text-gray-700 cursor-pointer min-w-[120px]"
                 >
                     <option value="">Todos los estados</option>
                     <option value="1">Habilitados</option>
@@ -422,7 +422,7 @@ onMounted(() => {
                 </select>
                 <select
                     v-model="filterChannel"
-                    class="p-2 border border-gray-200 rounded-xl bg-white outline-none text-xs focus:border-[var(--system-primary)] text-gray-700 cursor-pointer"
+                    class="flex-1 sm:flex-initial p-2 border border-gray-200 rounded-xl bg-white outline-none text-xs focus:border-[var(--system-primary)] text-gray-700 cursor-pointer min-w-[120px]"
                 >
                     <option value="">Todos los canales</option>
                     <option value="Local">Local (Mesa)</option>
@@ -434,7 +434,7 @@ onMounted(() => {
                 <button
                     type="button"
                     @click="openCreateModal"
-                    class="btn-system-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-xs"
+                    class="w-full sm:w-auto btn-system-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-xs"
                 >
                     <i class="fas fa-plus"></i>
                     <span>Nuevo Combo o Promoción</span>
@@ -574,11 +574,11 @@ onMounted(() => {
 
         <!-- MODAL: Crear / Editar Combo -->
         <Teleport to="body">
-            <div v-if="showModal" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs fade-in" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;">
-                <div class="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+            <div v-if="showModal" class="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs fade-in overflow-y-auto" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;">
+                <div class="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-2xl w-full max-h-[90vh] sm:max-h-[92vh] max-h-[90dvh] flex flex-col overflow-hidden my-auto">
                     <!-- Modal Header -->
-                    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                        <div class="flex items-center gap-2.5">
+                    <div class="p-2 sm:px-6 py-2 sm:py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                        <div class="flex items-center p-4 gap-2.5">
                             <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-base shrink-0 shadow-xs" style="background-color: var(--system-primary, #f5b55f); color: var(--system-secondary, #1e2122);">
                                 <i class="fas fa-tags" style="color: var(--system-secondary, #1e2122);"></i>
                             </div>
@@ -598,8 +598,8 @@ onMounted(() => {
                         </button>
                     </div>
 
-                <!-- Modal Body (Scrollable) -->
-                <form @submit.prevent="handleSave" class="overflow-y-auto p-6 space-y-5 flex-1">
+                    <!-- Modal Body (Scrollable) -->
+                    <form @submit.prevent="handleSave" class="overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5 flex-1 min-h-0 overscroll-contain">
                     <!-- General Details: Name & Category -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="sm:col-span-2 space-y-1">
@@ -906,11 +906,11 @@ onMounted(() => {
                 </form>
 
                 <!-- Modal Footer -->
-                <div class="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-2.5">
+                <div class="p-2 sm:px-6 py-3.5 sm:py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-2.5 shrink-0">
                     <button
                         type="button"
                         @click="showModal = false"
-                        class="px-4 py-2.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                        class="px-4 py-2.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                     >
                         Cancelar
                     </button>
@@ -918,7 +918,7 @@ onMounted(() => {
                         type="button"
                         @click="handleSave"
                         :disabled="saving"
-                        class="btn-system-primary px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs disabled:opacity-50"
+                        class="btn-system-primary px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
                     >
                         <i v-if="saving" class="fas fa-spinner fa-spin"></i>
                         <span>{{ isEditing ? 'Guardar Cambios' : 'Crear Combo' }}</span>
@@ -932,12 +932,12 @@ onMounted(() => {
         <Teleport to="body">
         <div
             v-if="showViewModal && viewingCombo"
-            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in overflow-y-auto"
             @click.self="showViewModal = false"
         >
-            <div class="bg-white rounded-2xl w-full max-w-md max-h-[85vh] shadow-2xl overflow-hidden flex flex-col border border-gray-100 animate-scale-up">
+            <div class="bg-white rounded-2xl w-full max-w-md max-h-[85vh] max-h-[85dvh] shadow-2xl overflow-hidden flex flex-col border border-gray-100 animate-scale-up my-auto">
                 <!-- Modal Header -->
-                <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-white">
+                <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
                     <div class="flex items-center gap-2.5">
                         <div class="w-8 h-8 rounded-xl flex items-center justify-center text-sm shadow-xs font-black shrink-0"
                              style="background-color: var(--system-primary, #f5b55f); color: var(--system-secondary, #1e2122);">
@@ -963,7 +963,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Modal Body -->
-                <div class="p-4 overflow-y-auto space-y-4 subtle-scrollbar">
+                <div class="p-4 overflow-y-auto space-y-4 subtle-scrollbar flex-1 min-h-0 overscroll-contain">
                     <div class="flex gap-3 items-center">
                         <img
                             :src="viewingCombo.img || '/img/noimage.png'"
@@ -1024,7 +1024,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Modal Footer -->
-                <div class="p-3 bg-gray-50/50 border-t border-gray-100 flex justify-end gap-2">
+                <div class="p-3 bg-gray-50/50 border-t border-gray-100 flex justify-end gap-2 shrink-0">
                     <button
                         type="button"
                         @click="showViewModal = false; openEditModal(viewingCombo)"

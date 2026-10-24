@@ -2573,6 +2573,14 @@ if (btnAdminMenu) {
 btnCloseSidebar?.addEventListener('click', toggleAdminSidebar);
 adminOverlay?.addEventListener('click', toggleAdminSidebar);
 
+// Expose globally so Vue components and external triggers can toggle/close the admin sidebar
+window.toggleAdminSidebar = toggleAdminSidebar;
+window.closeAdminSidebar = function() {
+    if (adminSidebar && !adminSidebar.classList.contains('-translate-x-full')) {
+        toggleAdminSidebar();
+    }
+};
+
 window.addEventListener('resize', alignSidebarSticky);
 
 // Sidebar Accordion Sections
