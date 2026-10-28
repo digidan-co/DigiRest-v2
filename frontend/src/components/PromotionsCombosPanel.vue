@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
@@ -240,6 +240,8 @@ function addProductToCombo(prod) {
             img: prod.img || '/img/noimage.png'
         });
     }
+    // Resetear el buscador de platos para ocultar resultados y mostrar los platos añadidos
+    productSearch.value = '';
 }
 
 function removeProductFromCombo(index) {
@@ -380,11 +382,46 @@ function getChannelBadge(channel) {
     return { label: channel, icon: 'fas fa-tag text-gray-500', class: 'bg-gray-50 text-gray-700 border-gray-200' };
 }
 
+function handleEscapeKey(e) {
+    if (e.key === 'Escape') {
+        if (showViewModal.value) {
+            showViewModal.value = false;
+            e.stopPropagation();
+            return;
+        }
+        if (showModal.value) {
+            showModal.value = false;
+            e.stopPropagation();
+            return;
+        }
+    }
+}
+
+function handleAppEscape(e) {
+    if (showViewModal.value) {
+        showViewModal.value = false;
+        if (e && e.preventDefault) e.preventDefault();
+        return;
+    }
+    if (showModal.value) {
+        showModal.value = false;
+        if (e && e.preventDefault) e.preventDefault();
+        return;
+    }
+}
+
 onMounted(() => {
     loadCombos();
     listenToPromotionsCombos((updatedList) => {
         combos.value = updatedList;
     });
+    window.addEventListener('keydown', handleEscapeKey);
+    window.addEventListener('app:escape', handleAppEscape);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleEscapeKey);
+    window.removeEventListener('app:escape', handleAppEscape);
 });
 </script>
 

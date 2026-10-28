@@ -93,12 +93,12 @@ export function renderAdminProductsPage() {
                 </td>
                 <td class="p-2 text-center">
                     ${(p.has_variants && p.has_toppings) ? `
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Tamaños y Adiciones">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Variantes y Adiciones">
                             <i class="fas fa-layer-group text-[8px]"></i> + <i class="fas fa-cookie-bite text-[8px]"></i>
                         </span>
                     ` : p.has_variants ? `
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Tamaños disponibles">
-                            <i class="fas fa-layer-group text-[8px]"></i> Tamaños
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Variantes disponibles">
+                            <i class="fas fa-layer-group text-[8px]"></i> Variantes
                         </span>
                     ` : p.has_toppings ? `
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200" title="Adiciones">

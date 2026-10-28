@@ -234,7 +234,7 @@ onMounted(async () => {
 
         <div class="absolute top-4 left-4 z-20 flex items-center gap-2">
             <button type="button" @click="openGps" aria-label="Abrir GPS"
-                class="w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center border border-white/30 text-white group cursor-pointer"
+                class="w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center border border-white/30 text-white group cursor-pointer shrink-0 aspect-square"
                 title="Ver Dirección">
                 <i class="fas fa-map-marker-alt text-xl group-hover:scale-110 transition-transform drop-shadow-md"></i>
             </button>
@@ -247,13 +247,12 @@ onMounted(async () => {
 
         <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
             <button v-show="state.user" type="button" @click="goPanel" aria-label="Volver al panel"
-                class="h-10 w-10 sm:w-auto sm:px-3.5 rounded-full bg-[var(--system-primary)] text-[var(--system-secondary)] font-bold text-xs shadow-md transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer"
+                class="w-10 h-10 rounded-full bg-[var(--system-primary)] text-[var(--system-secondary)] font-bold text-xs shadow-md transition-all hover:scale-105 active:scale-95 flex items-center justify-center border border-white/20 cursor-pointer shrink-0 aspect-square"
                 title="Volver a mi Panel">
                 <i class="fas fa-arrow-left"></i>
-                <span class="hidden sm:inline">Panel</span>
             </button>
             <button type="button" @click="toggleLogin" aria-label="Acceso al sistema"
-                class="w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center border border-white/30 text-white group cursor-pointer active:scale-95"
+                class="w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center border border-white/30 text-white group cursor-pointer active:scale-95 shrink-0 aspect-square"
                 title="Acceso al Sistema">
                 <i class="fas fa-user text-sm group-hover:scale-110 transition-transform drop-shadow-md"></i>
             </button>
@@ -289,10 +288,9 @@ onMounted(async () => {
 
         <!-- Rastrear Pedido (bottom-right of header) -->
         <button type="button" @click="goTracker" aria-label="Rastrear pedidos"
-            class="absolute bottom-4 right-4 z-20 h-10 w-10 sm:w-auto sm:px-3.5 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center gap-1.5 border border-white/30 text-white group cursor-pointer active:scale-95"
+            class="absolute bottom-4 right-4 z-20 w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 transition-colors backdrop-blur-md flex items-center justify-center border border-white/30 text-white group cursor-pointer active:scale-95 shrink-0 aspect-square"
             title="Rastrear Pedido">
             <i class="fas fa-search-location text-sm group-hover:scale-110 transition-transform drop-shadow-md"></i>
-            <span class="hidden sm:inline text-xs font-bold">Rastrear</span>
         </button>
     </div>
 
@@ -400,11 +398,11 @@ onMounted(async () => {
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
-                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Variantes y Adiciones">
                             <i class="fas fa-layer-group text-[10px]"></i>
                             <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
                         </span>
-                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples variantes">
                             <i class="fas fa-layer-group text-[11px]"></i>
                         </span>
                         <span v-else-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
@@ -466,11 +464,11 @@ onMounted(async () => {
                         <span v-else class="badge-recommended absolute top-2 left-2 px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider text-white shadow-xs flex items-center gap-1" style="background-color: #d97706; color: #ffffff;">
                             <i class="fas fa-star text-[8px] text-amber-200"></i> Recomendado
                         </span>
-                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Variantes y Adiciones">
                             <i class="fas fa-layer-group text-[10px]"></i>
                             <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
                         </span>
-                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples variantes">
                             <i class="fas fa-layer-group text-[11px]"></i>
                         </span>
                         <span v-else-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
@@ -530,11 +528,11 @@ onMounted(async () => {
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                         <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
                         <span v-else-if="idx === 0" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black bg-orange-500 text-white shadow-xs">#{{ idx + 1 }} Más Pedido</span>
-                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                        <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Variantes y Adiciones">
                             <i class="fas fa-layer-group text-[10px]"></i>
                             <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
                         </span>
-                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                        <span v-else-if="p.has_variants" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples variantes">
                             <i class="fas fa-layer-group text-[11px]"></i>
                         </span>
                         <span v-else-if="p.has_toppings" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">
@@ -592,11 +590,11 @@ onMounted(async () => {
                             <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy"
                                 class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                             <span v-if="hasDiscount(p)" class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">Promo</span>
-                            <span v-if="p.has_variants && p.has_toppings" class="absolute top-1.5 right-1.5 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Tamaños y Adiciones">
+                            <span v-if="p.has_variants && p.has_toppings" class="absolute top-1.5 right-1.5 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Variantes y Adiciones">
                                 <i class="fas fa-layer-group text-[10px]"></i>
                                 <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
                             </span>
-                            <span v-else-if="p.has_variants" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples tamaños / porciones">
+                            <span v-else-if="p.has_variants" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Múltiples variantes">
                                 <i class="fas fa-layer-group text-[11px]"></i>
                             </span>
                             <span v-else-if="p.has_toppings" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white text-amber-700 shadow-sm flex items-center justify-center border border-gray-100/80 z-10 pointer-events-none" title="Personalizable con opciones">

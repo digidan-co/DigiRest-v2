@@ -56,15 +56,28 @@ function checkWarning() {
   }
 }
 
+function handleEscape(e) {
+  if (show.value) {
+    if (e.type === 'keydown' && e.key !== 'Escape') return;
+    dismiss();
+    if (e.stopPropagation) e.stopPropagation();
+    if (e.preventDefault) e.preventDefault();
+  }
+}
+
 onMounted(() => {
   if (isUserAdmin()) {
     checkWarning();
   }
   window.addEventListener('saas-refresh', checkWarning);
+  window.addEventListener('keydown', handleEscape);
+  window.addEventListener('app:escape', handleEscape);
 });
 
 onUnmounted(() => {
   window.removeEventListener('saas-refresh', checkWarning);
+  window.removeEventListener('keydown', handleEscape);
+  window.removeEventListener('app:escape', handleEscape);
 });
 </script>
 

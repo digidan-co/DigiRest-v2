@@ -170,6 +170,15 @@ async function checkAnuncios() {
   }
 }
 
+function handleEscape(e) {
+  if (show.value) {
+    if (e.type === 'keydown' && e.key !== 'Escape') return;
+    dismiss();
+    if (e.stopPropagation) e.stopPropagation();
+    if (e.preventDefault) e.preventDefault();
+  }
+}
+
 onMounted(() => {
   // Solo chequear si el usuario actual es administrador (evita mostrar en carga pública o a clientes)
   if (isUserAdmin()) {
@@ -177,12 +186,16 @@ onMounted(() => {
   }
   window.addEventListener('saas-refresh', checkAnuncios);
   window.addEventListener('saas-check-anuncios', checkAnuncios);
+  window.addEventListener('keydown', handleEscape);
+  window.addEventListener('app:escape', handleEscape);
   window.checkSaasAnuncios = checkAnuncios;
 });
 
 onUnmounted(() => {
   window.removeEventListener('saas-refresh', checkAnuncios);
   window.removeEventListener('saas-check-anuncios', checkAnuncios);
+  window.removeEventListener('keydown', handleEscape);
+  window.removeEventListener('app:escape', handleEscape);
 });
 </script>
 

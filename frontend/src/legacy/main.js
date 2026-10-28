@@ -1775,29 +1775,44 @@ async function checkInactivity() {
 // Global Shortcuts
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        // 1. Check prompt, confirm, alert modals first (highest priority)
-        const uiModal = document.querySelector('#prompt-modal:not(.hidden), #confirm-modal:not(.hidden), #alert-modal:not(.hidden)');
+        // 1. Check prompt, confirm, alert, image modals first (highest priority)
+        const uiModal = document.querySelector('#prompt-modal:not(.hidden), #confirm-modal:not(.hidden), #alert-modal:not(.hidden), #image-modal:not(.hidden)');
         if (uiModal) {
-            const cancelBtn = uiModal.querySelector('.btn-cancel, [data-action="cancel"], button:has(.fa-times), button.btn-secondary');
+            const cancelBtn = uiModal.querySelector('#prompt-modal-cancel, #confirm-modal-cancel, [data-action="cancel"], .btn-cancel, button:has(.fa-times), button.btn-secondary');
             if (cancelBtn) cancelBtn.click();
             else uiModal.classList.add('hidden');
             return;
         }
 
         // 2. Dispatch custom event so Vue modals can close themselves cleanly
-        window.dispatchEvent(new CustomEvent('app:escape'));
+        const escEvt = new CustomEvent('app:escape', { cancelable: true });
+        window.dispatchEvent(escEvt);
+        if (escEvt.defaultPrevented) {
+            return;
+        }
 
-        // 3. Find any open modal in the DOM (legacy, dynamic, and modals starting with modal- or cf-modal)
+        // 3. Find any open modal in the DOM (legacy and dynamic).
+        // CRITICAL: NEVER close Rapid Management View ('Modo GR') on ESC.
         const openModals = Array.from(document.querySelectorAll(
-            '[id$="-modal"]:not(.hidden), [id^="modal-"]:not(.hidden), [id*="-modal-"]:not(.hidden), [id^="cf-modal"]:not(.hidden), .modal:not(.hidden), [role="dialog"]:not(.hidden)'
+            'div[id$="-modal"]:not(.hidden), div[id^="modal-"]:not(.hidden), div[id^="cf-modal"]:not(.hidden), div.modal:not(.hidden), div[role="dialog"]:not(.hidden)'
         )).filter(el => {
+            if (el.id === 'rapid-management-view') return false;
             const style = window.getComputedStyle(el);
             return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
         });
 
         if (openModals.length > 0) {
-            const topModal = openModals[openModals.length - 1];
-            const closeBtn = topModal.querySelector('[id^="btn-close"], .btn-close-modal, .close-modal, button[aria-label="Cerrar"], button[title="Cerrar"], .modal-close-btn, button:has(.fa-times)');
+            // Sort by z-index descending so we close the topmost modal first
+            openModals.sort((a, b) => {
+                const zA = parseInt(window.getComputedStyle(a).zIndex, 10) || 0;
+                const zB = parseInt(window.getComputedStyle(b).zIndex, 10) || 0;
+                return zB - zA;
+            });
+
+            const topModal = openModals[0];
+            const closeBtn = topModal.querySelector(
+                '#btn-close-display, #btn-close-ctm, #btn-close-cotm, #btn-close-view-notes-action, #btn-close-customer-profile, #btn-close-pm-modal, [id^="btn-close"], [id^="btn-cancel"], .btn-close-modal, .close-modal, button[aria-label="Cerrar"], button[title="Cerrar"], button[title="Cerrar modal"], .modal-close-btn, button:has(.fa-times)'
+            );
             if (closeBtn) {
                 closeBtn.click();
             } else {

@@ -29,17 +29,17 @@ function hasDiscount(x) { return x.is_promo && x.promo_price && x.promo_price < 
                 <div class="flex items-center gap-1.5 mb-0.5">
                     <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider truncate">{{ p.category }}</span>
                     <span v-if="hasDiscount(p)" class="sm:hidden px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-100 text-red-700">Promo</span>
-                    <span v-if="p.has_variants && p.has_toppings" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Tamaños + Extras</span>
-                    <span v-else-if="p.has_variants" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Tamaños</span>
+                    <span v-if="p.has_variants && p.has_toppings" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Variantes + Extras</span>
+                    <span v-else-if="p.has_variants" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Variantes</span>
                     <span v-else-if="p.has_toppings" class="sm:hidden text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Toppings</span>
                 </div>
                 <h3 class="font-bold text-gray-800 text-sm leading-tight truncate sm:whitespace-normal sm:line-clamp-1">{{ p.name }}</h3>
                 <p class="hidden sm:block text-[10px] text-gray-400 leading-tight line-clamp-2 mt-0.5">{{ p.desc || '' }}</p>
                 <div v-if="p.has_variants && p.has_toppings" class="hidden sm:block mt-1">
-                    <span class="inline-flex items-center text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60"><i class="fas fa-layer-group mr-1 text-[8px]"></i><i class="fas fa-cookie-bite mr-1 text-[8px] text-amber-600"></i>Tamaños y Adiciones</span>
+                    <span class="inline-flex items-center text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60"><i class="fas fa-layer-group mr-1 text-[8px]"></i><i class="fas fa-cookie-bite mr-1 text-[8px] text-amber-600"></i>Variantes y Adiciones</span>
                 </div>
                 <div v-else-if="p.has_variants" class="hidden sm:block mt-1">
-                    <span class="inline-flex items-center text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60"><i class="fas fa-layer-group mr-1 text-[8px]"></i>Múltiples Tamaños</span>
+                    <span class="inline-flex items-center text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60"><i class="fas fa-layer-group mr-1 text-[8px]"></i>Múltiples Variantes</span>
                 </div>
                 <div v-else-if="p.has_toppings" class="hidden sm:block mt-1">
                     <span class="inline-flex items-center text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60"><i class="fas fa-cookie-bite mr-1 text-[8px]"></i>Personalizable</span>

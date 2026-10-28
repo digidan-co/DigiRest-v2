@@ -287,11 +287,11 @@ export function openDisplayDetail(id, cardElement) {
     if (badgeExtra) {
         if (product.has_variants && product.has_toppings) {
             badgeExtra.className = 'inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 bg-indigo-100 px-2.5 py-0.5 rounded-full';
-            badgeExtra.innerHTML = '<i class="fas fa-layer-group text-[10px] text-indigo-600"></i><i class="fas fa-cookie-bite text-[10px] text-amber-600"></i> Tamaños y Adiciones';
+            badgeExtra.innerHTML = '<i class="fas fa-layer-group text-[10px] text-indigo-600"></i><i class="fas fa-cookie-bite text-[10px] text-amber-600"></i> Variantes y Adiciones';
             badgeExtra.classList.remove('hidden');
         } else if (product.has_variants) {
             badgeExtra.className = 'inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 bg-indigo-100 px-2.5 py-0.5 rounded-full';
-            badgeExtra.innerHTML = '<i class="fas fa-layer-group text-[10px] text-indigo-600"></i> Múltiples Tamaños';
+            badgeExtra.innerHTML = '<i class="fas fa-layer-group text-[10px] text-indigo-600"></i> Múltiples Variantes';
             badgeExtra.classList.remove('hidden');
         } else if (product.has_toppings) {
             badgeExtra.className = 'inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full';
@@ -895,7 +895,7 @@ function createDishCardHtml(p, { isDisplay = false, isPromo = false, isRec = fal
                             </span>
                         ` : p.has_variants ? `
                             <span class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                <i class="fas fa-layer-group text-[7px]"></i> Tamaños
+                                <i class="fas fa-layer-group text-[7px]"></i> Variantes
                             </span>
                         ` : p.has_toppings ? `
                             <span class="sm:hidden text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
@@ -911,13 +911,13 @@ function createDishCardHtml(p, { isDisplay = false, isPromo = false, isRec = fal
                             <span class="inline-flex items-center text-[9px] font-semibold text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60 gap-1">
                                 <i class="fas fa-layer-group text-[8px] text-indigo-600"></i>
                                 <i class="fas fa-cookie-bite text-[8px] text-amber-600"></i>
-                                Tamaños y Adiciones
+                                Variantes y Adiciones
                             </span>
                         </div>
                     ` : p.has_variants ? `
                         <div class="hidden sm:block mt-1">
                             <span class="inline-flex items-center text-[9px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60">
-                                <i class="fas fa-layer-group mr-1 text-[8px]"></i>Múltiples Tamaños
+                                <i class="fas fa-layer-group mr-1 text-[8px]"></i>Múltiples Variantes
                             </span>
                         </div>
                     ` : p.has_toppings ? `

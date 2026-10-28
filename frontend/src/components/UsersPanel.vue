@@ -186,9 +186,25 @@ function newUser() {
     if ($('user-modal')) $('user-modal').classList.remove('hidden');
 }
 
+function handleEscapeKey(e) {
+    if (e.key === 'Escape' && showAccountsModal.value) {
+        closeAccountsModal();
+        e.stopPropagation();
+    }
+}
+
+function handleAppEscape(e) {
+    if (showAccountsModal.value) {
+        closeAccountsModal();
+        if (e && e.preventDefault) e.preventDefault();
+    }
+}
+
 onMounted(() => {
     window.reloadUsersPanel = load;
     window.addEventListener('users-refresh', load);
+    window.addEventListener('keydown', handleEscapeKey);
+    window.addEventListener('app:escape', handleAppEscape);
     if (window.socket) {
         window.socket.on('users_updated', load);
     }
@@ -199,6 +215,8 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('users-refresh', load);
+    window.removeEventListener('keydown', handleEscapeKey);
+    window.removeEventListener('app:escape', handleAppEscape);
     if (window.socket) {
         window.socket.off('users_updated', load);
     }
