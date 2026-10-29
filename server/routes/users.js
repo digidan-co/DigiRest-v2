@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
 const { v4: uuidv4 } = require('uuid');
@@ -7,6 +8,39 @@ const bcrypt = require('bcrypt');
 const { validateUser } = require('../middleware/validators');
 
 module.exports = (io) => {
+
+const STAFF_ROOMS = ['admin', 'cajero', 'supervisor', 'chef', 'cocinero', 'mesero', 'waiter', 'delivery', 'repartidor'];
+
+function revokeUserSessions(userId, reason = 'Tus permisos o credenciales fueron actualizados por el administrador.') {
+    if (!userId) return;
+    db.get("SELECT token FROM active_sessions WHERE user_id = ?", [userId], (err, row) => {
+        if (!err && row && row.token) {
+            const decoded = jwt.decode(row.token);
+            const expiresAt = decoded && decoded.exp
+                ? new Date(decoded.exp * 1000).toISOString()
+                : new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+            db.run(
+                "INSERT OR IGNORE INTO token_blacklist (token, user_id, expires_at) VALUES (?, ?, ?)",
+                [row.token, userId, expiresAt],
+                () => {}
+            );
+        }
+        db.run("DELETE FROM active_sessions WHERE user_id = ?", [userId], () => {});
+
+        if (io) {
+            io.to(`user_${userId}`).emit('session_replaced', { message: reason });
+            if (io.sockets && io.sockets.sockets) {
+                for (const [, sock] of io.sockets.sockets) {
+                    if (sock.user && String(sock.user.id) === String(userId)) {
+                        STAFF_ROOMS.forEach(r => sock.leave(r));
+                        sock.leave(`user_${userId}`);
+                        sock.user = null;
+                    }
+                }
+            }
+        }
+    });
+}
 
 // Get All Users (Admin only) - Sanitized: no password hashes exposed (Excludes master admin)
 router.get('/', verifyToken, requireRole(['admin']), (req, res) => {
@@ -34,51 +68,65 @@ router.post('/', verifyToken, requireRole(['admin']), validateUser, async (req, 
         let hashedCode = code;
 
         if (id) {
-            // Update
-            if (code) {
-                // Update with new password
-                hashedCode = await bcrypt.hash(code, 10);
-                let sql = `UPDATE users SET name = ?, username = ?, code = ?, role = ?`;
-                const params = [name, finalUsername, hashedCode, role];
+            db.get("SELECT role FROM users WHERE id = ?", [id], async (findErr, prevUser) => {
+                if (findErr) return res.status(500).json({ error: findErr.message });
+                const roleChanged = Boolean(prevUser && prevUser.role !== role);
 
-                if (scheduleStr !== null) {
-                    sql += `, work_schedule = ?`;
-                    params.push(scheduleStr);
-                }
-                if (accountsStr !== null) {
-                    sql += `, allowed_finance_accounts = ?`;
-                    params.push(accountsStr);
-                }
-                sql += ` WHERE id = ?`;
-                params.push(id);
+                if (code) {
+                    // Update with new password
+                    try {
+                        hashedCode = await bcrypt.hash(code, 10);
+                    } catch (hashErr) {
+                        return res.status(500).json({ error: "Error hashing password" });
+                    }
+                    let sql = `UPDATE users SET name = ?, username = ?, code = ?, role = ?`;
+                    const params = [name, finalUsername, hashedCode, role];
 
-                db.run(sql, params, function (err) {
-                    if (err) return res.status(500).json({ error: err.message });
-                    io.emit('users_updated');
-                    res.json({ message: 'User updated', id });
-                });
-            } else {
-                // Update details only (keep old password)
-                let sql = `UPDATE users SET name = ?, username = ?, role = ?`;
-                const params = [name, finalUsername, role];
+                    if (scheduleStr !== null) {
+                        sql += `, work_schedule = ?`;
+                        params.push(scheduleStr);
+                    }
+                    if (accountsStr !== null) {
+                        sql += `, allowed_finance_accounts = ?`;
+                        params.push(accountsStr);
+                    }
+                    sql += ` WHERE id = ?`;
+                    params.push(id);
 
-                if (scheduleStr !== null) {
-                    sql += `, work_schedule = ?`;
-                    params.push(scheduleStr);
-                }
-                if (accountsStr !== null) {
-                    sql += `, allowed_finance_accounts = ?`;
-                    params.push(accountsStr);
-                }
-                sql += ` WHERE id = ?`;
-                params.push(id);
+                    db.run(sql, params, function (err) {
+                        if (err) return res.status(500).json({ error: err.message });
+                        if (String(id) !== String(req.user?.id)) {
+                            revokeUserSessions(id, 'Tus credenciales de acceso fueron actualizadas. Inicia sesión nuevamente.');
+                        }
+                        io.emit('users_updated');
+                        res.json({ message: 'User updated', id });
+                    });
+                } else {
+                    // Update details only (keep old password)
+                    let sql = `UPDATE users SET name = ?, username = ?, role = ?`;
+                    const params = [name, finalUsername, role];
 
-                db.run(sql, params, function (err) {
-                    if (err) return res.status(500).json({ error: err.message });
-                    io.emit('users_updated');
-                    res.json({ message: 'User updated', id });
-                });
-            }
+                    if (scheduleStr !== null) {
+                        sql += `, work_schedule = ?`;
+                        params.push(scheduleStr);
+                    }
+                    if (accountsStr !== null) {
+                        sql += `, allowed_finance_accounts = ?`;
+                        params.push(accountsStr);
+                    }
+                    sql += ` WHERE id = ?`;
+                    params.push(id);
+
+                    db.run(sql, params, function (err) {
+                        if (err) return res.status(500).json({ error: err.message });
+                        if (roleChanged && String(id) !== String(req.user?.id)) {
+                            revokeUserSessions(id, 'Tu rol de usuario fue modificado. Inicia sesión nuevamente.');
+                        }
+                        io.emit('users_updated');
+                        res.json({ message: 'User updated', id });
+                    });
+                }
+            });
         } else {
             // Create
             if (!code) return res.status(400).json({ error: "Code is required for new users" });
@@ -102,6 +150,10 @@ router.post('/', verifyToken, requireRole(['admin']), validateUser, async (req, 
 router.post('/:id/schedule', verifyToken, requireRole(['admin']), (req, res) => {
     const { id } = req.params;
     const { schedule } = req.body;
+
+    if (id === 'digidan_master_admin' || id === 'master') {
+        return res.status(403).json({ error: 'No se puede modificar el horario del usuario maestro.' });
+    }
 
     const scheduleStr = schedule ? (typeof schedule === 'string' ? schedule : JSON.stringify(schedule)) : null;
 
@@ -136,6 +188,8 @@ router.delete('/:id', verifyToken, requireRole(['admin']), (req, res) => {
     if (id === 'digidan_master_admin' || id === 'master') {
         return res.status(403).json({ error: 'No se puede eliminar el usuario administrador maestro.' });
     }
+
+    revokeUserSessions(id, 'Tu cuenta de usuario ha sido desactivada.');
 
     db.run("DELETE FROM users WHERE id = ?", [id], function (err) {
         if (err) return res.status(500).json({ error: err.message });

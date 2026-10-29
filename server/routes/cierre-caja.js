@@ -1,17 +1,16 @@
 const express = require('express');
 const db = require('../db');
-const { verifyToken } = require('./auth');
+const { verifyToken, requireRole } = require('./auth');
 const { logAudit } = require('../utils/auditLogger');
 
 module.exports = function (io) {
     const router = express.Router();
 
-    // GET all cierres de caja (or paginated)
-    router.get('/cierre-caja', verifyToken, (req, res) => {
+    // GET all cierres de caja (Admin / Cajero / Supervisor only)
+    router.get('/cierre-caja', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         let query = 'SELECT * FROM cierre_cajas';
         const params = [];
 
-        // Si no es admin (ej. cajero), solo se le muestran los cierres que él mismo ha realizado
         if (req.user && req.user.role !== 'admin') {
             const userName = req.user.name || '';
             const userLogin = req.user.username || '';
@@ -29,8 +28,8 @@ module.exports = function (io) {
         });
     });
 
-    // POST create new cierre de caja (authenticated users only — cajero included)
-    router.post('/cierre-caja', verifyToken, (req, res) => {
+    // POST create new cierre de caja (Admin / Cajero / Supervisor only)
+    router.post('/cierre-caja', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const {
             fecha,
             hora,
@@ -47,7 +46,6 @@ module.exports = function (io) {
             return res.status(400).json({ error: 'Faltan campos obligatorios' });
         }
 
-        // Compute total gastos for the given fecha (Colombia offset)
         const gastosQuery = `SELECT SUM(valor) AS total_gastos FROM gastos_dia WHERE date(timestamp, '-5 hours') = date(?, '-5 hours')`;
         db.get(gastosQuery, [fecha], (err, row) => {
             if (err) {
@@ -88,6 +86,7 @@ module.exports = function (io) {
                     fecha,
                     hora,
                     usuario,
+                    userName: req.user?.name || usuario,
                     totalGeneral: total_general,
                     ingresoEfectivo: ingreso_efectivo,
                     ingresoTransferencia: ingreso_transferencia,
@@ -100,12 +99,40 @@ module.exports = function (io) {
         });
     });
 
-    // DELETE /cierre-caja/:id — Admin only: delete single cierre record by ID
-    router.delete('/cierre-caja/:id', verifyToken, (req, res) => {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Solo administradores pueden eliminar registros de cierre de caja.' });
+    // DELETE /cierre-caja/batch — Admin only (MUST be declared before /:id)
+    router.delete('/cierre-caja/batch', verifyToken, requireRole(['admin']), (req, res) => {
+        const { ids } = req.body;
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'Debes proporcionar un array de IDs para eliminar.' });
         }
 
+        const numericIds = ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id) && id > 0);
+        if (numericIds.length === 0) {
+            return res.status(400).json({ error: 'IDs inválidos proporcionados.' });
+        }
+
+        const placeholders = numericIds.map(() => '?').join(',');
+        const query = `DELETE FROM cierre_cajas WHERE id IN (${placeholders})`;
+
+        db.run(query, numericIds, function (err) {
+            if (err) {
+                console.error('Error deleting cierres de caja:', err);
+                return res.status(500).json({ error: 'Error deleting records' });
+            }
+
+            logAudit('CASH_CLOSINGS_DELETED', req.user?.id, req.ip, {
+                deletedCount: this.changes,
+                userName: req.user?.name,
+                admin: req.user?.name,
+                ids: numericIds
+            });
+
+            res.json({ success: true, deleted: this.changes });
+        });
+    });
+
+    // DELETE /cierre-caja/:id — Admin only: delete single cierre record by ID
+    router.delete('/cierre-caja/:id', verifyToken, requireRole(['admin']), (req, res) => {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id) || id <= 0) {
             return res.status(400).json({ error: 'ID inválido proporcionado.' });
@@ -125,48 +152,12 @@ module.exports = function (io) {
                     cierreId: id,
                     fecha: row.fecha,
                     totalGeneral: row.total_general,
+                    userName: req.user?.name || 'Administrador',
                     deletedBy: req.user?.name || 'Administrador'
                 });
 
                 res.json({ success: true, deleted: this.changes });
             });
-        });
-    });
-
-    // DELETE /cierre-caja/batch — Admin only: delete multiple cierre records by ID
-    router.delete('/cierre-caja/batch', verifyToken, (req, res) => {
-        // Only admins can delete cierre records
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Solo administradores pueden eliminar registros de cierre de caja.' });
-        }
-
-        const { ids } = req.body;
-        if (!ids || !Array.isArray(ids) || ids.length === 0) {
-            return res.status(400).json({ error: 'Debes proporcionar un array de IDs para eliminar.' });
-        }
-
-        // Validate all IDs are numbers
-        const numericIds = ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id) && id > 0);
-        if (numericIds.length === 0) {
-            return res.status(400).json({ error: 'IDs inválidos proporcionados.' });
-        }
-
-        const placeholders = numericIds.map(() => '?').join(',');
-        const query = `DELETE FROM cierre_cajas WHERE id IN (${placeholders})`;
-
-        db.run(query, numericIds, function (err) {
-            if (err) {
-                console.error('Error deleting cierres de caja:', err);
-                return res.status(500).json({ error: 'Error deleting records' });
-            }
-
-            logAudit('CASH_CLOSINGS_DELETED', req.user?.id, req.ip, {
-                deletedCount: this.changes,
-                admin: req.user?.name,
-                ids: numericIds
-            });
-
-            res.json({ success: true, deleted: this.changes });
         });
     });
 

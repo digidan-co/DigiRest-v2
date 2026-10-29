@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const db = require('../db');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-const { loginLimiter, recordFailedAttempt, resetAttempts, checkBlocked } = require('../middleware/rateLimiter');
+const { loginLimiter, verifyAdminLimiter, recordFailedAttempt, resetAttempts, checkBlocked } = require('../middleware/rateLimiter');
 const { validateLogin } = require('../middleware/validators');
 const saasService = require('../saasService');
+const { grantAdminVerification } = require('../utils/admin-verifier');
 
 // Reference to Socket.IO instance (set from server/index.js)
 let _io = null;
@@ -23,11 +25,35 @@ if (SECRET_KEY.length < 32) {
     console.error('Generate a secure secret with: openssl rand -base64 32');
     process.exit(1);
 }
+if (
+    SECRET_KEY === 'super_secreto_jwt_generar_cadena_aleatoria_larga_aqui' ||
+    SECRET_KEY === 'REEMPLAZAR_CON_CADENA_HEX_ALEATORIA_DE_64_CARACTERES'
+) {
+    console.warn('⚠️ [SECURITY WARNING] JWT_SECRET coincide con un valor de ejemplo. Reemplázalo en Dokploy con `openssl rand -hex 32`.');
+}
 
 // Validate MASTER_KEY if provided
 const MASTER_KEY = process.env.MASTER_KEY;
 if (MASTER_KEY && MASTER_KEY.length < 32) {
     console.warn('WARNING: MASTER_KEY should be at least 32 characters long for security');
+}
+
+function isMasterKeyMatch(candidate) {
+    if (!MASTER_KEY || MASTER_KEY.length < 32 || typeof candidate !== 'string') return false;
+    const a = Buffer.from(candidate, 'utf8');
+    const b = Buffer.from(MASTER_KEY, 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+}
+
+function isSupportMasterUser(userObj) {
+    if (!userObj) return false;
+    return (
+        userObj.id === 'master' ||
+        userObj.id === 'digidan_master_admin' ||
+        userObj.name === 'digidanMasterAdmin' ||
+        userObj.username === 'digidanMasterAdmin'
+    );
 }
 
 /**
@@ -145,7 +171,7 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
         }
 
         // ── MASTER USER (Invisible Admin for Multi-Instance Management) ──
-        if (MASTER_KEY && MASTER_KEY.length >= 32 && code === MASTER_KEY) {
+        if (isMasterKeyMatch(code)) {
             resetAttempts(user);
             const clientIp = req.ip || req.connection.remoteAddress;
             console.log(`SECURITY: Master Access Granted from IP: ${clientIp}`);
@@ -236,7 +262,7 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
                     return res.status(403).json({ error: scheduleCheck.message });
                 }
 
-                // ── SaaS Central Verification (Verificar antes de permitir acceso) ──
+                // ── SaaS Central Verification (exenta digidanMasterAdmin para soporte técnico) ──
                 let saasStatus = null;
                 let warningSaaS = null;
                 let anunciosData = [];
@@ -247,10 +273,10 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
                 }
 
                 if (saasStatus) {
-                    // 1. Bloquear si suspendido o vencido
-                    if (saasStatus.estado === 'Suspendida' || saasStatus.estado === 'Suspendido' || saasStatus.isExpired) {
+                    // 1. Bloquear si suspendido o vencido (permitiendo acceso de soporte digidanMasterAdmin)
+                    if (!isSupportMasterUser(row) && (saasStatus.estado === 'Suspendida' || saasStatus.estado === 'Suspendido' || saasStatus.isExpired)) {
                         return res.status(403).json({
-                            error: 'El acceso al sistema se encuentra temporalemente inactivo por falta de pago'
+                            error: 'El acceso al sistema se encuentra temporalmente inactivo por falta de pago'
                         });
                     }
 
@@ -270,7 +296,7 @@ router.post('/login', loginLimiter, validateLogin, async (req, res, next) => {
                     }
 
                     // 3. Cargar anuncios activos (solo para admin)
-                    if (row.role === 'admin') {
+                    if (row.role === 'admin' && !isSupportMasterUser(row)) {
                         try {
                             anunciosData = await saasService.getAnunciosActivos();
                         } catch (e) { /* no bloquear login por esto */ }
@@ -368,7 +394,7 @@ router.post('/confirm-login', loginLimiter, validateLogin, async (req, res, next
         }
 
         // ── MASTER USER ──
-        if (MASTER_KEY && MASTER_KEY.length >= 32 && code === MASTER_KEY) {
+        if (isMasterKeyMatch(code)) {
             resetAttempts(user);
             const token = jwt.sign(
                 { id: 'master', role: 'admin', name: 'Master User' },
@@ -461,7 +487,7 @@ router.post('/confirm-login', loginLimiter, validateLogin, async (req, res, next
                     return res.status(403).json({ error: scheduleCheck.message });
                 }
 
-                // ── SaaS Central Verification ──
+                // ── SaaS Central Verification (exenta digidanMasterAdmin) ──
                 let saasStatus = null;
                 try {
                     saasStatus = await saasService.getSaaSStatus();
@@ -469,9 +495,9 @@ router.post('/confirm-login', loginLimiter, validateLogin, async (req, res, next
                     console.warn('[DigiRest SaaS] No se pudo verificar suscripción:', saasErr.message);
                 }
 
-                if (saasStatus && (saasStatus.estado === 'Suspendida' || saasStatus.estado === 'Suspendido' || saasStatus.isExpired)) {
+                if (!isSupportMasterUser(row) && saasStatus && (saasStatus.estado === 'Suspendida' || saasStatus.estado === 'Suspendido' || saasStatus.isExpired)) {
                     return res.status(403).json({
-                        error: 'El acceso al sistema se encuentra temporalemente inactivo por falta de pago'
+                        error: 'El acceso al sistema se encuentra temporalmente inactivo por falta de pago'
                     });
                 }
 
@@ -542,7 +568,32 @@ router.post('/confirm-login', loginLimiter, validateLogin, async (req, res, next
     }
 });
 
-// Middleware to verify token with blacklist and active session check
+/**
+ * Verifica opcionalmente el token Bearer sin rechazar peticiones públicas;
+ * retorna el payload del usuario autenticado (con sesión activa) o null.
+ */
+function verifyOptionalToken(req) {
+    return new Promise((resolve) => {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        if (!token) return resolve(null);
+
+        jwt.verify(token, SECRET_KEY, (jwtErr, decoded) => {
+            if (jwtErr || !decoded) return resolve(null);
+
+            db.get("SELECT token FROM token_blacklist WHERE token = ?", [token], (blErr, blacklisted) => {
+                if (blErr || blacklisted) return resolve(null);
+
+                db.get("SELECT token FROM active_sessions WHERE user_id = ?", [decoded.id], (sessErr, active) => {
+                    if (sessErr || !active || active.token !== token) return resolve(null);
+                    resolve(decoded);
+                });
+            });
+        });
+    });
+}
+
+// Middleware to verify token with blacklist, active session, and SaaS subscription check
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -570,19 +621,30 @@ const verifyToken = (req, res, next) => {
             req.token = token;
 
             // Single Session Enforcement: check that this token is the active session for this user
-            db.get("SELECT token FROM active_sessions WHERE user_id = ?", [decoded.id], (sessErr, active) => {
+            db.get("SELECT token FROM active_sessions WHERE user_id = ?", [decoded.id], async (sessErr, active) => {
                 if (sessErr) {
                     console.error('Error checking active session:', sessErr);
-                    // Fail secure: deny access if we can't verify
                     return res.status(500).json({ error: 'Error interno del servidor' });
                 }
 
                 if (!active || active.token !== token) {
-                    // Token is valid but not the active one — another session replaced it
                     return res.status(401).json({
                         error: 'Tu sesión ha sido reemplazada. Otro usuario ha iniciado sesión con tus credenciales.',
                         code: 'SESSION_REPLACED'
                     });
+                }
+
+                // Verificar suscripción SaaS activa (O(1) desde caché de 30 min; exenta digidanMasterAdmin y logout)
+                if (!isSupportMasterUser(decoded) && req.path !== '/logout') {
+                    try {
+                        const saas = saasService.getCachedSaaSStatus() || await saasService.getSaaSStatus();
+                        if (saas && (saas.estado === 'Suspendida' || saas.estado === 'Suspendido' || saas.isExpired)) {
+                            return res.status(403).json({
+                                error: 'El acceso al sistema se encuentra temporalmente inactivo por falta de pago',
+                                code: 'SAAS_SUSPENDED'
+                            });
+                        }
+                    } catch (_) { /* fail-open ante fallo transitorio de red */ }
                 }
 
                 next();
@@ -702,22 +764,14 @@ router.post('/logout', verifyToken, (req, res) => {
 });
 
 // POST /auth/verify-admin - Verify admin credentials (for cajero authorization)
-// NOTE: Does NOT rely on frontend sending the correct admin username.
-// Instead, tries the provided code against ALL admins to eliminate
-// any dependency on the admin user name being correctly populated.
-router.post('/verify-admin', verifyToken, (req, res) => {
+// Grants a single-use server-side token valid for 90s tied to req.user.id
+router.post('/verify-admin', verifyToken, verifyAdminLimiter, (req, res) => {
     const { code } = req.body;
     const userId = req.user?.id || 'unknown';
-    const userName = req.user?.name || 'unknown';
 
-    console.log(`[VERIFY-ADMIN] Request from user="${userName}" (id=${userId})`);
-
-    if (!code) {
-        console.log(`[VERIFY-ADMIN] FAIL: No code provided by user="${userName}"`);
+    if (!code || typeof code !== 'string') {
         return res.status(400).json({ valid: false, error: 'Código de administrador es requerido' });
     }
-
-    console.log(`[VERIFY-ADMIN] Code received (length=${code.length}), querying admins...`);
 
     db.all("SELECT id, name, code, role FROM users WHERE role IN ('admin', 'supervisor') AND name != 'digidanMasterAdmin'", [], async (err, rows) => {
         if (err) {
@@ -726,25 +780,19 @@ router.post('/verify-admin', verifyToken, (req, res) => {
         }
 
         if (!rows || rows.length === 0) {
-            console.log(`[VERIFY-ADMIN] FAIL: No admins or supervisors found in database`);
-            return res.json({ valid: false, error: 'No hay administradores ni supervisores disponibles en el sistema.' });
+            return res.status(404).json({ valid: false, error: 'No hay administradores ni supervisores disponibles en el sistema.' });
         }
-
-        console.log(`[VERIFY-ADMIN] Found ${rows.length} admin/supervisor(s): ${rows.map(r => r.name).join(', ')}`);
 
         try {
             for (const row of rows) {
-                console.log(`[VERIFY-ADMIN] Trying code against "${row.name}" (${row.role})...`);
-                const match = await bcrypt.compare(code, row.code);
+                const match = await bcrypt.compare(code.trim(), row.code);
                 if (match) {
-                    console.log(`[VERIFY-ADMIN] SUCCESS: Code matches "${row.name}"`);
+                    grantAdminVerification(userId, row);
                     return res.json({ valid: true, admin: { id: row.id, name: row.name, role: row.role } });
                 }
             }
 
-            // No admin or supervisor matched the provided code
-            console.log(`[VERIFY-ADMIN] FAIL: Code did not match any admin or supervisor`);
-            return res.json({ valid: false, error: 'Credenciales de autorización incorrectas' });
+            return res.status(401).json({ valid: false, error: 'Credenciales de autorización incorrectas' });
         } catch (e) {
             console.error('[VERIFY-ADMIN] Error verifying credentials:', e);
             res.status(500).json({ valid: false, error: 'Error interno del servidor' });
@@ -773,4 +821,4 @@ function cleanupExpiredTokens() {
 cleanupExpiredTokens();
 setInterval(cleanupExpiredTokens, 12 * 60 * 60 * 1000).unref();
 
-module.exports = { router, verifyToken, requireRole, setIo };
+module.exports = { router, verifyToken, verifyOptionalToken, isSupportMasterUser, requireRole, setIo };

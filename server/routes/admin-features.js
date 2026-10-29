@@ -230,7 +230,7 @@ module.exports = (io) => {
     let cachedStats = null;
     let lastStatsFetch = 0;
 
-    router.get('/system/stats', verifyToken, async (req, res) => {
+    router.get('/system/stats', verifyToken, requireRole(['admin', 'cajero']), async (req, res) => {
         const now = Date.now();
         // 15 seconds TTL cache to prevent disk/db thrashing on fast reloads
         if (cachedStats && (now - lastStatsFetch) < 15000) {
@@ -261,9 +261,9 @@ module.exports = (io) => {
                 queryCount("SELECT COUNT(*) as count FROM orders"),
                 queryCount("SELECT COUNT(*) as count FROM products"),
                 queryCount("SELECT COUNT(*) as count FROM categories"),
-                queryCount("SELECT COUNT(*) as count FROM users"),
+                queryCount("SELECT COUNT(*) as count FROM users WHERE id != 'digidan_master_admin'"),
                 queryCount("SELECT COUNT(*) as count FROM gastos_dia"),
-                queryCount("SELECT COUNT(*) as count FROM cierre_caja"),
+                queryCount("SELECT COUNT(*) as count FROM cierre_cajas"),
                 queryCount("SELECT COUNT(*) as count FROM tasks"),
                 queryCount("SELECT COUNT(*) as count FROM reservations"),
                 queryCount("SELECT COUNT(*) as count FROM order_notes"),
@@ -476,7 +476,7 @@ module.exports = (io) => {
     let cachedDashboardStats = null;
     let lastDashboardFetch = 0;
 
-    router.get('/dashboard/stats', verifyToken, async (req, res) => {
+    router.get('/dashboard/stats', verifyToken, requireRole(['admin', 'cajero']), async (req, res) => {
         const now = Date.now();
         // 5 seconds cache to avoid duplicate calls on socket bursts
         if (cachedDashboardStats && (now - lastDashboardFetch) < 5000) {
@@ -659,15 +659,17 @@ module.exports = (io) => {
     // AUDIT LOGS (ANTIFRAUDE & CONTROL)
     // ==========================================
     router.get('/audit-logs', verifyToken, requireRole(['admin']), (req, res) => {
-        const limit = parseInt(req.query.limit, 10) || 100;
+        const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
         const sql = `
             SELECT a.*, u.name as user_name, u.role as user_role
             FROM audit_logs a
             LEFT JOIN users u ON a.user_id = u.id
-            WHERE a.user_id NOT IN ('digidan_master_admin', 'master', 'digidanMasterAdmin')
+            WHERE COALESCE(a.user_id, '') NOT IN ('digidan_master_admin', 'master', 'digidanMasterAdmin')
               AND (u.name IS NULL OR (u.name != 'digidanMasterAdmin' AND u.name != 'digidan_master_admin'))
               AND (u.username IS NULL OR (u.username != 'digidanMasterAdmin' AND u.username != 'digidan_master_admin'))
-              AND (a.details IS NULL OR (a.details NOT LIKE '%digidanMasterAdmin%' AND a.details NOT LIKE '%digidan_master_admin%'))
+              AND (CASE WHEN json_valid(a.details) THEN COALESCE(json_extract(a.details, '$.userName'), '') ELSE '' END) NOT IN ('digidanMasterAdmin', 'digidan_master_admin')
+              AND (CASE WHEN json_valid(a.details) THEN COALESCE(json_extract(a.details, '$.username'), '') ELSE '' END) NOT IN ('digidanMasterAdmin', 'digidan_master_admin')
+              AND (CASE WHEN json_valid(a.details) THEN COALESCE(json_extract(a.details, '$.authorizedBy'), '') ELSE '' END) NOT IN ('digidanMasterAdmin', 'digidan_master_admin')
             ORDER BY a.timestamp DESC
             LIMIT ?
         `;

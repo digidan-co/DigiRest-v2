@@ -9,11 +9,13 @@ const path = require('path');
 const { processProof } = require('../utils/imageProcessor');
 const { logAudit } = require('../utils/auditLogger');
 const { isSameDayOrder } = require('../utils/date-helper');
-const { verifyAdminCode } = require('../utils/admin-verifier');
+const { verifyAdminCode, consumeAdminVerification } = require('../utils/admin-verifier');
+
+const STAFF_ORDER_ROOMS = ['admin', 'cajero', 'supervisor', 'chef', 'cocinero', 'mesero', 'waiter'];
 
 module.exports = (io) => {
     // PUT /orders/:id - Update existing order (with optional proof upload)
-    router.put('/orders/:id', verifyToken, upload.single('proof'), validateOrderInput, async (req, res) => {
+    router.put('/orders/:id', verifyToken, upload.single('proof'), validateUploadedFile, validateOrderInput, async (req, res) => {
         const { id } = req.params;
         const { client, phone, address, notes, type, payment, status, table, items, proof, total } = req.body; // proof might be "" or "null" string
         
@@ -130,29 +132,17 @@ module.exports = (io) => {
                     waiterName: currentOrder.waiterName
                 };
 
-                // Broadcast to all connected clients for instant real-time sync across staff views
-                io.emit('order_updated', updateData);
-                io.emit('order_status_update', updateData);
-
-                // Emit Socket.io event for real-time update to relevant rooms
-                io.to('admin').emit('order_updated', updateData);
-                io.to('cajero').emit('order_updated', updateData);
-                io.to('supervisor').emit('order_updated', updateData);
-                io.to('chef').emit('order_updated', updateData);
-                io.to('cocinero').emit('order_updated', updateData);
-                io.to('tracker').emit('order_updated', updateData);
-                io.to('mesero').emit('order_updated', updateData);
-                io.to('waiter').emit('order_updated', updateData);
-
+                // Emisión deduplicada a salas autenticadas de personal
+                const editRooms = [...STAFF_ORDER_ROOMS];
                 if (currentOrder.waiterId) {
-                    io.to(`user_${currentOrder.waiterId}`).emit('order_updated', updateData);
+                    editRooms.push(`user_${currentOrder.waiterId}`);
                 }
-
-                // Notify delivery if it's a delivery order
                 if (type === 'Domicilio') {
-                    io.to('delivery').emit('order_updated', updateData);
-                    io.to('repartidor').emit('order_updated', updateData);
+                    editRooms.push('delivery', 'repartidor');
                 }
+                io.to(editRooms).emit('order_updated', updateData);
+                io.to(editRooms).emit('order_status_update', updateData);
+                io.to('tracker').emit('order_updated', { id, status: status || currentOrder.status, type: type || currentOrder.type });
 
                 // Log audit for order edit
                 const isExtemp = !isSameDayOrder(currentOrder.timestamp);
@@ -166,7 +156,7 @@ module.exports = (io) => {
                     status: status,
                     extemporary: isExtemp,
                     originalDate: currentOrder.timestamp,
-                    authorizedBy: approvingAdmin || null
+                    authorizedBy: approvingAdmin || editApprovingAdmin || null
                 });
 
                 res.json({ message: 'Order updated', id });
@@ -174,9 +164,11 @@ module.exports = (io) => {
         });
         };
 
-        // Cajero edit authorization check (Strict Mode enforcement)
+        let editApprovingAdmin = null;
+
+        // Cajero edit authorization check (Strict Mode enforcement on server — never trust x-admin-verified)
         if (req.user?.role === 'cajero') {
-            db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], (cfgErr, cfgRow) => {
+            db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], async (cfgErr, cfgRow) => {
                 let cajeroCanEdit = true;
                 if (cfgRow && cfgRow.value) {
                     try {
@@ -186,21 +178,35 @@ module.exports = (io) => {
                 }
 
                 if (!cajeroCanEdit) {
-                    const isVerified = req.headers['x-admin-verified'] === 'true' || req.body.adminVerified === true;
-                    if (!isVerified) {
-                        return db.get(
-                            "SELECT id FROM order_authorizations WHERE order_id = ? AND type = 'edit' AND status = 'approved' AND datetime(resolved_at, '+15 minutes') >= datetime('now') LIMIT 1",
-                            [id],
-                            (authErr, authRow) => {
-                                if (authErr || !authRow) {
-                                    return res.status(403).json({
-                                        error: 'La edición de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
-                                    });
-                                }
-                                proceedWithOrderUpdate();
-                            }
-                        );
+                    const grant = consumeAdminVerification(req.user.id);
+                    if (grant.valid) {
+                        editApprovingAdmin = grant.admin.name;
+                        return proceedWithOrderUpdate();
                     }
+
+                    const directCode = req.body?.adminCode || req.headers['x-admin-code'];
+                    if (directCode) {
+                        const directCheck = await verifyAdminCode(directCode, true);
+                        if (directCheck.valid) {
+                            editApprovingAdmin = directCheck.admin.name;
+                            return proceedWithOrderUpdate();
+                        }
+                    }
+
+                    return db.get(
+                        "SELECT id, resolved_by_name FROM order_authorizations WHERE order_id = ? AND type = 'edit' AND status = 'approved' AND datetime(resolved_at, '+15 minutes') >= datetime('now') LIMIT 1",
+                        [id],
+                        (authErr, authRow) => {
+                            if (authErr || !authRow) {
+                                return res.status(403).json({
+                                    error: 'La edición de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
+                                });
+                            }
+                            editApprovingAdmin = authRow.resolved_by_name || null;
+                            db.run("UPDATE order_authorizations SET status = 'consumed' WHERE id = ?", [authRow.id], () => {});
+                            proceedWithOrderUpdate();
+                        }
+                    );
                 }
                 proceedWithOrderUpdate();
             });
@@ -249,40 +255,23 @@ module.exports = (io) => {
             db.run('UPDATE orders SET items = ? WHERE id = ?', [itemsJson, id], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
 
-                // Construct generic update object, similar to full update but lighter if we wanted
-                // But let's send the full order update event so clients re-render cleanly
-                // We need to re-fetch the full order or just construct what we changed?
-                // The frontend expects the full object in 'order_updated' usually, or we can send a specific event.
-                // Existing listeners for 'order_updated' replace the whole object in state.
-
-                // Let's fetch full order to be safe and consistent with other updates
                 db.get('SELECT * FROM orders WHERE id = ?', [id], (err, fullOrder) => {
                     if (!err && fullOrder) {
                         const orderData = {
                             ...fullOrder,
-                            items: items, // Use the parsed items
+                            items: items,
                             displayDate: fullOrder.displayDate || new Date(fullOrder.timestamp).toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
-                            table: fullOrder.tableNum // Compatibility
+                            table: fullOrder.tableNum
                         };
 
-                        // Broadcast to all connected clients (chef, waiter, admin, etc.) so dish progress updates with 0ms latency
-                        io.emit('order_updated', orderData);
-                        io.emit('order_status_update', orderData);
-                        io.emit('order_item_toggled', orderData);
-
-                        io.to('admin').emit('order_updated', orderData);
-                        io.to('cajero').emit('order_updated', orderData);
-                        io.to('supervisor').emit('order_updated', orderData);
-                        io.to('chef').emit('order_updated', orderData);
-                        io.to('cocinero').emit('order_updated', orderData);
-                        io.to('tracker').emit('order_updated', orderData);
-
-                        // Always notify waiters room and specific waiter if assigned
-                        io.to('waiter').emit('order_updated', orderData);
-                        io.to('mesero').emit('order_updated', orderData);
+                        const toggleRooms = [...STAFF_ORDER_ROOMS];
                         if (orderData.waiterId) {
-                            io.to(`user_${orderData.waiterId}`).emit('order_updated', orderData);
+                            toggleRooms.push(`user_${orderData.waiterId}`);
                         }
+                        io.to(toggleRooms).emit('order_updated', orderData);
+                        io.to(toggleRooms).emit('order_status_update', orderData);
+                        io.to(toggleRooms).emit('order_item_toggled', orderData);
+                        io.to('tracker').emit('order_updated', { id: orderData.id, status: orderData.status, type: orderData.type });
                     }
                 });
 

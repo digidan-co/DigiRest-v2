@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
-const { upload } = require('../middleware/upload');
+const { csvUpload } = require('../middleware/upload');
 const { v4: uuidv4 } = require('uuid');
 const csv = require('csv-parser');
 const { Parser } = require('json2csv');
@@ -11,7 +11,7 @@ const fs = require('fs');
 module.exports = (io) => {
 
     // --- EXPORT TOPPINGS TO CSV ---
-    router.get('/toppings/export', (req, res) => {
+    router.get('/toppings/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const sql = `
             SELECT 
                 t.id, t.name, t.group_name, t.price, t.available, 
@@ -39,7 +39,7 @@ module.exports = (io) => {
     });
 
     // --- IMPORT TOPPINGS FROM CSV ---
-    router.post('/toppings/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+    router.post('/toppings/import', verifyToken, requireRole(['admin']), csvUpload.single('file'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No se subió ningún archivo" });
         }

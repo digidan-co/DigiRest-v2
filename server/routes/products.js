@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
-const { upload, validateUploadedFile } = require('../middleware/upload');
+const { upload, csvUpload, validateUploadedFile } = require('../middleware/upload');
 const { validateProduct } = require('../middleware/validators');
 const { processImage } = require('../utils/imageProcessor');
 const { v4: uuidv4 } = require('uuid');
@@ -24,7 +24,7 @@ module.exports = (io) => {
 
     // --- CSV CATEGORIES ---
 
-    router.get('/categories/export', (req, res) => {
+    router.get('/categories/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         db.all("SELECT * FROM categories ORDER BY name ASC", [], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
 
@@ -44,7 +44,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/categories/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+    router.post('/categories/import', verifyToken, requireRole(['admin']), csvUpload.single('file'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No file uploaded" });
         }
@@ -202,7 +202,7 @@ module.exports = (io) => {
 
     // --- CSV PRODUCTS ---
 
-    router.get('/products/export', (req, res) => {
+    router.get('/products/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         db.all("SELECT * FROM products ORDER BY category ASC, name ASC", [], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
 
@@ -227,7 +227,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/products/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+    router.post('/products/import', verifyToken, requireRole(['admin']), csvUpload.single('file'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No se subió ningún archivo" });
         }
@@ -349,7 +349,7 @@ module.exports = (io) => {
             });
     });
 
-    router.post('/products', verifyToken, requireRole(['admin', 'cajero']), upload.single('image'), validateProduct, async (req, res) => {
+    router.post('/products', verifyToken, requireRole(['admin', 'cajero']), upload.single('image'), validateUploadedFile, validateProduct, async (req, res) => {
         let { id, name, desc, price, category, available, has_toppings, toppings_config, has_variants, variants_config, is_recommended, is_promo, promo_price } = req.body;
         let imgUrl = req.body.img;
 

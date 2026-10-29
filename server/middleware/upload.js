@@ -35,34 +35,70 @@ function validateFileContent(buffer, extension) {
     }
 }
 
+const UPLOAD_DIR = path.join(__dirname, '../uploads/');
+
+// Cache total upload directory size in memory for 60s to avoid blocking fs.readdirSync + statSync on every upload
+let _cachedStorageBytes = null;
+let _cachedStorageAt = 0;
+
+function getUploadsStorageBytes() {
+    const now = Date.now();
+    if (_cachedStorageBytes !== null && (now - _cachedStorageAt) < 60000) {
+        return _cachedStorageBytes;
+    }
+    let total = 0;
+    if (fs.existsSync(UPLOAD_DIR)) {
+        try {
+            const files = fs.readdirSync(UPLOAD_DIR);
+            for (const f of files) {
+                if (f.startsWith('.')) continue;
+                const fp = path.join(UPLOAD_DIR, f);
+                const stat = fs.statSync(fp);
+                if (stat.isFile()) total += stat.size;
+            }
+        } catch (_) {}
+    }
+    _cachedStorageBytes = total;
+    _cachedStorageAt = now;
+    return total;
+}
+
+function invalidateUploadsStorageCache() {
+    _cachedStorageBytes = null;
+    _cachedStorageAt = 0;
+}
+
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../uploads/');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
+        if (!fs.existsSync(UPLOAD_DIR)) {
+            fs.mkdirSync(UPLOAD_DIR, { recursive: true });
         }
-        cb(null, uploadDir);
+        cb(null, UPLOAD_DIR);
     },
     filename: (req, file, cb) => {
-        // Sanitize filename - remove special characters (allow only safe chars)
         const sanitized = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
         const uniqueSuffix = uuidv4();
-        const ext = path.extname(sanitized);
+        const ext = path.extname(sanitized).toLowerCase();
         cb(null, uniqueSuffix + ext);
     }
 });
 
-// File filter for security
-const fileFilter = (req, file, cb) => {
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.csv'];
-
+// Strict filter for image uploads ONLY (products & payment proofs)
+const imageFileFilter = (req, file, cb) => {
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
     const ext = path.extname(file.originalname).toLowerCase();
-
-    // Extension check first
     if (!allowedExtensions.includes(ext)) {
-        return cb(new Error('Solo se permiten archivos de imagen (JPG, PNG, WEBP) o CSV'), false);
+        return cb(new Error('Solo se permiten imágenes válidas (JPG, PNG o WEBP)'), false);
     }
+    cb(null, true);
+};
 
+// Filter for admin CSV imports ONLY
+const csvFileFilter = (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.csv') {
+        return cb(new Error('Solo se permiten archivos CSV (.csv)'), false);
+    }
     cb(null, true);
 };
 
@@ -70,69 +106,67 @@ const upload = multer({
     storage: storage,
     limits: {
         fileSize: 1.5 * 1024 * 1024, // 1.5MB — el cliente ya comprime a WebP antes de subir
-        files: 1 // Only 1 file per request
+        files: 1
     },
-    fileFilter: fileFilter
+    fileFilter: imageFileFilter
+});
+
+const csvUpload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 2 * 1024 * 1024, // 2MB max CSV
+        files: 1
+    },
+    fileFilter: csvFileFilter
 });
 
 /**
  * Middleware to validate actual file content after multer writes the file.
- * Must be used AFTER upload.single('file') or upload.array() middleware.
+ * Must be used AFTER upload.single('...') middleware.
  * Reads the saved file and checks magic bytes to confirm real content type.
  */
 function validateUploadedFile(req, res, next) {
     if (!req.file) {
-        return next(); // No file uploaded — skip validation
-    }
-
-    const ext = path.extname(req.file.originalname).toLowerCase();
-
-    // Only validate image types (CSV has no reliable magic bytes)
-    if (!['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
         return next();
     }
 
-    // Read first 64 bytes of the saved file to check magic bytes
+    const ext = path.extname(req.file.originalname).toLowerCase();
     const filePath = req.file.path;
-    const fd = fs.openSync(filePath, 'r');
-    const buffer = Buffer.alloc(64);
-    const bytesRead = fs.readSync(fd, buffer, 0, 64, 0);
-    fs.closeSync(fd);
 
-    const isValid = validateFileContent(buffer.slice(0, bytesRead), ext);
+    if (!['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+        try { fs.unlinkSync(filePath); } catch (_) { /* ignore */ }
+        return res.status(400).json({ error: 'Formato de imagen no permitido.' });
+    }
+
+    let isValid = false;
+    try {
+        const fd = fs.openSync(filePath, 'r');
+        const buffer = Buffer.alloc(64);
+        const bytesRead = fs.readSync(fd, buffer, 0, 64, 0);
+        fs.closeSync(fd);
+        isValid = validateFileContent(buffer.slice(0, bytesRead), ext);
+    } catch (_) {
+        isValid = false;
+    }
 
     if (!isValid) {
-        // Delete the fake file immediately
         try { fs.unlinkSync(filePath); } catch (_) { /* ignore */ }
         return res.status(400).json({
-            error: 'El archivo subido no coincide con el tipo de archivo esperado. Por favor, sube una imagen válida.'
+            error: 'El archivo subido no coincide con una imagen real válida.'
         });
     }
 
-    // Check overall storage limit (configurable via Dokploy)
-    const rawStorageMb = process.env.MAX_IMAGE_STORAGE_MB 
-        || process.env.MAX_STORAGE_MB 
-        || process.env.STORAGE_LIMIT_MB 
-        || process.env.MAX_IMAGE_MB 
-        || process.env.MAX_IMAGES_MB 
-        || process.env.MAX_STORAGE 
-        || process.env.STORAGE_LIMIT 
+    const rawStorageMb = process.env.MAX_IMAGE_STORAGE_MB
+        || process.env.MAX_STORAGE_MB
+        || process.env.STORAGE_LIMIT_MB
+        || process.env.MAX_IMAGE_MB
+        || process.env.MAX_IMAGES_MB
+        || process.env.MAX_STORAGE
+        || process.env.STORAGE_LIMIT
         || process.env.STORAGE_MB;
     const maxMb = rawStorageMb ? (parseInt(String(rawStorageMb).replace(/[^0-9]/g, ''), 10) || 50) : 50;
     const maxBytes = maxMb * 1024 * 1024;
-    const uploadDir = path.join(__dirname, '../uploads/');
-    let totalStorageBytes = 0;
-    if (fs.existsSync(uploadDir)) {
-        try {
-            const files = fs.readdirSync(uploadDir);
-            for (const f of files) {
-                if (f.startsWith('.')) continue;
-                const fp = path.join(uploadDir, f);
-                const stat = fs.statSync(fp);
-                if (stat.isFile()) totalStorageBytes += stat.size;
-            }
-        } catch (_) {}
-    }
+    const totalStorageBytes = getUploadsStorageBytes();
 
     if (totalStorageBytes > maxBytes) {
         try { fs.unlinkSync(filePath); } catch (_) { /* ignore */ }
@@ -141,7 +175,12 @@ function validateUploadedFile(req, res, next) {
         });
     }
 
+    // Account for newly added file in cached counter
+    if (_cachedStorageBytes !== null && req.file.size) {
+        _cachedStorageBytes += req.file.size;
+    }
+
     next();
 }
 
-module.exports = { upload, validateUploadedFile };
+module.exports = { upload, csvUpload, validateUploadedFile, invalidateUploadsStorageCache };

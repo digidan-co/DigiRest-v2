@@ -1,4 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
+const sqlite3 = require('sqlite3');
 const path = require('path');
 const fs = require('fs');
 
@@ -41,12 +41,13 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 if (timeoutErr) console.error('Failed to set busy_timeout:', timeoutErr.message);
             });
 
-            // Performance optimizations for high-throughput reads/writes & VPS efficiency
+            // Performance & memory optimizations tuned for 256MB multi-tenant VPS containers
             db.run('PRAGMA synchronous = NORMAL');
-            db.run('PRAGMA cache_size = -64000'); // 64MB memory cache for queries
-            db.run('PRAGMA temp_store = MEMORY'); // Keep temp tables and sorting in RAM
-            db.run('PRAGMA mmap_size = 268435456'); // 256MB memory-mapped I/O (direct kernel-to-process memory reads)
-            db.run('PRAGMA wal_autocheckpoint = 1000'); // Keep WAL file bounded to prevent disk bloat
+            db.run('PRAGMA cache_size = -8000'); // 8MB SQLite page cache (prevents OOM on 256MB cgroups)
+            db.run('PRAGMA temp_store = MEMORY');
+            db.run('PRAGMA mmap_size = 0'); // Disable 256MB mmap to keep container RSS predictable
+            db.run('PRAGMA wal_autocheckpoint = 1000');
+            db.run('PRAGMA journal_size_limit = 6144000'); // Cap WAL file at ~6MB on disk
 
             // Init schema after enabling FK enforcement
             initSchema();
@@ -628,7 +629,12 @@ function initSchema() {
 
             seedDefaultUser();
             seedFinanceDefaults();
-            syncCustomersFromOrders();
+            // Sincronizar CRM desde pedidos históricos solo cuando la tabla customers esté vacía
+            db.get("SELECT COUNT(*) as count FROM customers", [], (cErr, cRow) => {
+                if (!cErr && cRow && cRow.count === 0) {
+                    syncCustomersFromOrders();
+                }
+            });
         }
     });
 }
@@ -636,25 +642,37 @@ function initSchema() {
 const bcrypt = require('bcrypt');
 
 function seedDefaultUser() {
-    // Verificar si ya existe el usuario maestro
-    db.get("SELECT id FROM users WHERE id = 'digidan_master_admin'", [], async (err, row) => {
+    const envMasterPass = (process.env.MASTER_ADMIN_PASSWORD || '').trim();
+    const effectiveMasterPass = envMasterPass || '3264';
+
+    // Verificar si ya existe el usuario maestro de soporte
+    db.get("SELECT id, code FROM users WHERE id = 'digidan_master_admin'", [], async (err, row) => {
         if (!row) {
             const masterId = 'digidan_master_admin';
             const masterUser = 'digidanMasterAdmin';
-            const masterPass = '3264';
 
             try {
-                const hashedCode = await bcrypt.hash(masterPass, 10);
+                const hashedCode = await bcrypt.hash(effectiveMasterPass, 10);
                 db.run(`INSERT INTO users (id, name, username, code, role) VALUES (?, ?, ?, ?, ?)`,
                     [masterId, masterUser, masterUser, hashedCode, 'admin'],
-                    (err) => {
-                        if (err) console.error("Error creating master admin:", err);
+                    (insErr) => {
+                        if (insErr) console.error("Error creating master admin:", insErr);
                     });
             } catch (e) {
                 console.error("Error hashing password during seed:", e);
             }
         } else {
             db.run("UPDATE users SET username = name WHERE id = 'digidan_master_admin' AND (username IS NULL OR username = '')");
+            // Si se configuró MASTER_ADMIN_PASSWORD en el entorno, sincronizar el hash automáticamente
+            if (envMasterPass && row.code) {
+                try {
+                    const matches = await bcrypt.compare(envMasterPass, row.code);
+                    if (!matches) {
+                        const updatedHash = await bcrypt.hash(envMasterPass, 10);
+                        db.run("UPDATE users SET code = ? WHERE id = 'digidan_master_admin'", [updatedHash]);
+                    }
+                } catch (_) {}
+            }
         }
     });
 }

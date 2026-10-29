@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { verifyToken, requireRole } = require('./auth');
-const { upload } = require('../middleware/upload');
+const { csvUpload } = require('../middleware/upload');
 const csv = require('csv-parser');
 const { Parser } = require('json2csv');
 const fs = require('fs');
@@ -55,7 +55,7 @@ module.exports = (io) => {
     });
 
     // Exportar insumos a CSV
-    router.get('/inventory/supplies/export', (req, res) => {
+    router.get('/inventory/supplies/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const sql = `SELECT id, name, unit, current_stock, min_stock, cost_per_unit, created_at FROM supplies ORDER BY name ASC`;
         db.all(sql, [], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -75,7 +75,7 @@ module.exports = (io) => {
     });
 
     // Importar insumos desde CSV
-    router.post('/inventory/supplies/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+    router.post('/inventory/supplies/import', verifyToken, requireRole(['admin']), csvUpload.single('file'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No se subió ningún archivo" });
         }
@@ -157,7 +157,7 @@ module.exports = (io) => {
     });
 
     // Crear insumo
-    router.post('/inventory/supplies', verifyToken, (req, res) => {
+    router.post('/inventory/supplies', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { name, unit, current_stock, min_stock, cost_per_unit } = req.body;
 
         if (!name || !name.trim()) {
@@ -202,7 +202,7 @@ module.exports = (io) => {
     });
 
     // Editar insumo
-    router.put('/inventory/supplies/:id', verifyToken, (req, res) => {
+    router.put('/inventory/supplies/:id', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { id } = req.params;
         const { name, unit, min_stock, cost_per_unit } = req.body;
 
@@ -235,7 +235,7 @@ module.exports = (io) => {
     });
 
     // Ajuste de stock rápido (Entrada de compra, Merma o Ajuste manual)
-    router.post('/inventory/supplies/:id/adjust', verifyToken, (req, res) => {
+    router.post('/inventory/supplies/:id/adjust', verifyToken, requireRole(['admin', 'cajero', 'chef', 'cocinero']), (req, res) => {
         const { id } = req.params;
         const { amount, type, notes } = req.body; // type: 'ENTRADA_COMPRA' | 'MERMA' | 'AJUSTE_MANUAL'
 
@@ -279,7 +279,7 @@ module.exports = (io) => {
     });
 
     // Eliminar insumo
-    router.delete('/inventory/supplies/:id', verifyToken, (req, res) => {
+    router.delete('/inventory/supplies/:id', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { id } = req.params;
 
         // Verificar si se usa en recetas
@@ -341,34 +341,37 @@ module.exports = (io) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!recipes || recipes.length === 0) return res.json([]);
 
-            let completed = 0;
-            const fullRecipes = [];
+            const itemSql = `
+                SELECT 
+                    ri.id, ri.recipe_id, ri.supply_id, ri.quantity, ri.unit as recipe_unit,
+                    s.name as supply_name, s.unit as supply_unit, s.cost_per_unit, s.current_stock
+                FROM recipe_items ri
+                JOIN supplies s ON s.id = ri.supply_id
+            `;
 
-            recipes.forEach(rec => {
-                const itemSql = `
-                    SELECT 
-                        ri.id, ri.supply_id, ri.quantity, ri.unit as recipe_unit,
-                        s.name as supply_name, s.unit as supply_unit, s.cost_per_unit, s.current_stock
-                    FROM recipe_items ri
-                    JOIN supplies s ON s.id = ri.supply_id
-                    WHERE ri.recipe_id = ?
-                `;
+            db.all(itemSql, [], (iErr, allItems) => {
+                if (iErr) return res.status(500).json({ error: iErr.message });
 
-                db.all(itemSql, [rec.id], (iErr, items) => {
-                    const recipeItems = (items || []).map(item => {
-                        const effectiveUnit = item.recipe_unit || item.supply_unit;
-                        const qtyInSupplyUnit = convertUnit(item.quantity, effectiveUnit, item.supply_unit);
-                        const itemCost = qtyInSupplyUnit * (item.cost_per_unit || 0);
-                        return {
-                            ...item,
-                            unit: effectiveUnit,
-                            item_cost: Math.round(itemCost * 100) / 100
-                        };
-                    });
+                const itemsByRecipeId = new Map();
+                (allItems || []).forEach(item => {
+                    const effectiveUnit = item.recipe_unit || item.supply_unit;
+                    const qtyInSupplyUnit = convertUnit(item.quantity, effectiveUnit, item.supply_unit);
+                    const itemCost = qtyInSupplyUnit * (item.cost_per_unit || 0);
+                    const enrichedItem = {
+                        ...item,
+                        unit: effectiveUnit,
+                        item_cost: Math.round(itemCost * 100) / 100
+                    };
+                    if (!itemsByRecipeId.has(item.recipe_id)) {
+                        itemsByRecipeId.set(item.recipe_id, []);
+                    }
+                    itemsByRecipeId.get(item.recipe_id).push(enrichedItem);
+                });
 
+                const fullRecipes = recipes.map(rec => {
+                    const recipeItems = itemsByRecipeId.get(rec.id) || [];
                     const totalCost = recipeItems.reduce((acc, curr) => acc + (curr.item_cost || 0), 0);
-                    
-                    // Si la receta es de una variante específica, buscar su precio correspondiente
+
                     let effectivePrice = rec.product_price || 0;
                     if (rec.variant_id && rec.variants_config) {
                         try {
@@ -383,20 +386,17 @@ module.exports = (io) => {
                     const foodCostPct = effectivePrice > 0 ? ((totalCost / effectivePrice) * 100) : 0;
                     const margin = effectivePrice - totalCost;
 
-                    fullRecipes.push({
+                    return {
                         ...rec,
                         items: recipeItems,
                         total_cost: Math.round(totalCost * 100) / 100,
                         effective_price: effectivePrice,
                         margin: Math.round(margin * 100) / 100,
                         food_cost_pct: Math.round(foodCostPct * 10) / 10
-                    });
-
-                    completed++;
-                    if (completed === recipes.length) {
-                        res.json(fullRecipes);
-                    }
+                    };
                 });
+
+                res.json(fullRecipes);
             });
         });
     });
@@ -467,7 +467,7 @@ module.exports = (io) => {
     });
 
     // Guardar (Crear o Actualizar) receta para un plato o variante
-    router.post('/inventory/recipes', verifyToken, (req, res) => {
+    router.post('/inventory/recipes', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { product_id, variant_id, variant_name, name, yield: recipeYield, instructions, items } = req.body;
 
         if (!product_id) {
@@ -573,7 +573,7 @@ module.exports = (io) => {
     });
 
     // Eliminar receta
-    router.delete('/inventory/recipes/:id', verifyToken, (req, res) => {
+    router.delete('/inventory/recipes/:id', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { id } = req.params;
         db.run('DELETE FROM recipes WHERE id = ?', [id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -587,7 +587,7 @@ module.exports = (io) => {
     });
 
     // Exportar recetas a CSV
-    router.get('/inventory/recipes/export', (req, res) => {
+    router.get('/inventory/recipes/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const sql = `
             SELECT 
                 p.id AS product_id,
@@ -622,7 +622,7 @@ module.exports = (io) => {
     });
 
     // Importar recetas desde CSV
-    router.post('/inventory/recipes/import', verifyToken, requireRole(['admin']), upload.single('file'), (req, res) => {
+    router.post('/inventory/recipes/import', verifyToken, requireRole(['admin']), csvUpload.single('file'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No se subió ningún archivo" });
         }
@@ -750,7 +750,7 @@ module.exports = (io) => {
     // KÁRDEX / MOVIMIENTOS DE INVENTARIO
     // =============================================
     router.get('/inventory/movements', verifyToken, (req, res) => {
-        const limit = parseInt(req.query.limit, 10) || 100;
+        const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
         const sql = `
             SELECT id, supply_id, supply_name, type, quantity, stock_after, order_id, notes, user_name, created_at
             FROM inventory_movements

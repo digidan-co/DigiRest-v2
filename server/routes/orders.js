@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const db = require('../db');
-const { verifyToken } = require('./auth');
+const { verifyToken, verifyOptionalToken, isSupportMasterUser, requireRole } = require('./auth');
 const { upload, validateUploadedFile } = require('../middleware/upload');
+const { safeKeyGenerator } = require('../middleware/rateLimiter');
 const { validateOrderInput } = require('../middleware/validators');
 const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
@@ -11,22 +13,226 @@ const { processProof } = require('../utils/imageProcessor');
 const { deductStockForOrder, revertStockForOrder } = require('../utils/inventory-helper');
 const { calculateOrderCombos } = require('../utils/combo-calculator');
 const { isSameDayOrder, getColombiaDateString } = require('../utils/date-helper');
-const { verifyAdminCode } = require('../utils/admin-verifier');
+const { verifyAdminCode, consumeAdminVerification } = require('../utils/admin-verifier');
+const saasService = require('../saasService');
 
 const { logAudit } = require('../utils/auditLogger');
 
-// Rate limiter for public order creation (customers without auth)
+const STAFF_ORDER_ROOMS = ['admin', 'cajero', 'supervisor', 'chef', 'cocinero', 'mesero', 'waiter'];
+
+function sanitizeOrderForPublicTracker(orderObj) {
+    return {
+        id: orderObj.id,
+        status: orderObj.status,
+        type: orderObj.type,
+        timestamp: orderObj.timestamp,
+        displayDate: orderObj.displayDate || null,
+        source: orderObj.type === 'Local' ? 'Local' : 'General'
+    };
+}
+
+function dbAllAsync(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+        });
+    });
+}
+
+/**
+ * Recalcula en servidor precios de platos, variantes, promociones, toppings, combos y tarifa de domicilio
+ * para pedidos públicos sin JWT de personal, neutralizando manipulación de precios o montos negativos.
+ */
+async function recalculatePublicOrderPricing(rawItems, rawDeliveryZone, orderType, rawDeliveryFee) {
+    const [products, toppings, combos, zones] = await Promise.all([
+        dbAllAsync("SELECT id, name, price, is_promo, promo_price, has_variants, variants_config FROM products"),
+        dbAllAsync("SELECT id, name, price FROM toppings"),
+        dbAllAsync("SELECT id, name, type, combo_price, discount_value FROM promotions_combos"),
+        dbAllAsync("SELECT id, name, fee FROM delivery_zones")
+    ]);
+
+    const prodById = new Map();
+    const prodByName = new Map();
+    for (const p of products) {
+        prodById.set(String(p.id), p);
+        if (p.name) prodByName.set(String(p.name).trim().toLowerCase(), p);
+    }
+
+    const topById = new Map();
+    const topByName = new Map();
+    for (const t of toppings) {
+        topById.set(String(t.id), t);
+        if (t.name) topByName.set(String(t.name).trim().toLowerCase(), t);
+    }
+
+    const comboMap = new Map();
+    for (const c of combos) {
+        const cid = String(c.id);
+        comboMap.set(cid, c);
+        comboMap.set(cid.startsWith('combo_') ? cid.slice(6) : `combo_${cid}`, c);
+        if (c.name) comboMap.set(String(c.name).trim().toLowerCase(), c);
+    }
+
+    const resolveProductUnitPrice = (prod, item) => {
+        const baseRegular = Math.max(0, parseFloat(prod.price) || 0);
+        const basePromo = (prod.is_promo === 1 && parseFloat(prod.promo_price) > 0)
+            ? parseFloat(prod.promo_price)
+            : baseRegular;
+
+        const varId = item.variant_id || item.variantId || null;
+        const varName = item.variant_name || item.variantName || (typeof item.variant === 'string' ? item.variant : item.variant?.name) || null;
+        if (prod.has_variants === 1 && prod.variants_config && (varId || varName)) {
+            try {
+                const vars = JSON.parse(prod.variants_config);
+                if (Array.isArray(vars)) {
+                    const matched = vars.find(v =>
+                        (varId && String(v.id) === String(varId)) ||
+                        (varName && v.name && String(v.name).trim().toLowerCase() === String(varName).trim().toLowerCase())
+                    );
+                    if (matched) {
+                        const vPrice = Math.max(0, parseFloat(matched.price) || baseRegular);
+                        if (prod.is_promo === 1 && parseFloat(matched.promo_price) > 0) {
+                            return parseFloat(matched.promo_price);
+                        }
+                        return vPrice;
+                    }
+                }
+            } catch (_) {}
+        }
+        return basePromo;
+    };
+
+    const sanitizedItems = (Array.isArray(rawItems) ? rawItems : []).map((rawItem) => {
+        const item = { ...rawItem };
+        const qty = Math.max(1, Math.min(200, parseInt(item.qty ?? item.quantity, 10) || 1));
+        item.qty = qty;
+
+        // Sanitize toppings prices from DB
+        if (Array.isArray(item.toppings)) {
+            item.toppings = item.toppings.map((top) => {
+                const dbTop = (top.id && topById.get(String(top.id))) ||
+                    (top.name && topByName.get(String(top.name).trim().toLowerCase()));
+                return {
+                    ...top,
+                    price: dbTop ? Math.max(0, parseFloat(dbTop.price) || 0) : Math.max(0, parseFloat(top.price) || 0)
+                };
+            });
+        }
+
+        const rawProdId = String(item.productId || item.id || '').split('_')[0];
+        const rawComboKey = item.combo_id || (String(item.id || '').startsWith('combo_') ? String(item.id) : null);
+        const dbCombo = (rawComboKey && comboMap.get(String(rawComboKey))) ||
+            (item.combo_name && comboMap.get(String(item.combo_name).trim().toLowerCase())) ||
+            (item.is_combo && item.name && comboMap.get(String(item.name).trim().toLowerCase()));
+
+        if (item.is_combo && dbCombo) {
+            // Calcular precio base real sumando sub-items si existen
+            let realBase = 0;
+            if (Array.isArray(item.combo_items) && item.combo_items.length > 0) {
+                for (const sub of item.combo_items) {
+                    const subQty = Math.max(1, parseInt(sub.qty ?? sub.quantity, 10) || 1);
+                    const subProd = (sub.product_id && prodById.get(String(sub.product_id))) ||
+                        (sub.id && prodById.get(String(sub.id))) ||
+                        (sub.name && prodByName.get(String(sub.name).trim().toLowerCase()));
+                    if (subProd) {
+                        realBase += resolveProductUnitPrice(subProd, sub) * subQty;
+                    } else {
+                        realBase += Math.max(0, parseFloat(sub.price) || 0) * subQty;
+                    }
+                }
+            }
+            const cPrice = Math.max(0, parseFloat(dbCombo.combo_price) || 0);
+            const dVal = Math.max(0, parseFloat(dbCombo.discount_value) || 0);
+            let finalComboUnit = cPrice;
+            let unitDisc = 0;
+
+            if (dbCombo.type === 'FIXED_PRICE' && cPrice > 0) {
+                finalComboUnit = cPrice;
+                unitDisc = realBase > cPrice ? (realBase - cPrice) : 0;
+            } else if (dbCombo.type === 'PERCENT_DISCOUNT' && realBase > 0) {
+                unitDisc = Math.round(realBase * (Math.min(100, dVal) / 100));
+                finalComboUnit = Math.max(0, realBase - unitDisc);
+            } else if (dbCombo.type === 'FIXED_DISCOUNT' && realBase > 0) {
+                unitDisc = Math.min(realBase, dVal);
+                finalComboUnit = Math.max(0, realBase - unitDisc);
+            } else if (realBase > 0) {
+                finalComboUnit = cPrice > 0 ? cPrice : realBase;
+            }
+
+            item.price = finalComboUnit;
+            item.base_price = realBase > 0 ? realBase : (finalComboUnit + unitDisc);
+            item.discount_amount = unitDisc;
+            return item;
+        }
+
+        // Si usa combo_instance_id legacy, forzar metadatos reales del combo desde BD
+        if (item.combo_instance_id) {
+            if (dbCombo) {
+                item.combo_type = dbCombo.type;
+                item.combo_price = Math.max(0, parseFloat(dbCombo.combo_price) || 0);
+                item.discount_value = Math.max(0, parseFloat(dbCombo.discount_value) || 0);
+                if (dbCombo.type !== 'FREE_PRODUCT') item.is_free = false;
+            } else {
+                delete item.combo_instance_id;
+                item.is_free = false;
+            }
+        }
+
+        const dbProd = prodById.get(String(item.productId || item.id || '')) ||
+            prodById.get(rawProdId) ||
+            (item.name && prodByName.get(String(item.name).trim().toLowerCase()));
+
+        if (dbProd) {
+            item.price = resolveProductUnitPrice(dbProd, item);
+        } else {
+            item.price = Math.max(0, parseFloat(item.price) || 0);
+        }
+
+        return item;
+    });
+
+    let verifiedDeliveryFee = 0;
+    if (orderType === 'Domicilio' || rawDeliveryZone) {
+        const cleanZone = String(rawDeliveryZone || '').trim().toLowerCase();
+        const matchedZone = cleanZone
+            ? zones.find(z => String(z.id).toLowerCase() === cleanZone || String(z.name || '').trim().toLowerCase() === cleanZone)
+            : null;
+        if (matchedZone) {
+            verifiedDeliveryFee = Math.max(0, parseFloat(matchedZone.fee) || 0);
+        } else {
+            verifiedDeliveryFee = Math.max(0, parseFloat(rawDeliveryFee) || 0);
+        }
+    }
+
+    const comboCalc = calculateOrderCombos(sanitizedItems);
+    return {
+        sanitizedItems,
+        comboCalc,
+        verifiedDeliveryFee
+    };
+}
+
+// Rate limiter for public order creation (customers without valid staff JWT)
 const orderCreationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 30, // 30 orders per 15 min per IP for public clients
+    keyGenerator: safeKeyGenerator,
     message: {
         error: 'Demasiados pedidos. Por favor, intenta nuevamente en 15 minutos.'
     },
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => {
-        // No limitar al personal autenticado (meseros, cajeros, administradores)
-        return Boolean(req.headers.authorization);
+        const authHeader = req.headers.authorization;
+        const token = authHeader && authHeader.split(' ')[1];
+        if (!token || !process.env.JWT_SECRET) return false;
+        try {
+            jwt.verify(token, process.env.JWT_SECRET);
+            return true;
+        } catch (_) {
+            return false;
+        }
     }
 });
 
@@ -75,13 +281,32 @@ module.exports = (io) => {
     // Create New Order (Public or Waiter)
     // IMPORTANT: upload.single('proof') must come BEFORE validateOrderInput
     // so that multer parses FormData fields into req.body before validation runs.
-    router.post('/orders', orderCreationLimiter, upload.single('proof'), validateOrderInput, async (req, res) => {
-        // req.body contains text fields, req.file contains proof if sent
-        const { client, phone, address, notes, type, payment, waiterId, waiterName, table, items, total } = req.body;
+    router.post('/orders', orderCreationLimiter, upload.single('proof'), validateUploadedFile, validateOrderInput, async (req, res) => {
+        const staffUser = await verifyOptionalToken(req);
 
-        let { proof } = req.body; // Can be a URL string if no file uploaded, or undefined
+        // Verificar suscripción SaaS antes de crear pedidos (exenta soporte maestro)
+        if (!isSupportMasterUser(staffUser)) {
+            try {
+                const saas = saasService.getCachedSaaSStatus() || await saasService.getSaaSStatus();
+                if (saas && (saas.estado === 'Suspendida' || saas.estado === 'Suspendido' || saas.isExpired)) {
+                    return res.status(403).json({
+                        error: 'El servicio de recepción de pedidos se encuentra temporalmente inactivo.',
+                        code: 'SAAS_SUSPENDED'
+                    });
+                }
+            } catch (_) {}
+        }
 
-        // If file uploaded, compress it server-side (Sharp → WebP) before saving
+        const { client, phone, address, notes, type, payment, table, items, total } = req.body;
+        const waiterId = staffUser ? (req.body.waiterId || staffUser.id) : null;
+        const waiterName = staffUser ? (req.body.waiterName || staffUser.name) : null;
+
+        let { proof } = req.body;
+        // Evitar rutas arbitrarias en pedidos públicos cuando no se subió archivo real
+        if (!staffUser && !req.file) {
+            proof = null;
+        }
+
         if (req.file) {
             try {
                 const optimized = await processProof(req.file.path);
@@ -92,52 +317,64 @@ module.exports = (io) => {
             }
         }
 
-        let tip = parseFloat(req.body.tip) || 0;
-        let discount = parseFloat(req.body.discount) || 0;
-        let discount_reason = req.body.discount_reason || "";
+        let tip = Math.max(0, parseFloat(req.body.tip) || 0);
+        let discount = staffUser ? Math.max(0, parseFloat(req.body.discount) || 0) : 0;
+        let discount_reason = staffUser ? (req.body.discount_reason || "") : "";
         const delivery_zone = req.body.delivery_zone || "";
-        const delivery_fee = parseFloat(req.body.delivery_fee) || 0;
+        let delivery_fee = Math.max(0, parseFloat(req.body.delivery_fee) || 0);
 
         try {
-            // Generate formatted ID
             const newId = await generateOrderId(type || 'Domicilio');
-            const finalStatus = req.body.status || 'Pendiente';
+            const ALLOWED_STAFF_INITIAL_STATUS = new Set(['Pendiente', 'Recibido', 'En Preparación', 'En preparación', 'En Cocina', 'Terminado', 'Cobrado']);
+            const finalStatus = (staffUser && req.body.status && ALLOWED_STAFF_INITIAL_STATUS.has(req.body.status))
+                ? req.body.status
+                : 'Pendiente';
 
-            // Parse items to detect combos and ensure valid JSON
             let parsedItems = [];
-            let itemsJson = items;
             try {
                 parsedItems = typeof items === 'string' ? JSON.parse(items) : (items || []);
-                itemsJson = JSON.stringify(parsedItems);
             } catch (e) {
                 parsedItems = [];
-                itemsJson = JSON.stringify([]);
             }
 
-            let finalOrderTotal = parseFloat(total) || 0;
+            let finalOrderTotal = Math.max(0, parseFloat(total) || 0);
 
-            // Auto-evaluar combos si están presentes en la orden
-            const comboCalc = calculateOrderCombos(parsedItems);
-            if (comboCalc.totalComboDiscount > 0) {
-                if (discount === 0) {
-                    discount = comboCalc.totalComboDiscount;
-                    if (finalOrderTotal >= comboCalc.subtotalBase) {
-                        finalOrderTotal = Math.max(0, finalOrderTotal - discount);
+            if (!staffUser) {
+                // Recalcular estrictamente precios, variantes, promos, toppings, combos y domicilio desde SQLite
+                const pricing = await recalculatePublicOrderPricing(parsedItems, delivery_zone, type || 'Domicilio', delivery_fee);
+                parsedItems = pricing.sanitizedItems;
+                delivery_fee = pricing.verifiedDeliveryFee;
+                discount = pricing.comboCalc.totalComboDiscount;
+                discount_reason = pricing.comboCalc.discountReason || '';
+                finalOrderTotal = Math.max(0, pricing.comboCalc.netItemsTotal + delivery_fee + tip);
+            } else {
+                // Personal autenticado: mantener flujo actual con auto-evaluación de combos
+                const comboCalc = calculateOrderCombos(parsedItems);
+                if (comboCalc.totalComboDiscount > 0) {
+                    if (discount === 0) {
+                        discount = comboCalc.totalComboDiscount;
+                        if (finalOrderTotal >= comboCalc.subtotalBase) {
+                            finalOrderTotal = Math.max(0, finalOrderTotal - discount);
+                        }
+                    }
+                    if (!discount_reason) {
+                        discount_reason = comboCalc.discountReason;
+                    } else if (!discount_reason.includes(comboCalc.discountReason)) {
+                        discount_reason = `${discount_reason} (${comboCalc.discountReason})`;
                     }
                 }
-                if (!discount_reason) {
-                    discount_reason = comboCalc.discountReason;
-                } else if (!discount_reason.includes(comboCalc.discountReason)) {
-                    discount_reason = `${discount_reason} (${comboCalc.discountReason})`;
-                }
             }
 
-            const account_id = req.body.account_id ? parseInt(req.body.account_id, 10) : null;
-            const cash_amount = parseFloat(req.body.cash_amount) || 0;
-            const transfer_amount = parseFloat(req.body.transfer_amount) || 0;
-            const cash_account_id = req.body.cash_account_id ? parseInt(req.body.cash_account_id, 10) : null;
-            const transfer_account_id = req.body.transfer_account_id ? parseInt(req.body.transfer_account_id, 10) : null;
-            const payment_details = req.body.payment_details ? (typeof req.body.payment_details === 'object' ? JSON.stringify(req.body.payment_details) : req.body.payment_details) : null;
+            const itemsJson = JSON.stringify(parsedItems);
+
+            const account_id = (staffUser && req.body.account_id) ? parseInt(req.body.account_id, 10) : null;
+            const cash_amount = staffUser ? (Math.max(0, parseFloat(req.body.cash_amount) || 0)) : 0;
+            const transfer_amount = staffUser ? (Math.max(0, parseFloat(req.body.transfer_amount) || 0)) : 0;
+            const cash_account_id = (staffUser && req.body.cash_account_id) ? parseInt(req.body.cash_account_id, 10) : null;
+            const transfer_account_id = (staffUser && req.body.transfer_account_id) ? parseInt(req.body.transfer_account_id, 10) : null;
+            const payment_details = (staffUser && req.body.payment_details)
+                ? (typeof req.body.payment_details === 'object' ? JSON.stringify(req.body.payment_details) : req.body.payment_details)
+                : null;
 
             const sql = `INSERT INTO orders (id, client, phone, address, notes, type, payment, status, total, tip, discount, discount_reason, items, waiterId, waiterName, tableNum, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -145,58 +382,42 @@ module.exports = (io) => {
             db.run(sql, [newId, client, phone, address, notes, type, payment, finalStatus, finalOrderTotal, tip, discount, discount_reason, itemsJson, waiterId, waiterName, table, proof, delivery_zone, delivery_fee, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details], function (err) {
                 if (err) return res.status(500).json({ error: err.message });
 
-                if (!parsedItems || parsedItems.length === 0) {
-                    try { parsedItems = JSON.parse(itemsJson); } catch (e) { }
-                }
-
                 const newOrder = {
                     id: newId,
                     client, phone, address, notes, type, payment,
-                    status: finalStatus, total,
-                    tip, discount, discount_reason, 
+                    status: finalStatus,
+                    total: finalOrderTotal,
+                    tip, discount, discount_reason,
                     items: parsedItems,
                     waiterId, waiterName, table,
                     tableNum: table,
                     proof,
                     delivery_zone, delivery_fee,
                     account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details,
-                    // Send ISO string directly. Client handles TZ.
                     timestamp: new Date().toISOString()
                 };
 
-                // Broadcast immediately to ALL connected clients so kitchen, waiters and cashier update in real time
-                io.emit('new_order', newOrder);
-
-                // Notify Kitchen & Admin via Socket.IO rooms
-                io.to('chef').emit('new_order', newOrder);
-                io.to('cocinero').emit('new_order', newOrder); // Support localized role aliases
-                io.to('admin').emit('new_order', newOrder);
-
                 // Si el pedido entra directamente a cocina (no pasa por 'Pendiente')
                 if (finalStatus !== 'Pendiente' && finalStatus !== 'Anulado') {
-                    deductStockForOrder(newId, parsedItems, req.user?.name || waiterName || 'Mesero', io);
+                    deductStockForOrder(newId, parsedItems, staffUser?.name || waiterName || 'Mesero', io);
                 }
-                io.to('cajero').emit('new_order', newOrder);
-                io.to('supervisor').emit('new_order', newOrder);
-                io.to('tracker').emit('new_order', newOrder);
-                io.to('waiter').emit('new_order', newOrder);
-                io.to('mesero').emit('new_order', newOrder);
 
-                // If it's a delivery order, notify delivery drivers
+                // Emisión deduplicada únicamente a salas autenticadas de personal (sin fugas globales io.emit)
+                const targetRooms = [...STAFF_ORDER_ROOMS];
                 if (type === 'Domicilio') {
-                    io.to('delivery').emit('new_order', newOrder);
+                    targetRooms.push('delivery', 'repartidor');
                 }
-
-                // If waiter order, notify the specific waiter
                 if (waiterId) {
-                    io.to(`user_${waiterId}`).emit('new_order', newOrder);
+                    targetRooms.push(`user_${waiterId}`);
                 }
+                io.to(targetRooms).emit('new_order', newOrder);
+
+                // Al turnero público ('tracker') solo se emite ID y estado sin PII ni comprobantes
+                io.to('tracker').emit('new_order', sanitizeOrderForPublicTracker(newOrder));
 
                 // Log initial note to history if present
                 if (notes && notes.trim().length > 0) {
-                    // Determine author: WaiterName, or 'Cliente' (if public), or 'Sistema'
                     const noteAuthor = waiterName || (type === 'Local' ? 'Mesero' : 'Cliente');
-
                     db.run("INSERT INTO notes_log (order_id, note, created_by, resolved) VALUES (?, ?, ?, ?)",
                         [newId, notes, noteAuthor, 0], (err) => {
                             if (err) console.error("Error logging initial note history:", err);
@@ -213,7 +434,6 @@ module.exports = (io) => {
                     const custName = client && client.trim().length > 0 ? client.trim() : 'Cliente';
                     const custAddr = address && address !== 'N/A' ? address.trim() : '';
                     const custZone = delivery_zone ? delivery_zone.trim() : '';
-                    const orderTotal = parseFloat(total) || 0;
 
                     const upsertCustomerSql = `
                         INSERT INTO customers (phone, name, address, delivery_zone, total_orders, total_spent, last_order_at, updated_at)
@@ -233,9 +453,9 @@ module.exports = (io) => {
                             last_order_at = CURRENT_TIMESTAMP,
                             updated_at = CURRENT_TIMESTAMP
                     `;
-                    db.run(upsertCustomerSql, [cleanPhone, custName, custAddr, custZone, orderTotal], (custErr) => {
+                    db.run(upsertCustomerSql, [cleanPhone, custName, custAddr, custZone, finalOrderTotal], (custErr) => {
                         if (custErr) console.error("Error updating customer CRM on order:", custErr.message);
-                        else io.emit('customers_updated');
+                        else io.to(['admin', 'cajero', 'supervisor']).emit('customers_updated');
                     });
                 }
 
@@ -246,129 +466,135 @@ module.exports = (io) => {
         }
     });
 
-    // Get Active Orders (Trackers, Kitchen) - WITH PAGINATION
-    router.get('/orders', (req, res) => {
-        const {
-            page = 1,
-            limit = 50,
-            status,
-            type,
-            from,
-            to
-        } = req.query;
+    // Get Active Orders (Staff full access; Public tracker sanitized without PII & bounded pagination)
+    router.get('/orders', async (req, res) => {
+        const staffUser = await verifyOptionalToken(req);
 
-        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const rawPage = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const maxAllowedLimit = !staffUser
+            ? 50
+            : ((req.query.from || req.query.to) ? 2000 : 500);
+        const safeLimit = Math.max(1, Math.min(maxAllowedLimit, parseInt(req.query.limit, 10) || 50));
+        const offset = (rawPage - 1) * safeLimit;
 
-        // Build dynamic query
-        let sql = `
-            SELECT o.*, 
-            (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id) as notes_count,
-            (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id AND n.solved = 0) as unsolved_notes_count
-            FROM orders o WHERE 1=1
-        `;
+        const status = req.query.status;
+        const type = req.query.type;
+        const from = staffUser ? req.query.from : null;
+        const to = staffUser ? req.query.to : null;
+        const allowAll = Boolean(staffUser && req.query.all === 'true');
+
+        let whereClause = " WHERE 1=1";
         const params = [];
 
-        // Date filter (default: last 24 hours if no date specified AND all != 'true')
-        if (from) {
-            sql += " AND datetime(timestamp) >= datetime(?)";
+        if (!staffUser) {
+            // Visitantes públicos (turnero/tracker): solo pedidos activos recientes (últimas 12h), nunca anulados
+            const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+            whereClause += " AND status != 'Anulado' AND status != 'Cancelado' AND datetime(timestamp) > datetime(?)";
+            params.push(cutoff);
+        } else if (from) {
+            whereClause += " AND datetime(timestamp) >= datetime(?)";
             params.push(from);
-        } else if (req.query.all !== 'true') {
+        } else if (!allowAll) {
             const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            sql += " AND (status NOT IN ('Cobrado', 'Anulado') OR datetime(timestamp) > datetime(?))";
+            whereClause += " AND (status NOT IN ('Cobrado', 'Anulado') OR datetime(timestamp) > datetime(?))";
             params.push(yesterday);
         }
 
         if (to) {
-            sql += " AND datetime(timestamp) <= datetime(?)";
+            whereClause += " AND datetime(timestamp) <= datetime(?)";
             params.push(to);
         }
 
-        // Status filter
         if (status) {
-            sql += " AND status = ?";
+            whereClause += " AND status = ?";
             params.push(status);
         }
 
-        // Type filter
         if (type) {
-            sql += " AND type = ?";
+            whereClause += " AND type = ?";
             params.push(type);
         }
 
-        // Count total for pagination metadata
-        // For count, we don't need the subqueries, but easier to just wrap or replace
-        const countSql = `SELECT COUNT(*) as total FROM orders o WHERE 1=1 ` +
-            (from ? "AND datetime(timestamp) >= datetime(?) " : (req.query.all !== 'true' ? "AND (status NOT IN ('Cobrado', 'Anulado') OR datetime(timestamp) > datetime(?)) " : "")) +
-            (to ? "AND datetime(timestamp) <= datetime(?) " : "") +
-            (status ? "AND status = ? " : "") +
-            (type ? "AND type = ? " : "");
-
-        // Re-map params for count (exact same order/logic as main query clauses)
-        // Note: The params array is already built. We can use it. But for countSql, we need to match the placeholders.
-        // Effectively, just replace the SELECT part of the query built so far? 
-        // But I hardcoded sql string above. Let's restart the logic slightly for safer implementation.
+        const countSql = `SELECT COUNT(*) as total FROM orders o${whereClause}`;
+        const sql = staffUser
+            ? `SELECT o.*,
+                (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id) as notes_count,
+                (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id AND n.solved = 0) as unsolved_notes_count
+               FROM orders o${whereClause}
+               ORDER BY timestamp DESC LIMIT ? OFFSET ?`
+            : `SELECT o.id, o.status, o.type, o.timestamp, o.displayDate
+               FROM orders o${whereClause}
+               ORDER BY timestamp DESC LIMIT ? OFFSET ?`;
 
         db.get(countSql, params, (err, countRow) => {
             if (err) return res.status(500).json({ error: err.message });
 
             const total = countRow ? countRow.total : 0;
-            const totalPages = Math.ceil(total / parseInt(limit));
+            const totalPages = Math.max(1, Math.ceil(total / safeLimit));
 
-            // Add pagination
-            sql += " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
-            params.push(parseInt(limit), offset);
-
-            db.all(sql, params, (err, rows) => {
+            db.all(sql, [...params, safeLimit, offset], (err, rows) => {
                 if (err) return res.status(500).json({ error: err.message });
 
-                // Parse JSON items and add displayDate
-                const orders = rows.map(o => ({
-                    ...o,
-                    table: o.tableNum, // Map tableNum to table for client compatibility
-                    items: JSON.parse(o.items),
-                    // SQLite stores typical "YYYY-MM-DD HH:MM:SS".
-                    // If we just do new Date(o.timestamp), browser might treat as local. 
-                    // We must append 'Z' to force UTC interpretation if it's not present.
-                    // But check if it already has one.
-                    timestamp: o.timestamp && !o.timestamp.endsWith('Z') ? o.timestamp + 'Z' : o.timestamp,
-                    // Determine source for report compatibility
-                    source: o.type === 'Local' ? 'Local' : 'General',
-                    hasNotes: o.notes_count > 0,
-                    hasUnsolvedNotes: o.unsolved_notes_count > 0
-                }));
+                const orders = (rows || []).map(o => {
+                    const normalizedTs = o.timestamp && !o.timestamp.endsWith('Z') ? o.timestamp + 'Z' : o.timestamp;
+                    if (!staffUser) {
+                        return sanitizeOrderForPublicTracker({ ...o, timestamp: normalizedTs });
+                    }
+                    let parsedItems = [];
+                    try { parsedItems = JSON.parse(o.items || '[]'); } catch (_) {}
+                    return {
+                        ...o,
+                        table: o.tableNum,
+                        items: parsedItems,
+                        timestamp: normalizedTs,
+                        source: o.type === 'Local' ? 'Local' : 'General',
+                        hasNotes: o.notes_count > 0,
+                        hasUnsolvedNotes: o.unsolved_notes_count > 0
+                    };
+                });
 
                 res.json({
                     orders,
                     pagination: {
-                        page: parseInt(page),
-                        limit: parseInt(limit),
+                        page: rawPage,
+                        limit: safeLimit,
                         total,
                         totalPages,
-                        hasMore: parseInt(page) < totalPages
+                        hasMore: rawPage < totalPages
                     }
                 });
             });
         });
     });
 
-    // Get Single Order by ID
-    router.get('/orders/:id', (req, res) => {
+    // Get Single Order by ID (Staff gets full order; Public tracker gets non-PII status only)
+    router.get('/orders/:id', async (req, res) => {
         const { id } = req.params;
-        const sql = `
-            SELECT o.*, 
-            (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id) as notes_count,
-            (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id AND n.solved = 0) as unsolved_notes_count
-            FROM orders o WHERE id = ?
-        `;
+        const staffUser = await verifyOptionalToken(req);
+
+        const sql = staffUser
+            ? `SELECT o.*,
+                (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id) as notes_count,
+                (SELECT COUNT(*) FROM order_notes n WHERE n.id_order = o.id AND n.solved = 0) as unsolved_notes_count
+               FROM orders o WHERE id = ?`
+            : `SELECT id, status, type, timestamp, displayDate FROM orders WHERE id = ?`;
+
         db.get(sql, [id], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!row) return res.status(404).json({ error: 'Order not found' });
 
+            const displayDate = row.displayDate || new Date(row.timestamp).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+            if (!staffUser) {
+                return res.json(sanitizeOrderForPublicTracker({ ...row, displayDate }));
+            }
+
+            let parsedItems = [];
+            try { parsedItems = JSON.parse(row.items || '[]'); } catch (_) {}
             const order = {
                 ...row,
                 table: row.tableNum,
-                items: JSON.parse(row.items),
-                displayDate: row.displayDate || new Date(row.timestamp).toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
+                items: parsedItems,
+                displayDate,
                 source: row.type === 'Local' ? 'Local' : 'General',
                 hasNotes: row.notes_count > 0,
                 hasUnsolvedNotes: row.unsolved_notes_count > 0
@@ -382,10 +608,14 @@ module.exports = (io) => {
         const { status, chefName, deliveryDriverName } = req.body;
         const { id } = req.params;
 
+        // Restringir el estado 'Cobrado' exclusivamente a roles de caja / administración
+        if (status === 'Cobrado' && !['admin', 'cajero', 'supervisor'].includes(req.user?.role)) {
+            return res.status(403).json({ error: 'Solo personal de caja o administración puede marcar pedidos como cobrados.' });
+        }
+
         let isExtemporaryCancel = false;
         let approvingAdmin = null;
 
-        // Audit log for cancellations (track who cancelled orders)
         if (status === 'Anulado' || status === 'Cancelado') {
             console.log(`[CANCEL] Order ${id} cancellation requested by ${req.user.name} (role: ${req.user.role})`);
         }
@@ -394,13 +624,11 @@ module.exports = (io) => {
             isExtemporaryCancel = isExtemp;
             approvingAdmin = adminAuthorizer;
 
-            // DELIVERY LOCK: Check if order is already locked by another driver
             if (status === 'En Reparto' || status === 'En ruta') {
                 db.get('SELECT deliveryDriverId, deliveryDriverName FROM orders WHERE id = ?', [id], (err, order) => {
                     if (err) return res.status(500).json({ error: err.message });
                     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-                    // If order already has a driver assigned and it's NOT the current user
                     if (order.deliveryDriverId && order.deliveryDriverId != req.user.id) {
                         return res.status(409).json({
                             error: 'ORDER_LOCKED',
@@ -409,16 +637,14 @@ module.exports = (io) => {
                         });
                     }
 
-                    // Order is available or already locked by this user, proceed with update
                     performStatusUpdate();
                 });
             } else {
-                // Not a delivery status, proceed normally
                 performStatusUpdate();
             }
         };
 
-        // Verificación de anulación / cancelación
+        // Verificación de anulación / cancelación en servidor (sin confiar en x-admin-verified)
         if (status === 'Anulado' || status === 'Cancelado') {
             db.get('SELECT timestamp, client, total, payment FROM orders WHERE id = ?', [id], async (fetchErr, orderRow) => {
                 if (fetchErr) return res.status(500).json({ error: fetchErr.message });
@@ -433,7 +659,7 @@ module.exports = (io) => {
                         adminAuthName = req.user.name;
                     } else {
                         const adminCode = req.body.adminCode || req.headers['x-admin-code'];
-                        const authCheck = await verifyAdminCode(adminCode);
+                        const authCheck = await verifyAdminCode(adminCode, false);
                         if (authCheck.valid) {
                             adminAuthName = authCheck.admin.name;
                         } else {
@@ -444,9 +670,9 @@ module.exports = (io) => {
                     }
                 }
 
-                // Verificación cajero (modo estricto) dentro de la misma jornada
+                // Verificación cajero (modo estricto) validada en servidor
                 if (req.user.role === 'cajero') {
-                    db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], (cfgErr, cfgRow) => {
+                    db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], async (cfgErr, cfgRow) => {
                         let cajeroCanCancel = true;
                         if (cfgRow && cfgRow.value) {
                             try {
@@ -455,22 +681,38 @@ module.exports = (io) => {
                             } catch (e) {}
                         }
 
-                        if (!cajeroCanCancel) {
-                            const isVerified = req.headers['x-admin-verified'] === 'true' || req.body.adminVerified === true || adminAuthName;
-                            if (!isVerified) {
-                                return db.get(
-                                    "SELECT id FROM order_authorizations WHERE order_id = ? AND type = 'cancel' AND status = 'approved' LIMIT 1",
-                                    [id],
-                                    (authErr, authRow) => {
-                                        if (authErr || !authRow) {
-                                            return res.status(403).json({
-                                                error: 'La anulación de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
-                                            });
-                                        }
-                                        handleUpdateFlow(adminAuthName, !isSameDay);
-                                    }
-                                );
+                        if (!cajeroCanCancel && !adminAuthName) {
+                            // 1) Consumir autorización reciente emitida por POST /api/auth/verify-admin
+                            const grant = consumeAdminVerification(req.user.id);
+                            if (grant.valid) {
+                                adminAuthName = grant.admin.name;
+                                return handleUpdateFlow(adminAuthName, !isSameDay);
                             }
+
+                            // 2) O validar código directo si fue enviado en esta misma petición
+                            const directCode = req.body.adminCode || req.headers['x-admin-code'];
+                            if (directCode) {
+                                const directCheck = await verifyAdminCode(directCode, true);
+                                if (directCheck.valid) {
+                                    adminAuthName = directCheck.admin.name;
+                                    return handleUpdateFlow(adminAuthName, !isSameDay);
+                                }
+                            }
+
+                            // 3) O consumir aprobación remota en order_authorizations (de un solo uso)
+                            return db.get(
+                                "SELECT id, resolved_by_name FROM order_authorizations WHERE order_id = ? AND type = 'cancel' AND status = 'approved' LIMIT 1",
+                                [id],
+                                (authErr, authRow) => {
+                                    if (authErr || !authRow) {
+                                        return res.status(403).json({
+                                            error: 'La anulación de pedidos por cajeros requiere autorización previa de un administrador o supervisor.'
+                                        });
+                                    }
+                                    db.run("UPDATE order_authorizations SET status = 'consumed' WHERE id = ?", [authRow.id], () => {});
+                                    handleUpdateFlow(authRow.resolved_by_name || null, !isSameDay);
+                                }
+                            );
                         }
                         handleUpdateFlow(adminAuthName, !isSameDay);
                     });
@@ -485,7 +727,6 @@ module.exports = (io) => {
         handleUpdateFlow();
 
         function performStatusUpdate() {
-            // Build dynamic update query based on provided fields
             const updates = ['status = ?'];
             const values = [status];
 
@@ -549,7 +790,7 @@ module.exports = (io) => {
                 values.push(req.body.proof);
             }
 
-            values.push(id); // WHERE clause
+            values.push(id);
 
             const sql = `UPDATE orders SET ${updates.join(', ')} WHERE id = ?`;
 
@@ -571,36 +812,19 @@ module.exports = (io) => {
                     proof: req.body.proof
                 };
 
-                // Broadcast status updates immediately to all connected clients
-                io.emit('order_status_update', updateData);
-                io.emit('order_updated', updateData);
-
-                // Notify relevant rooms via Socket.IO
-                io.to('admin').emit('order_status_update', updateData);
-                io.to('cajero').emit('order_status_update', updateData);
-                io.to('supervisor').emit('order_status_update', updateData);
-                io.to('admin').emit('order_updated', updateData);
-                io.to('cajero').emit('order_updated', updateData);
-                io.to('supervisor').emit('order_updated', updateData);
-                io.to('chef').emit('order_status_update', updateData);
-                io.to('cocinero').emit('order_status_update', updateData);
-                io.to('tracker').emit('order_status_update', updateData);
-                io.to('mesero').emit('order_status_update', updateData);
-                io.to('waiter').emit('order_status_update', updateData);
-                io.to('mesero').emit('order_updated', updateData);
-                io.to('waiter').emit('order_updated', updateData);
-
-                // Emit to delivery room when status is delivery-related OR when deliveryDriverId changes (including unlock)
+                // Emisión deduplicada a salas autenticadas de personal
+                const statusRooms = [...STAFF_ORDER_ROOMS];
                 if (status === 'Terminado' || status === 'En ruta' || status === 'En Reparto' || status === 'Entregado' || req.body.deliveryDriverId !== undefined) {
-                    io.to('delivery').emit('order_status_update', updateData);
-                    io.to('repartidor').emit('order_status_update', updateData);
-                    io.to('delivery').emit('order_updated', updateData);
-                    io.to('repartidor').emit('order_updated', updateData);
+                    statusRooms.push('delivery', 'repartidor');
                 }
+                io.to(statusRooms).emit('order_status_update', updateData);
+                io.to(statusRooms).emit('order_updated', updateData);
+
+                // Al turnero público solo se envía ID y estado
+                io.to('tracker').emit('order_status_update', { id, status });
 
                 if (status === 'Cobrado') {
-                    io.to('admin').emit('cashflow_updated', { type: 'order_collected', orderId: id });
-                    io.to('cajero').emit('cashflow_updated', { type: 'order_collected', orderId: id });
+                    io.to(['admin', 'cajero', 'supervisor']).emit('cashflow_updated', { type: 'order_collected', orderId: id });
                 }
 
                 // INVENTARIO AUTOMÁTICO: Descuento al pasar a cocina / Reintegro al anular
@@ -609,7 +833,6 @@ module.exports = (io) => {
                 } else if (status === 'Anulado' || status === 'Cancelado') {
                     revertStockForOrder(id, req.user?.name || 'Admin', io);
 
-                    // REGISTRO DE AUDITORÍA ANTIFRAUDE: Guarda quién anuló, monto, motivo y jornada
                     db.get("SELECT client, total, payment, timestamp FROM orders WHERE id = ?", [id], (fetchErr, ordRow) => {
                         const auditAction = isExtemporaryCancel ? 'ORDER_CANCELLED_EXTEMPORARY' : 'ORDER_CANCELLED';
                         logAudit(auditAction, req.user?.id || 'unknown', req.ip, {
@@ -632,8 +855,8 @@ module.exports = (io) => {
         }
     });
 
-    // POST /orders/:id/cobrar — Cobrar pedido con método de pago (Efectivo, Transferencia, Datáfono, Pago Mixto), cuentas y comprobante
-    router.post('/orders/:id/cobrar', verifyToken, upload.single('proof'), async (req, res) => {
+    // POST /orders/:id/cobrar — Cobrar pedido (Solo Admin / Cajero / Supervisor)
+    router.post('/orders/:id/cobrar', verifyToken, requireRole(['admin', 'cajero']), upload.single('proof'), validateUploadedFile, async (req, res) => {
         const { id } = req.params;
         const {
             payment = 'Efectivo',
@@ -646,7 +869,6 @@ module.exports = (io) => {
             notes
         } = req.body;
 
-        // Process proof file if uploaded
         let proofPath = null;
         if (req.file) {
             try {
@@ -762,34 +984,15 @@ module.exports = (io) => {
                     items: parsedItems
                 };
 
-                // Notify all panels & connected clients immediately
-                io.emit('order_status_update', updateData);
-                io.emit('order_updated', updateData);
-
-                io.to('admin').emit('order_status_update', updateData);
-                io.to('cajero').emit('order_status_update', updateData);
-                io.to('supervisor').emit('order_status_update', updateData);
-                io.to('admin').emit('order_updated', updateData);
-                io.to('cajero').emit('order_updated', updateData);
-                io.to('supervisor').emit('order_updated', updateData);
-                io.to('chef').emit('order_status_update', updateData);
-                io.to('cocinero').emit('order_status_update', updateData);
-                io.to('tracker').emit('order_status_update', updateData);
-                io.to('mesero').emit('order_status_update', updateData);
-                io.to('waiter').emit('order_status_update', updateData);
-                io.to('mesero').emit('order_updated', updateData);
-                io.to('waiter').emit('order_updated', updateData);
-                io.to('delivery').emit('order_status_update', updateData);
-                io.to('repartidor').emit('order_status_update', updateData);
-
+                const collectRooms = [...STAFF_ORDER_ROOMS, 'delivery', 'repartidor'];
                 if (order.waiterId) {
-                    io.to(`user_${order.waiterId}`).emit('order_status_update', updateData);
-                    io.to(`user_${order.waiterId}`).emit('order_updated', updateData);
+                    collectRooms.push(`user_${order.waiterId}`);
                 }
+                io.to(collectRooms).emit('order_status_update', updateData);
+                io.to(collectRooms).emit('order_updated', updateData);
+                io.to('tracker').emit('order_status_update', { id, status: 'Cobrado' });
 
-                // Notify cashflow to refresh
-                io.to('admin').emit('cashflow_updated', { type: 'order_collected', orderId: id });
-                io.to('cajero').emit('cashflow_updated', { type: 'order_collected', orderId: id });
+                io.to(['admin', 'cajero', 'supervisor']).emit('cashflow_updated', { type: 'order_collected', orderId: id });
 
                 res.json({ success: true, message: 'Pedido cobrado exitosamente', order: updateData });
             });

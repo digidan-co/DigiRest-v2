@@ -2,19 +2,45 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const bcrypt = require('bcrypt');
-const { verifyToken } = require('./auth');
+const { verifyToken, requireRole } = require('./auth');
 const { validateConfig } = require('../middleware/validators');
 const { logAudit } = require('../utils/auditLogger');
 
+const PUBLIC_CONFIG_KEYS = new Set([
+    'dataRestaurant',
+    'AcountMoney',
+    'bankAccounts',
+    'imgRestaurantDefault',
+    'imgBannerDefault',
+    'uiNameColor',
+    'uiPrimaryColor',
+    'uiContrastColor',
+    'uiThemeId',
+    'uiBgAside'
+]);
+
+const ADMIN_ONLY_CONFIG_KEYS = new Set([
+    'AcountMoney',
+    'bankAccounts',
+    'imgRestaurantDefault',
+    'imgBannerDefault',
+    'uiNameColor',
+    'uiPrimaryColor',
+    'uiContrastColor',
+    'uiThemeId',
+    'uiBgAside'
+]);
+
 module.exports = (io) => {
-    // Get Config (Public)
+    // Get Config (Whitelisted public UI/payment keys)
     router.get('/config/:key', (req, res) => {
         const { key } = req.params;
+        if (!PUBLIC_CONFIG_KEYS.has(key)) {
+            return res.json(null);
+        }
         db.get("SELECT value FROM config WHERE key = ?", [key], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!row) {
-                // If config key doesn't exist yet (e.g. imgBannerDefault), return null instead of 404
-                // so the frontend client doesn't log unhandled API_ERROR
                 return res.json(null);
             }
             try {
@@ -26,20 +52,49 @@ module.exports = (io) => {
         });
     });
 
-    // Set Config (Authenticated users only — cajero included for isOpen toggle and close register)
-    router.post('/config', verifyToken, validateConfig, (req, res) => {
-        const { key, value } = req.body;
+    // Set Config (Admin/Supervisor/Cajero only; Cajero cannot alter bank accounts or strict antifraud flags)
+    router.post('/config', verifyToken, requireRole(['admin', 'cajero']), validateConfig, (req, res) => {
+        const { key } = req.body;
+        let { value } = req.body;
 
-        const jsonValue = JSON.stringify(value);
-        const sql = `INSERT INTO config (key, value) VALUES (?, ?) 
-                     ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
+        if (key === 'orderCounter_PG' || key === 'orderCounter_PL') {
+            return res.status(403).json({ error: 'Usa el endpoint de reinicio de contadores con verificación de administrador.' });
+        }
 
-        db.run(sql, [key, jsonValue], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
+        if (req.user.role === 'cajero' && ADMIN_ONLY_CONFIG_KEYS.has(key)) {
+            return res.status(403).json({ error: 'Solo un administrador o supervisor puede modificar esta configuración.' });
+        }
 
-            io.emit('config_updated', { key, value });
-            res.json({ message: 'Config saved', key });
-        });
+        const saveValue = (finalVal) => {
+            const jsonValue = JSON.stringify(finalVal);
+            const sql = `INSERT INTO config (key, value) VALUES (?, ?) 
+                         ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
+
+            db.run(sql, [key, jsonValue], function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+
+                io.emit('config_updated', { key, value: finalVal });
+                res.json({ message: 'Config saved', key });
+            });
+        };
+
+        // Si un cajero cambia dataRestaurant (ej. abrir/cerrar turno isOpen), preservar banderas antifraude
+        if (req.user.role === 'cajero' && key === 'dataRestaurant' && value && typeof value === 'object') {
+            return db.get("SELECT value FROM config WHERE key = 'dataRestaurant'", [], (err, row) => {
+                if (err) return res.status(500).json({ error: err.message });
+                let current = {};
+                if (row && row.value) {
+                    try { current = JSON.parse(row.value) || {}; } catch (_) {}
+                }
+                const safeValue = {
+                    ...current,
+                    isOpen: Boolean(value.isOpen)
+                };
+                saveValue(safeValue);
+            });
+        }
+
+        saveValue(value);
     });
 
     // Reset Order Counters (Admin only — requires password re-confirmation)

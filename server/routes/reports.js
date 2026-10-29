@@ -1,8 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { verifyToken } = require('./auth');
+const { verifyToken, requireRole } = require('./auth');
 const { Parser } = require('json2csv');
+
+// Previene inyección de fórmulas en Excel/CSV (=, +, -, @ al inicio de cadenas de usuario)
+function safeCell(val) {
+    if (typeof val !== 'string' || val.length === 0) return val || '';
+    if (/^[=+\-@\t\r]/.test(val)) return `'${val}`;
+    return val;
+}
 
 module.exports = (io) => {
 
@@ -10,7 +17,7 @@ module.exports = (io) => {
     // To match "today" in Colombia (UTC-5), we apply '-5 hours' offset in SQLite
     // so that date(timestamp, '-5 hours') returns the Colombia calendar date.
 
-    router.get('/daily-export', verifyToken, (req, res) => {
+    router.get('/daily-export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         const sql = `
             SELECT * FROM orders 
             WHERE date(timestamp, '-5 hours') = date('now', '-5 hours')
@@ -40,21 +47,21 @@ module.exports = (io) => {
 
                 rows.forEach(row => {
                     const mappedOrder = {
-                        'ID Pedido': row.id,
-                        'Cliente': row.client || '',
-                        'Mesero': row.waiterName || '',
-                        'Mesa': row.tableNum || '',
-                        'Chef': row.chefName || '',
-                        'Repartidor': row.deliveryDriverName || '',
-                        'Tipo': row.type || '',
-                        'Método de Pago': row.payment || '',
+                        'ID Pedido': safeCell(row.id),
+                        'Cliente': safeCell(row.client || ''),
+                        'Mesero': safeCell(row.waiterName || ''),
+                        'Mesa': safeCell(row.tableNum || ''),
+                        'Chef': safeCell(row.chefName || ''),
+                        'Repartidor': safeCell(row.deliveryDriverName || ''),
+                        'Tipo': safeCell(row.type || ''),
+                        'Método de Pago': safeCell(row.payment || ''),
                         'Propina': row.tip || 0,
                         'Descuento': row.discount || 0,
-                        'Razón Descuento': row.discount_reason || '',
+                        'Razón Descuento': safeCell(row.discount_reason || ''),
                         'Total Base': (parseFloat(row.total) || 0) + (parseFloat(row.discount) || 0) - (parseFloat(row.tip) || 0),
                         'Total Final': row.total || 0,
-                        'Estado': row.status || '',
-                        'Notas': row.notes || ''
+                        'Estado': safeCell(row.status || ''),
+                        'Notas': safeCell(row.notes || '')
                     };
 
                     if (row.status === 'Anulado' || row.status === 'Cancelado' || row.status === 'Eliminado') {

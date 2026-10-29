@@ -1,23 +1,36 @@
+# ==========================================
+# Stage 1: Compilar Frontend Vue + Precompresión (.br / .gz)
+# ==========================================
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci || npm install
+COPY frontend/ ./
+RUN npm run build
+
+# ==========================================
+# Stage 2: Imagen Ligera de Producción
+# ==========================================
 FROM node:20-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
+RUN npm install --omit=dev && npm cache clean --force
 
-# Instalamos únicamente las dependencias de producción de Node.js (cero paquetes del SO, cero compiladores)
-RUN npm install --omit=dev
+# Copiar únicamente el código necesario del servidor y el frontend compilado
+COPY server/ ./server/
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# --- CACHE BUSTING ---
-ENV CACHE_BUST=1.5
+RUN mkdir -p /app/server/uploads /app/server/data && chmod 750 /app/server/uploads /app/server/data
 
-COPY . .
-
-# Variables de entorno por defecto
+# Variables de entorno optimizadas para contenedor de 256MB en VPS
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV UV_THREADPOOL_SIZE=2
+ENV NODE_OPTIONS="--max-old-space-size=160"
 
-# Puerto expuesto
 EXPOSE 3000
 
-# Permisos y arranque
-CMD ["sh", "-c", "mkdir -p /app/server/uploads /app/server/data && chmod -R 777 /app/server/uploads /app/server/data && node --max-old-space-size=384 server/index.js"]
+CMD ["sh", "-c", "mkdir -p /app/server/uploads /app/server/data && exec node server/index.js"]

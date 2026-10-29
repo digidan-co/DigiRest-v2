@@ -1,14 +1,57 @@
+const net = require('net');
 const rateLimit = require('express-rate-limit');
 
+function normalizeClientIp(raw) {
+    let ip = String(raw || '127.0.0.1').trim();
+    if (ip.includes(',')) {
+        ip = ip.split(',')[0].trim();
+    }
+    if (ip.startsWith('::ffff:')) {
+        ip = ip.slice(7);
+    }
+    const zoneIdx = ip.indexOf('%');
+    if (zoneIdx !== -1) {
+        ip = ip.slice(0, zoneIdx);
+    }
+    if (typeof rateLimit.ipKeyGenerator === 'function') {
+        return rateLimit.ipKeyGenerator(ip || '127.0.0.1');
+    }
+    if (net.isIP(ip) === 6) {
+        // Normalizar IPv6 por prefijo /64 cuando express-rate-limit < v8 no incluye ipKeyGenerator
+        const parts = ip.toLowerCase().split('::');
+        const left = parts[0] ? parts[0].split(':').filter(Boolean) : [];
+        const right = parts.length > 1 && parts[1] ? parts[1].split(':').filter(Boolean) : [];
+        const missing = Math.max(0, 8 - (left.length + right.length));
+        const full = [...left, ...Array(missing).fill('0'), ...right].map(h => h.padStart(4, '0'));
+        return `${full.slice(0, 4).join(':')}::/64`;
+    }
+    return ip || '127.0.0.1';
+}
+
+const safeKeyGenerator = (req) => normalizeClientIp(req.ip || req.socket?.remoteAddress || '127.0.0.1');
+
 // Rate limiter for login endpoint (strict)
-// Allows 20 attempts per IP per 15 minutes — sufficient for multiple staff
-// while preventing brute-force attacks. Uses skipSuccessfulRequests=true
-// so successful logins don't count against the limit.
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // 20 attempts per 15 min per IP
+    max: 20, // 20 failed attempts per 15 min per IP
+    keyGenerator: safeKeyGenerator,
     message: {
         error: 'Usuario bloqueado por multiples intentos fallidos, por favor inténtalo más tarde'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    skipFailedRequests: false
+});
+
+// Rate limiter for admin PIN verification modal (prevents 4-digit PIN brute-forcing)
+const verifyAdminLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // 10 failed PIN attempts per 15 min per IP
+    keyGenerator: safeKeyGenerator,
+    message: {
+        valid: false,
+        error: 'Demasiados intentos de autorización fallidos. Espera 15 minutos.'
     },
     standardHeaders: true,
     legacyHeaders: false,
@@ -75,23 +118,24 @@ function checkBlocked(credential) {
     return { blocked: false };
 }
 
-// Rate limiter for API endpoints (moderate)
+// Rate limiter for API endpoints (enforced on all requests except health/webhook)
 const apiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 500, // 500 requests per minute (increased for busy operations)
+    max: 600, // 600 requests per minute per IP
+    keyGenerator: safeKeyGenerator,
+    skip: (req) => req.path === '/health' || req.path === '/saas/webhook',
     message: {
         error: 'Demasiadas solicitudes. Por favor, espera un momento.'
     },
     standardHeaders: true,
-    legacyHeaders: false,
-    // Skip rate limiting for successful requests to avoid blocking legitimate users
-    skipSuccessfulRequests: true
+    legacyHeaders: false
 });
 
 // Rate limiter for file uploads (strict)
 const uploadLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 100, // 100 uploads per hour
+    keyGenerator: safeKeyGenerator,
     message: {
         error: 'Demasiadas subidas de archivos. Por favor, intenta más tarde.'
     },
@@ -101,9 +145,11 @@ const uploadLimiter = rateLimit({
 
 module.exports = {
     loginLimiter,
+    verifyAdminLimiter,
     recordFailedAttempt,
     resetAttempts,
     checkBlocked,
     apiLimiter,
-    uploadLimiter
+    uploadLimiter,
+    safeKeyGenerator
 };

@@ -45,17 +45,41 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Parse ALLOWED_ORIGINS from environment (comma-separated)
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-    : ['http://localhost:3000'];
+const rawAllowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()).filter(Boolean)
+    : [];
+
+function isAllowedOrigin(origin, hostHeader = '') {
+    if (!origin) return true; // Peticiones same-origin directas / server-to-server
+    if (rawAllowedOrigins.includes(origin)) return true;
+    try {
+        const parsed = new URL(origin);
+        const cleanHost = String(hostHeader).split(',')[0].trim().toLowerCase();
+        // Permitir siempre same-origin (cuando Origin coincide con el Host del propio contenedor)
+        if (cleanHost && parsed.host.toLowerCase() === cleanHost) return true;
+        // En desarrollo local o subdominios oficiales *.digidan.co si ALLOWED_ORIGINS='*' o vacío
+        if (rawAllowedOrigins.length === 0 || rawAllowedOrigins.includes('*')) {
+            if (
+                parsed.hostname === 'localhost' ||
+                parsed.hostname === '127.0.0.1' ||
+                parsed.hostname === 'digidan.co' ||
+                parsed.hostname.endsWith('.digidan.co')
+            ) {
+                return true;
+            }
+        }
+    } catch (_) {
+        return false;
+    }
+    return false;
+}
 
 const io = new Server(server, {
-    // Connection options
     pingTimeout: 60000,
     pingInterval: 25000,
+    maxHttpBufferSize: 100 * 1024, // 100KB max payload por mensaje WebSocket
     allowUpgrades: true,
     transports: ['polling', 'websocket'],
-    // Cookie settings for session persistence (Traefik sticky sessions)
     cookie: {
         name: 'io',
         httpOnly: true,
@@ -63,9 +87,12 @@ const io = new Server(server, {
         secure: process.env.NODE_ENV === 'production',
         path: '/'
     },
-    // CORS configuration
+    allowRequest: (req, callback) => {
+        const ok = isAllowedOrigin(req.headers.origin, req.headers.host);
+        callback(null, ok);
+    },
     cors: {
-        origin: true,
+        origin: (origin, cb) => cb(null, !origin || rawAllowedOrigins.includes(origin) || rawAllowedOrigins.includes('*') || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$|https:\/\/([a-z0-9-]+\.)?digidan\.co$/i.test(origin)),
         methods: ["GET", "POST"],
         credentials: true,
         allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"]
@@ -74,21 +101,20 @@ const io = new Server(server, {
 
 // Security Middleware
 app.use(helmet({
-    contentSecurityPolicy: false, // Disable for dev, enable in production with proper config
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
 }));
 
-// CSP enforcement
+// CSP enforcement (sin 'unsafe-eval')
 app.use((req, res, next) => {
-    // Policy tailored to local-first offline-ready resources while allowing Google Fonts and secure assets
     const cspPolicy = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "script-src 'self' 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' data: https://fonts.gstatic.com",
         "img-src 'self' data: blob: https:",
         "media-src 'self' https://cdn-icons-mp4.flaticon.com",
-        "connect-src 'self' ws: wss: ws://* wss://*",
+        "connect-src 'self' ws: wss:",
         "frame-src 'none'",
         "object-src 'none'",
         "base-uri 'self'",
@@ -99,27 +125,33 @@ app.use((req, res, next) => {
     next();
 });
 
-// Compress responses — skip images/binary (they're already compressed)
+// Compress dynamic responses — skip images/binary and already precompressed assets
 app.use(compression({
     filter: (req, res) => {
+        if (res.getHeader('Content-Encoding')) return false;
         const contentType = res.getHeader('Content-Type') || '';
-        // Don't compress already-compressed or binary responses
         if (/image|video|audio|font|zip|gz|br/.test(contentType)) return false;
         return compression.filter(req, res);
     },
-    level: 6, // Balanced: good compression without max CPU
-    threshold: 1024 // Only compress responses > 1KB
-}));
-app.use(cors({
-    origin: true,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    level: 6,
+    threshold: 1024
 }));
 
-// Body parsing — 2MB max (images should come as multipart/form-data via multer, not JSON)
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use((req, res, next) => {
+    cors({
+        origin: (origin, cb) => {
+            if (isAllowedOrigin(origin, req.headers.host)) return cb(null, true);
+            return cb(new Error('Origen CORS no autorizado'));
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Code']
+    })(req, res, next);
+});
+
+// Body parsing — 512KB max (imágenes se suben por multipart/form-data vía multer)
+app.use(express.json({ limit: '512kb', type: ['application/json', 'application/csp-report'] }));
+app.use(express.urlencoded({ extended: true, limit: '512kb' }));
 
 // Dynamic PWA Manifest
 app.get('/manifest.json', (req, res) => {
@@ -189,23 +221,67 @@ app.use('/server/uploads', express.static(path.join(__dirname, 'uploads'), uploa
 // Shared cache strategy for static assets
 function staticCacheHeaders(res, filePath) {
     if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
-        // HTML and service worker: never cache (always fresh)
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    } else if (
+        filePath.includes(`${path.sep}assets${path.sep}`) &&
+        /\.(js|css|woff2?|ttf|eot|webp|png|jpg|jpeg|svg)$/.test(filePath)
+    ) {
+        // Hashed Vite assets: cache for 1 year (immutable)
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     } else if (/\.(webp|png|jpg|jpeg|gif|ico|svg|mp3|mp4|woff2?|ttf|eot)$/.test(filePath)) {
-        // Images, media and fonts: cache for 7 days (immutable)
         res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     } else if (/\.(js|css)$/.test(filePath)) {
-        // JS/CSS: cache with ETag revalidation and stale-while-revalidate for fast loads
         res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     }
 }
 
-// Built Vue frontend (Vite output) — the only frontend served.
+// Built Vue frontend (Vite output) — serve precompressed .br / .gz assets with zero CPU overhead
 const frontendDist = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
+    const PRECOMPRESSED_MIMES = {
+        '.js': 'application/javascript; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.svg': 'image/svg+xml',
+        '.json': 'application/json; charset=utf-8'
+    };
+
+    app.use((req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+        const ext = path.extname(req.path).toLowerCase();
+        const mimeType = PRECOMPRESSED_MIMES[ext];
+        if (!mimeType) return next();
+
+        const safeRel = path.normalize(req.path).replace(/^(\.\.(\/|\\|$))+/, '');
+        const origFile = path.join(frontendDist, safeRel);
+        if (!origFile.startsWith(frontendDist)) return next();
+
+        const acceptEnc = req.headers['accept-encoding'] || '';
+        let chosenExt = null;
+        let chosenEncoding = null;
+
+        if (acceptEnc.includes('br') && fs.existsSync(`${origFile}.br`)) {
+            chosenExt = '.br';
+            chosenEncoding = 'br';
+        } else if (acceptEnc.includes('gzip') && fs.existsSync(`${origFile}.gz`)) {
+            chosenExt = '.gz';
+            chosenEncoding = 'gzip';
+        }
+
+        if (!chosenExt) return next();
+
+        req.url = `${req.path}${chosenExt}`;
+        res.setHeader('Content-Encoding', chosenEncoding);
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Vary', 'Accept-Encoding');
+        staticCacheHeaders(res, origFile);
+        next();
+    });
+
     app.use(express.static(frontendDist, {
         maxAge: '1h',
         etag: true,
+        index: 'index.html',
+        dotfiles: 'deny',
         setHeaders: staticCacheHeaders
     }));
     console.log('🌐 Sirviendo frontend Vue compilado desde frontend/dist');
@@ -216,20 +292,20 @@ if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
 // Apply rate limiting to all API routes
 app.use('/api', apiLimiter);
 
-// CSP violation reporting endpoint
+// CSP violation reporting endpoint (sanitized & bounded)
 app.post('/api/csp-report', (req, res) => {
-    const report = req.body;
-    console.warn('CSP Violation:', {
-        documentUri: report['document-uri'],
-        violatedDirective: report['violated-directive'],
-        blockedUri: report['blocked-uri'],
-        originalPolicy: report['original-policy'],
-        timestamp: new Date().toISOString()
-    });
+    const raw = req.body && (req.body['csp-report'] || req.body);
+    if (raw && typeof raw === 'object') {
+        console.warn('CSP Violation:', {
+            documentUri: String(raw['document-uri'] || '').slice(0, 200),
+            violatedDirective: String(raw['violated-directive'] || '').slice(0, 100),
+            blockedUri: String(raw['blocked-uri'] || '').slice(0, 200)
+        });
+    }
     res.status(204).end();
 });
 
-const { router: authRouter, verifyToken, requireRole, setIo } = require('./routes/auth');
+const { router: authRouter, verifyToken, verifyOptionalToken, requireRole, setIo } = require('./routes/auth');
 setIo(io);
 const usersRouter = require('./routes/users')(io);
 const productsRouter = require('./routes/products')(io);
@@ -272,17 +348,47 @@ app.use('/api', inventoryRouter);
 app.use('/api', cashflowRouter);
 app.use('/api', authorizationsRouter);
 
-// SaaS Manager — estado de suscripción y anuncios desde panel.digidan.co
+// SaaS Manager — estado de suscripción, webhook firmado y anuncios desde panel.digidan.co
 const saasService = require('./saasService');
 app.get('/api/saas/status', async (req, res) => {
     try {
+        const staffUser = await verifyOptionalToken(req);
         const status = await saasService.getSaaSStatus();
-        res.json(status);
+        if (staffUser) {
+            return res.json(status);
+        }
+        // Respuesta mínima sin exponer URLs internas ni subdominio a visitantes anónimos
+        return res.json({
+            configured: Boolean(status.configured),
+            estado: status.estado || 'Activa'
+        });
     } catch (e) {
-        // Si el panel no responde, retornamos un estado permisivo para no bloquear el sistema
-        res.json({ estado: 'Activa', saldo_documentos: 0, vencimiento: null });
+        res.json({ configured: false, estado: 'Activa' });
     }
 });
+
+// Push Webhook firmado (HMAC-SHA256) desde panel.digidan.co para sincronización en tiempo real
+app.post('/api/saas/webhook', (req, res) => {
+    const rawTs = req.headers['x-digidan-timestamp'];
+    const signature = req.headers['x-digidan-signature'];
+
+    if (!saasService.verifySaaSWebhookSignature(rawTs, signature, req.body || {})) {
+        return res.status(401).json({ error: 'Firma de webhook inválida o expirada' });
+    }
+
+    const payload = req.body || {};
+    saasService.invalidateCache(payload.data || payload);
+
+    if (io) {
+        io.to('admin').emit('saas_status_updated', {
+            event: payload.event || 'status_changed',
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    return res.json({ ok: true });
+});
+
 app.get('/api/saas/anuncios', verifyToken, requireRole(['admin']), async (req, res) => {
     try {
         const anuncios = await saasService.getAnunciosActivos();
@@ -300,13 +406,13 @@ app.get('/api/saas/diagnostics', verifyToken, requireRole(['admin']), async (req
     let anunciosTest = null;
 
     try {
-        statusTest = await saasService.getSaaSStatus();
+        statusTest = await saasService.getSaaSStatus(true);
     } catch (e) {
         statusTest = { error: e.message };
     }
 
     try {
-        anunciosTest = await saasService.getAnunciosActivos();
+        anunciosTest = await saasService.getAnunciosActivos(true);
     } catch (e) {
         anunciosTest = { error: e.message };
     }
@@ -314,103 +420,132 @@ app.get('/api/saas/diagnostics', verifyToken, requireRole(['admin']), async (req
     res.json({
         configured_url: url || '(no definida en Dokploy)',
         has_key: Boolean(key),
-        key_preview: key ? `${key.substring(0, 8)}...${key.substring(key.length - 4)}` : '(no definida en Dokploy)',
+        key_preview: key ? `${key.substring(0, 4)}...${key.substring(key.length - 4)}` : '(no definida en Dokploy)',
         status: statusTest,
         anuncios_count: Array.isArray(anunciosTest) ? anunciosTest.length : 0,
         anuncios: anunciosTest
     });
 });
 
-// Health check endpoint (no rate limiting)
+// Health check endpoint (exempt from apiLimiter)
 app.get('/api/health', (req, res) => {
     const health = {
         status: 'ok',
         server: 'pos-backend',
-        version: '1.0.0',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: process.env.NODE_ENV || 'development'
+        timestamp: new Date().toISOString()
     };
 
-    // Test database connection
     db.get('SELECT 1', [], (err) => {
         if (err) {
             health.status = 'degraded';
             health.database = 'error';
-        } else {
-            health.database = 'connected';
+            return res.status(503).json(health);
         }
+        health.database = 'connected';
         res.json(health);
     });
 });
 
 const jwt = require('jsonwebtoken');
 
-// Socket.io Logic with Secure Room Authorization
+// Socket.io Logic with Strict JWT Room Authorization
 const PUBLIC_ROOMS = new Set(['tracker', 'public', 'client']);
 
-io.on('connection', (socket) => {
+function getAllowedRoomsForUser(userObj) {
+    const allowed = new Set(['tracker', 'public', 'client']);
+    if (!userObj || !userObj.role) return allowed;
+    const r = String(userObj.role).toLowerCase();
+    allowed.add(r);
+    if (r === 'chef' || r === 'cocinero') {
+        allowed.add('chef');
+        allowed.add('cocinero');
+    }
+    if (r === 'mesero' || r === 'waiter') {
+        allowed.add('mesero');
+        allowed.add('waiter');
+    }
+    if (r === 'delivery' || r === 'repartidor') {
+        allowed.add('delivery');
+        allowed.add('repartidor');
+    }
+    if (r === 'admin' || r === 'cajero' || r === 'supervisor') {
+        allowed.add('admin');
+        allowed.add('cajero');
+        allowed.add('supervisor');
+    }
+    if (userObj.id) {
+        allowed.add(`user_${userObj.id}`);
+    }
+    return allowed;
+}
 
-    // Join rooms for real-time notifications
-    socket.on('join_room', (room) => {
-        if (!room) return;
-        socket.join(room);
-    });
+function verifySocketJwt(token, callback) {
+    const SECRET = process.env.JWT_SECRET;
+    if (!token || !SECRET) return callback(null);
 
-    // Authenticate socket using JWT token or role payload
-    socket.on('authenticate', (data = {}) => {
-        const token = data.token || socket.handshake.auth?.token;
-        const SECRET = process.env.JWT_SECRET;
-
-        const joinRoleRooms = (role, userId) => {
-            if (!role) return;
-            const r = String(role).toLowerCase();
-            socket.join(r);
-            // Join localized aliases to guarantee real-time updates reach all client views
-            if (r === 'chef') socket.join('cocinero');
-            if (r === 'cocinero') socket.join('chef');
-            if (r === 'mesero') socket.join('waiter');
-            if (r === 'waiter') socket.join('mesero');
-            if (r === 'delivery') socket.join('repartidor');
-            if (r === 'repartidor') socket.join('delivery');
-            if (r === 'cajero' || r === 'supervisor') socket.join('admin');
-            if (r === 'admin' || r === 'supervisor') socket.join('cajero');
-            if (r === 'admin' || r === 'cajero') socket.join('supervisor');
-
-            if (userId) {
-                socket.join(`user_${userId}`);
-            }
-            socket.emit('authenticated');
-        };
-
-        if (token && SECRET) {
-            jwt.verify(token, SECRET, (err, decoded) => {
-                if (!err && decoded) {
-                    socket.user = decoded;
-                    joinRoleRooms(decoded.role, decoded.id);
-                } else if (data.role) {
-                    socket.user = { role: data.role, id: data.userId };
-                    joinRoleRooms(data.role, data.userId);
-                }
+    jwt.verify(token, SECRET, (err, decoded) => {
+        if (err || !decoded || !decoded.id) return callback(null);
+        db.get("SELECT token FROM token_blacklist WHERE token = ?", [token], (blErr, blRow) => {
+            if (blErr || blRow) return callback(null);
+            db.get("SELECT token FROM active_sessions WHERE user_id = ?", [decoded.id], (sErr, sRow) => {
+                if (sErr || !sRow || sRow.token !== token) return callback(null);
+                callback(decoded);
             });
-        } else if (data.role) {
-            socket.user = { role: data.role, id: data.userId };
-            joinRoleRooms(data.role, data.userId);
+        });
+    });
+}
+
+io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next();
+    verifySocketJwt(token, (decoded) => {
+        if (decoded) socket.user = decoded;
+        next();
+    });
+});
+
+io.on('connection', (socket) => {
+    // Join rooms with strict authorization check
+    socket.on('join_room', (room) => {
+        if (!room || typeof room !== 'string' || room.length > 64) return;
+        if (PUBLIC_ROOMS.has(room)) {
+            socket.join(room);
+            return;
+        }
+        if (socket.user) {
+            const allowed = getAllowedRoomsForUser(socket.user);
+            if (allowed.has(room)) {
+                socket.join(room);
+            }
         }
     });
 
-    socket.on('disconnect', () => {
+    // Authenticate socket strictly via valid JWT token + active session (never trust raw role payload)
+    socket.on('authenticate', (data = {}) => {
+        const token = (data && typeof data === 'object' ? data.token : null) || socket.handshake.auth?.token;
+        if (!token) return;
 
+        verifySocketJwt(token, (decoded) => {
+            if (!decoded) return;
+            socket.user = decoded;
+            const allowedRooms = getAllowedRoomsForUser(decoded);
+            for (const roomName of allowedRooms) {
+                if (!PUBLIC_ROOMS.has(roomName)) {
+                    socket.join(roomName);
+                }
+            }
+            socket.emit('authenticated');
+        });
     });
+
+    socket.on('disconnect', () => {});
 });
 
 // ====================================================================
 // NIGHTLY NOTES ARCHIVER — runs at midnight Bogotá time (00:00 COT = 05:00 UTC)
-// Purges previous-day order_notes from the active table, keeping notes_log as archive
 // ====================================================================
 function scheduleNightlyNotesArchive() {
     const now = new Date();
-    // Next midnight in Colombia = next 05:00 UTC
     const nextMidnightUTC = new Date();
     nextMidnightUTC.setUTCHours(5, 0, 0, 0);
     if (nextMidnightUTC <= now) {
@@ -421,14 +556,11 @@ function scheduleNightlyNotesArchive() {
 
     setTimeout(() => {
         archivePreviousDayNotes();
-        // Reschedule for next night
-        setInterval(archivePreviousDayNotes, 24 * 60 * 60 * 1000);
-    }, msUntilMidnight);
+        setInterval(archivePreviousDayNotes, 24 * 60 * 60 * 1000).unref();
+    }, msUntilMidnight).unref();
 }
 
 function archivePreviousDayNotes() {
-
-    // Find order_notes from previous days (using Colombia UTC-5 offset)
     db.all(
         "SELECT * FROM order_notes WHERE date(created_at, '-5 hours') < date('now', '-5 hours')",
         [],
@@ -440,7 +572,6 @@ function archivePreviousDayNotes() {
 
             if (rows.length === 0) return;
 
-            // Archive each note to notes_log if not already there (avoid duplicates)
             rows.forEach(note => {
                 db.get(
                     "SELECT id FROM notes_log WHERE order_id = ? AND note = ? AND date(created_at, '-5 hours') = date(?, '-5 hours')",
@@ -457,14 +588,12 @@ function archivePreviousDayNotes() {
                 );
             });
 
-            // Now delete all previous-day notes from the active table
             db.run(
                 "DELETE FROM order_notes WHERE date(created_at, '-5 hours') < date('now', '-5 hours')",
                 [],
                 function (err) {
                     if (err) console.error('Error deleting old active notes:', err);
 
-                    // Maintain WAL file size on VPS disk without blocking active connections
                     db.run('PRAGMA wal_checkpoint(PASSIVE)', (cpErr) => {
                         if (cpErr) console.warn('Nightly WAL checkpoint notice:', cpErr.message);
                     });
@@ -480,9 +609,6 @@ scheduleNightlyNotesArchive();
 // Start the daily database backup scheduler
 const { scheduleDailyBackup } = require('./utils/backupService');
 scheduleDailyBackup();
-
-// --- DEBUG PERSISTENCE CHECK ---
-
 
 // 404 handler (must be after all routes)
 app.use(notFoundHandler);
@@ -509,3 +635,22 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📝 Base de datos: SQLite`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 });
+
+// Graceful shutdown to checkpoint WAL and close SQLite cleanly in Docker
+let isShuttingDown = false;
+function gracefulShutdown(signal) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`\n🛑 [${signal}] Cerrando servidor DigiRest de forma segura...`);
+    server.close(() => {
+        db.run('PRAGMA wal_checkpoint(TRUNCATE)', () => {
+            db.close(() => {
+                process.exit(0);
+            });
+        });
+    });
+    setTimeout(() => process.exit(0), 5000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
