@@ -1,7 +1,6 @@
 node_modules
-frontend/node_modules
+**/node_modules
 frontend/dist
-server/node_modules
 npm-debug.log
 .git
 .gitignore
@@ -12,12 +11,12 @@ server/.env
 server/.env.*
 frontend/.env
 frontend/.env.*
-server/data/*.sqlite
-server/data/*.sqlite-*
-server/data/*.db-*
+server/data/*.sqlite*
+server/data/*.db*
 server/data/backups/
 server/uploads/*
 !server/uploads/.gitkeep
 *.log
 *.md
 .DS_Store
+.kilo
