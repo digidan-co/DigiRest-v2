@@ -8,7 +8,7 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm ci || npm install --prefer-offline --no-audit
+RUN npm ci --prefer-offline --no-audit && npm cache clean --force
 
 COPY frontend/ ./
 RUN npm run build
