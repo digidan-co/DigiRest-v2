@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
-import { importProductsCSV, importCategoriesCSV } from '@/legacy/services/product-service.js';
+import { importProductsCSV, importCategoriesCSV, exportProductsCSV, exportCategoriesCSV } from '@/legacy/services/product-service.js';
 import { populateDishFormExtensions, resetDishToppingsConfig } from '@/legacy/features/toppings-manager.js';
 import { resetDishVariantsConfig } from '@/legacy/features/variants-manager.js';
 import { toast } from '@/legacy/components/ui.js';
@@ -92,8 +92,8 @@ function newCategory() {
     if ($('cat-modal')) $('cat-modal').classList.remove('hidden');
 }
 
-function exportProducts() { window.open('/api/products/export', '_blank'); }
-function exportCategories() { window.open('/api/categories/export', '_blank'); }
+function exportProducts() { exportProductsCSV(); }
+function exportCategories() { exportCategoriesCSV(); }
 
 async function onImportProducts(e) {
     const file = e.target.files[0];

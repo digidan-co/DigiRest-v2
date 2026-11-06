@@ -5,7 +5,7 @@
 
 import { state } from '../core/state.js';
 import { $, formatMoney, escapeHtml } from '../utils/helpers.js';
-import { deleteProduct, deleteCategory, importProductsCSV, importCategoriesCSV, toggleProductRecommended, toggleProductPromo } from '../services/product-service.js';
+import { deleteProduct, deleteCategory, importProductsCSV, importCategoriesCSV, exportProductsCSV, exportCategoriesCSV, toggleProductRecommended, toggleProductPromo } from '../services/product-service.js';
 import { toast, showConfirmModal } from '../components/ui.js';
 import { populateDishFormExtensions } from '../features/toppings-manager.js';
 import { populateDishVariantsExtensions } from '../features/variants-manager.js';
@@ -469,7 +469,7 @@ export function setupDishesCSVListeners() {
 
     if (btnExpProds) {
         btnExpProds.onclick = () => {
-            window.open('/api/products/export', '_blank');
+            exportProductsCSV();
         };
     }
 
@@ -507,7 +507,7 @@ export function setupDishesCSVListeners() {
 
     if (btnExpCats) {
         btnExpCats.onclick = () => {
-            window.open('/api/categories/export', '_blank');
+            exportCategoriesCSV();
         };
     }
 

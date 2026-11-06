@@ -3,11 +3,130 @@ const router = express.Router();
 const path = require('path');
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
-const { upload } = require('../middleware/upload');
+const { upload, csvUpload } = require('../middleware/upload');
 const { processImage } = require('../utils/imageProcessor');
 const { v4: uuidv4 } = require('uuid');
+const csv = require('csv-parser');
+const { Parser } = require('json2csv');
+const fs = require('fs');
 
 module.exports = (io) => {
+
+    // --- CSV PROMOTIONS AND COMBOS ---
+
+    router.get('/promotions-combos/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
+        db.all("SELECT * FROM promotions_combos ORDER BY name ASC", [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            try {
+                const fields = [
+                    'id', 'name', 'description', 'category', 'img', 'type',
+                    'combo_price', 'discount_value', 'items_config', 'available',
+                    'days_of_week', 'start_time', 'end_time', 'channels', 'created_at'
+                ];
+                const parser = new Parser({ fields });
+                const csvData = parser.parse(rows || []);
+
+                res.header('Content-Type', 'text/csv; charset=utf-8');
+                res.header('Content-Disposition', 'attachment; filename=combos_promociones_digirest.csv');
+                res.send(csvData);
+            } catch (err) {
+                console.error('Error generating combos CSV:', err);
+                res.status(500).json({ error: 'Error generating CSV' });
+            }
+        });
+    });
+
+    router.post('/promotions-combos/import', verifyToken, requireRole(['admin']), csvUpload.single('file'), (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: "No se subió ningún archivo" });
+        }
+
+        const filePath = req.file.path;
+        const results = [];
+
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => results.push(data))
+            .on('end', () => {
+                let processed = 0;
+                let errors = 0;
+
+                const dbRun = (sql, params) => {
+                    return new Promise((resolve, reject) => {
+                        db.run(sql, params, function (err) {
+                            if (err) reject(err);
+                            else resolve(this);
+                        });
+                    });
+                };
+
+                const processBatch = async () => {
+                    for (const row of results) {
+                        try {
+                            const name = (row.name || row.nombre || row.combo || row.promocion || '').trim();
+                            if (!name) continue;
+
+                            const description = (row.description !== undefined ? row.description : (row.descripcion || '')).trim();
+                            const category = (row.category || row.categoria || 'Combos').trim();
+                            const img = (row.img || row.imagen || row.foto || '/img/noimage.png').trim() || '/img/noimage.png';
+                            const type = (row.type || row.tipo || 'FIXED_PRICE').trim();
+
+                            const combo_price = parseFloat(String(row.combo_price ?? row.precio_combo ?? row.precio ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+                            const discount_value = parseFloat(String(row.discount_value ?? row.valor_descuento ?? row.descuento ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+
+                            const items_config = row.items_config || row.configuracion_items || '[]';
+
+                            const rawAvail = row.available !== undefined ? row.available : row.disponible;
+                            const available = (rawAvail === undefined || rawAvail === '' || rawAvail === '1' || rawAvail === 1 || rawAvail === 'true' || rawAvail === true || String(rawAvail).toLowerCase() === 'si' || String(rawAvail).toLowerCase() === 'sí') ? 1 : 0;
+
+                            const days_of_week = row.days_of_week || row.dias_semana || '["1","2","3","4","5","6","7"]';
+                            const start_time = (row.start_time || row.hora_inicio || '').trim() || null;
+                            const end_time = (row.end_time || row.hora_fin || '').trim() || null;
+                            const channels = row.channels || row.canales || '["Local","Domicilio","Para Llevar"]';
+
+                            let existing = null;
+                            if (row.id) {
+                                existing = await new Promise(r => db.get("SELECT id FROM promotions_combos WHERE id = ?", [row.id], (err, rRow) => r(rRow)));
+                            }
+                            if (!existing) {
+                                existing = await new Promise(r => db.get("SELECT id FROM promotions_combos WHERE LOWER(name) = LOWER(?)", [name], (err, rRow) => r(rRow)));
+                            }
+
+                            if (existing) {
+                                await dbRun(
+                                    `UPDATE promotions_combos 
+                                     SET name=?, description=?, category=?, img=?, type=?, combo_price=?, discount_value=?, items_config=?, available=?, days_of_week=?, start_time=?, end_time=?, channels=?
+                                     WHERE id=?`,
+                                    [name, description, category, img, type, combo_price, discount_value, items_config, available, days_of_week, start_time, end_time, channels, existing.id]
+                                );
+                            } else {
+                                const newId = row.id || uuidv4();
+                                await dbRun(
+                                    `INSERT INTO promotions_combos 
+                                     (id, name, description, category, img, type, combo_price, discount_value, items_config, available, days_of_week, start_time, end_time, channels)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    [newId, name, description, category, img, type, combo_price, discount_value, items_config, available, days_of_week, start_time, end_time, channels]
+                                );
+                            }
+                            processed++;
+                        } catch (e) {
+                            console.error("Import Error combo row:", row, e);
+                            errors++;
+                        }
+                    }
+
+                    fs.unlink(filePath, (err) => {
+                        if (err) console.error("Error deleting uploaded file:", err);
+                    });
+
+                    io.emit('promotions_updated');
+                    io.emit('promotions_combos_updated');
+                    res.json({ message: `Importación completada. Procesados: ${processed}, Errores: ${errors}` });
+                };
+
+                processBatch();
+            });
+    });
 
     // Helper para parsear campos JSON de forma segura
     const parseComboRow = (row) => {

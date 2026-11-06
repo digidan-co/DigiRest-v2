@@ -2,12 +2,40 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
-import { getDeliveryZones, toggleDeliveryZone, deleteDeliveryZone, listenToDeliveryZones } from '@/legacy/services/delivery-service.js';
+import { getDeliveryZones, toggleDeliveryZone, deleteDeliveryZone, listenToDeliveryZones, importDeliveryZonesCSV, exportDeliveryZonesCSV } from '@/legacy/services/delivery-service.js';
 import { openDeliveryZoneModal, populateClientDeliveryZones } from '@/legacy/features/delivery-zones-manager.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
 
 const searchTerm = ref('');
 const openMenuId = ref(null);
+const importingZones = ref(false);
+const fileZonesRef = ref(null);
+
+function exportZones() {
+    exportDeliveryZonesCSV();
+}
+
+async function onImportZones(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+        toast('Por favor selecciona un archivo CSV', 'error');
+        return;
+    }
+    importingZones.value = true;
+    try {
+        const res = await importDeliveryZonesCSV(file);
+        toast(res.message || 'Zonas de domicilio importadas correctamente', 'success');
+        await load();
+        populateClientDeliveryZones();
+    } catch (err) {
+        console.error(err);
+        toast('Error al importar zonas: ' + (err.message || ''), 'error');
+    } finally {
+        importingZones.value = false;
+        e.target.value = '';
+    }
+}
 
 const filteredZones = computed(() => {
     const term = searchTerm.value.toLowerCase().trim();
@@ -103,6 +131,15 @@ onUnmounted(() => {
                     class="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl outline-none focus:border-[var(--system-primary)] focus:ring-2 focus:ring-amber-100 transition-all text-xs"
                 >
             </div>
+            <input type="file" ref="fileZonesRef" accept=".csv" class="hidden" @change="onImportZones">
+            <button type="button" @click="exportZones"
+                class="px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Exportar zonas a CSV">
+                <i class="fas fa-file-export text-gray-500"></i> Exportar
+            </button>
+            <button type="button" @click="fileZonesRef?.click()" :disabled="importingZones"
+                class="px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Importar zonas desde CSV">
+                <i class="fas" :class="importingZones ? 'fa-spinner fa-spin' : 'fa-file-import text-gray-500'"></i> Importar
+            </button>
             <button
                 type="button"
                 @click="newZone"

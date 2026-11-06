@@ -69,10 +69,18 @@ export async function importCategoriesCSV(file) {
     return await ApiClient.post('/categories/import', formData);
 }
 
+export async function exportCategoriesCSV() {
+    return await ApiClient.downloadExport('/api/categories/export', 'categorias_digirest.csv');
+}
+
 export async function importProductsCSV(file) {
     const formData = new FormData();
     formData.append('file', file);
     return await ApiClient.post('/products/import', formData);
+}
+
+export async function exportProductsCSV() {
+    return await ApiClient.downloadExport('/api/products/export', 'platos_digirest.csv');
 }
 
 export async function toggleProductRecommended(id) {

@@ -51,8 +51,16 @@ export async function importSuppliesCSV(file) {
     return await ApiClient.post('/inventory/supplies/import', formData);
 }
 
+export async function exportSuppliesCSV() {
+    return await ApiClient.downloadExport('/api/inventory/supplies/export', 'insumos_digirest.csv');
+}
+
 export async function importRecipesCSV(file) {
     const formData = new FormData();
     formData.append('file', file);
     return await ApiClient.post('/inventory/recipes/import', formData);
+}
+
+export async function exportRecipesCSV() {
+    return await ApiClient.downloadExport('/api/inventory/recipes/export', 'recetas_digirest.csv');
 }

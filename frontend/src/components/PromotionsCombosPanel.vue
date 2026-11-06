@@ -9,7 +9,9 @@ import {
     savePromotionCombo,
     togglePromotionCombo,
     deletePromotionCombo,
-    listenToPromotionsCombos
+    listenToPromotionsCombos,
+    importPromotionsCSV,
+    exportPromotionsCSV
 } from '@/legacy/services/promotions-service.js';
 
 const combos = ref([]);
@@ -18,6 +20,33 @@ const searchTerm = ref('');
 const filterType = ref('');
 const filterStatus = ref('');
 const filterChannel = ref('');
+const importingCombos = ref(false);
+const fileCombosRef = ref(null);
+
+function exportCombos() {
+    exportPromotionsCSV();
+}
+
+async function onImportCombos(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+        toast('Por favor selecciona un archivo CSV', 'error');
+        return;
+    }
+    importingCombos.value = true;
+    try {
+        const res = await importPromotionsCSV(file);
+        toast(res.message || 'Combos y promociones importados correctamente', 'success');
+        await loadCombos();
+    } catch (err) {
+        console.error(err);
+        toast('Error al importar combos: ' + (err.message || ''), 'error');
+    } finally {
+        importingCombos.value = false;
+        e.target.value = '';
+    }
+}
 
 // Modal State
 const showModal = ref(false);
@@ -467,7 +496,16 @@ onUnmounted(() => {
                     <option value="Para Llevar">Para Llevar / Recoger</option>
                 </select>
             </div>
-            <div class="flex gap-2 w-full sm:w-auto justify-end">
+            <div class="flex gap-2 w-full sm:w-auto justify-end flex-wrap items-center">
+                <input type="file" ref="fileCombosRef" accept=".csv" class="hidden" @change="onImportCombos">
+                <button type="button" @click="exportCombos"
+                    class="px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Exportar combos a CSV">
+                    <i class="fas fa-file-export text-gray-500"></i> Exportar
+                </button>
+                <button type="button" @click="fileCombosRef?.click()" :disabled="importingCombos"
+                    class="px-3.5 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Importar combos desde CSV">
+                    <i class="fas" :class="importingCombos ? 'fa-spinner fa-spin' : 'fa-file-import text-gray-500'"></i> Importar
+                </button>
                 <button
                     type="button"
                     @click="openCreateModal"

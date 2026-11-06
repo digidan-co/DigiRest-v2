@@ -19,6 +19,16 @@ export async function deleteDeliveryZone(id) {
     return await ApiClient.delete(`/delivery-zones/${id}`);
 }
 
+export async function importDeliveryZonesCSV(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await ApiClient.post('/delivery-zones/import', formData);
+}
+
+export async function exportDeliveryZonesCSV() {
+    return await ApiClient.downloadExport('/api/delivery-zones/export', 'zonas_domicilio_digirest.csv');
+}
+
 export function listenToDeliveryZones(callback) {
     const socket = window.socket || (typeof io !== 'undefined' ? io() : null);
     if (!socket) return () => {};

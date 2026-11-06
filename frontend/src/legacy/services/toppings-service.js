@@ -53,3 +53,7 @@ export async function importToppingsCSV(file) {
     formData.append('file', file);
     return await ApiClient.post('/toppings/import', formData);
 }
+
+export async function exportToppingsCSV() {
+    return await ApiClient.downloadExport('/api/toppings/export', 'toppings_digirest.csv');
+}

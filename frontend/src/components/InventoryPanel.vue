@@ -4,7 +4,7 @@ import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import {
     getInventorySummary, getSupplies, getRecipes, getInventoryMovements, deleteSupply, deleteRecipe,
-    importSuppliesCSV, importRecipesCSV
+    importSuppliesCSV, importRecipesCSV, exportSuppliesCSV, exportRecipesCSV
 } from '@/legacy/services/inventory-service.js';
 import { toast, showConfirmModal, showModalAlert } from '@/legacy/components/ui.js';
 
@@ -256,7 +256,7 @@ const importingSupplies = ref(false);
 const importingRecipes = ref(false);
 
 function exportSupplies() {
-    window.open('/api/inventory/supplies/export', '_blank');
+    exportSuppliesCSV();
 }
 
 async function onImportSupplies(e) {
@@ -281,7 +281,7 @@ async function onImportSupplies(e) {
 }
 
 function exportRecipes() {
-    window.open('/api/inventory/recipes/export', '_blank');
+    exportRecipesCSV();
 }
 
 async function onImportRecipes(e) {

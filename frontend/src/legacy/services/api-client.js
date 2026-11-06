@@ -611,3 +611,38 @@ export const ApiClient = {
         }
     }
 };
+
+/**
+ * Helper robusto para descargar archivos exportados (CSV, backups, etc.)
+ * Intenta primero autenticar mediante cabecera Bearer y generar Blob nativo.
+ * Si falla, usa fallback mediante window.open con query parameter token.
+ */
+export async function downloadExportFile(endpoint, filename) {
+    const token = ApiClient.getToken() || (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_token') : '');
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const fallbackUrl = token ? `${endpoint}${separator}token=${encodeURIComponent(token)}` : endpoint;
+
+    try {
+        const res = await fetch(endpoint, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        if (!res.ok) {
+            window.open(fallbackUrl, '_blank');
+            return;
+        }
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename || 'export.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1500);
+    } catch (err) {
+        console.warn('Fallback a window.open para descarga de archivo:', err);
+        window.open(fallbackUrl, '_blank');
+    }
+}
+
+ApiClient.downloadExport = downloadExportFile;

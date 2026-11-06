@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
-import { getToppings, toggleTopping, deleteTopping, importToppingsCSV } from '@/legacy/services/toppings-service.js';
+import { getToppings, toggleTopping, deleteTopping, importToppingsCSV, exportToppingsCSV } from '@/legacy/services/toppings-service.js';
 import { openToppingModal, openToppingGroupsModal, getToppingGroups } from '@/legacy/features/toppings-manager.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
 
@@ -56,7 +56,7 @@ function deleteToppingItem(t) {
 const importingToppings = ref(false);
 
 function exportToppings() {
-    window.open('/api/toppings/export', '_blank');
+    exportToppingsCSV();
 }
 
 async function onImportToppings(e) {

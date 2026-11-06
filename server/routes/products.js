@@ -34,7 +34,7 @@ module.exports = (io) => {
                 const parser = new Parser(opts);
                 const csvData = parser.parse(rows);
 
-                res.header('Content-Type', 'text/csv');
+                res.header('Content-Type', 'text/csv; charset=utf-8');
                 res.header('Content-Disposition', 'attachment; filename=categories.csv');
                 res.send(csvData);
             } catch (err) {

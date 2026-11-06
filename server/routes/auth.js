@@ -596,7 +596,7 @@ function verifyOptionalToken(req) {
 // Middleware to verify token with blacklist, active session, and SaaS subscription check
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
 
     if (!token) {
         return res.status(403).json({ error: 'No token provided' });

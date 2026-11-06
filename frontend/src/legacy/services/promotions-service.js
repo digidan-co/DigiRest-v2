@@ -27,6 +27,16 @@ export async function deletePromotionCombo(id) {
     return await ApiClient.delete(`/promotions-combos/${id}`);
 }
 
+export async function importPromotionsCSV(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await ApiClient.post('/promotions-combos/import', formData);
+}
+
+export async function exportPromotionsCSV() {
+    return await ApiClient.downloadExport('/api/promotions-combos/export', 'combos_promociones_digirest.csv');
+}
+
 export function listenToPromotionsCombos(callback) {
     const socket = window.socket || (typeof io !== 'undefined' ? io() : null);
     if (!socket) return () => {};

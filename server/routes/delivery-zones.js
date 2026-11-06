@@ -2,9 +2,114 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
+const { csvUpload } = require('../middleware/upload');
 const { v4: uuidv4 } = require('uuid');
+const csv = require('csv-parser');
+const { Parser } = require('json2csv');
+const fs = require('fs');
 
 module.exports = (io) => {
+
+    // --- CSV DELIVERY ZONES ---
+
+    router.get('/delivery-zones/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
+        db.all("SELECT * FROM delivery_zones ORDER BY fee ASC, name ASC", [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            try {
+                const fields = ['id', 'name', 'fee', 'estimated_time', 'available', 'min_order', 'created_at'];
+                const parser = new Parser({ fields });
+                const csvData = parser.parse(rows || []);
+
+                res.header('Content-Type', 'text/csv; charset=utf-8');
+                res.header('Content-Disposition', 'attachment; filename=zonas_domicilio_digirest.csv');
+                res.send(csvData);
+            } catch (err) {
+                console.error('Error generating delivery zones CSV:', err);
+                res.status(500).json({ error: 'Error generating CSV' });
+            }
+        });
+    });
+
+    router.post('/delivery-zones/import', verifyToken, requireRole(['admin']), csvUpload.single('file'), (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: "No se subió ningún archivo" });
+        }
+
+        const filePath = req.file.path;
+        const results = [];
+
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => results.push(data))
+            .on('end', () => {
+                let processed = 0;
+                let errors = 0;
+
+                const dbRun = (sql, params) => {
+                    return new Promise((resolve, reject) => {
+                        db.run(sql, params, function (err) {
+                            if (err) reject(err);
+                            else resolve(this);
+                        });
+                    });
+                };
+
+                const processBatch = async () => {
+                    for (const row of results) {
+                        try {
+                            const name = (row.name || row.nombre || row.zona || row.sector || '').trim();
+                            if (!name) continue;
+
+                            const fee = parseFloat(String(row.fee ?? row.tarifa ?? row.costo ?? row.precio ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+                            const estimated_time = (row.estimated_time || row.tiempo_estimado || row.tiempo || '30-45 min').trim();
+
+                            const rawAvail = row.available !== undefined ? row.available : row.disponible;
+                            const available = (rawAvail === undefined || rawAvail === '' || rawAvail === '1' || rawAvail === 1 || rawAvail === 'true' || rawAvail === true || String(rawAvail).toLowerCase() === 'si' || String(rawAvail).toLowerCase() === 'sí') ? 1 : 0;
+
+                            const min_order = parseFloat(String(row.min_order ?? row.pedido_minimo ?? row.minimo ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+
+                            let existing = null;
+                            if (row.id) {
+                                existing = await new Promise(r => db.get("SELECT id FROM delivery_zones WHERE id = ?", [row.id], (err, rRow) => r(rRow)));
+                            }
+                            if (!existing) {
+                                existing = await new Promise(r => db.get("SELECT id FROM delivery_zones WHERE LOWER(name) = LOWER(?)", [name], (err, rRow) => r(rRow)));
+                            }
+
+                            if (existing) {
+                                await dbRun(
+                                    `UPDATE delivery_zones 
+                                     SET name=?, fee=?, estimated_time=?, available=?, min_order=?
+                                     WHERE id=?`,
+                                    [name, fee, estimated_time, available, min_order, existing.id]
+                                );
+                            } else {
+                                const newId = row.id || `zone_${uuidv4().slice(0, 8)}`;
+                                await dbRun(
+                                    `INSERT INTO delivery_zones 
+                                     (id, name, fee, estimated_time, available, min_order)
+                                     VALUES (?, ?, ?, ?, ?, ?)`,
+                                    [newId, name, fee, estimated_time, available, min_order]
+                                );
+                            }
+                            processed++;
+                        } catch (e) {
+                            console.error("Import Error delivery zone row:", row, e);
+                            errors++;
+                        }
+                    }
+
+                    fs.unlink(filePath, (err) => {
+                        if (err) console.error("Error deleting uploaded file:", err);
+                    });
+
+                    io.emit('delivery_zones_updated');
+                    res.json({ message: `Importación completada. Procesadas: ${processed}, Errores: ${errors}` });
+                };
+
+                processBatch();
+            });
+    });
 
     // --- GET ALL DELIVERY ZONES ---
     router.get('/delivery-zones', (req, res) => {
