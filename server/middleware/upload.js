@@ -13,16 +13,22 @@ const { v4: uuidv4 } = require('uuid');
 function isRealImageBuffer(buffer) {
     if (!buffer || buffer.length < 12) return false;
 
-    const header = buffer.toString('hex', 0, 12).toUpperCase();
+    // 1. JPEG (FF D8 FF)
+    if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
 
-    // JPEG starts with FF D8 FF
-    if (header.startsWith('FFD8FF')) return true;
-    // PNG starts with 89 50 4E 47 0D 0A 1A 0A
-    if (header.startsWith('89504E470D0A1A0A')) return true;
-    // WebP starts with RIFF .... WEBP
-    if (header.startsWith('52494646') && header.substring(8, 16) === '57454250') return true;
-    // GIF starts with 47 49 46 38
-    if (header.startsWith('47494638')) return true;
+    // 2. PNG (89 50 4E 47 0D 0A 1A 0A)
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
+
+    // 3. WebP: "RIFF" en bytes 0-3 y "WEBP" en bytes 8-11
+    if (
+        buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+        buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+    ) {
+        return true;
+    }
+
+    // 4. GIF (GIF87a o GIF89a: 47 49 46 38)
+    if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) return true;
 
     return false;
 }
