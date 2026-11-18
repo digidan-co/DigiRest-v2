@@ -479,6 +479,23 @@ module.exports = (io) => {
             if (err) return res.status(500).json({ error: err.message });
 
             if (id) {
+                // Si se sube una nueva imagen o se elimina la actual, limpiar el archivo físico anterior del disco
+                if (req.file || imgUrl === '/img/noimage.png') {
+                    db.get("SELECT img FROM products WHERE id = ?", [id], (findErr, oldProd) => {
+                        if (oldProd && oldProd.img && (oldProd.img.startsWith('/uploads/') || oldProd.img.startsWith('/server/uploads/'))) {
+                            try {
+                                const rel = oldProd.img.replace('/server/uploads/', 'uploads/').replace('/uploads/', 'uploads/');
+                                const full = path.resolve(__dirname, '..', rel);
+                                if (fs.existsSync(full)) {
+                                    fs.unlink(full, (unlinkErr) => {
+                                        if (!unlinkErr) console.log('🧹 [STORAGE] Imagen reemplazada de plato eliminada:', rel);
+                                    });
+                                }
+                            } catch (_) {}
+                        }
+                    });
+                }
+
                 // Update - Dynamic Query Construction
                 const fields = [];
                 const values = [];
