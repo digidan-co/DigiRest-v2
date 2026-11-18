@@ -60,7 +60,11 @@ uploads/*
 frontend/public/uploads/*
 frontend/dist/uploads/*
 
-# 6. Caches y archivos temporales de compilación
+# 6. Caches y archivos temporales de compilación (Builds estáticos)
+dist/
+dist/*
+frontend/dist/
+frontend/dist/*
 .vite/
 frontend/.vite/
 dist-ssr/
