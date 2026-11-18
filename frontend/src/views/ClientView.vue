@@ -149,7 +149,7 @@ function handleSelectProduct(id) {
 
 function handleSelectCombo(combo) {
     searchTerm.value = '';
-    openComboDisplayDetail(combo, (c) => handleAddCombo(c));
+    openComboDisplayDetail(combo, (c, qty) => handleAddCombo(c, qty));
 }
 
 function handleAddProduct(id) {
@@ -161,17 +161,18 @@ function getComboPricing(combo) {
     return calculateComboPricing(combo);
 }
 
-function handleAddCombo(combo) {
+function handleAddCombo(combo, qty = 1) {
     if (!combo || !Array.isArray(combo.items_config) || combo.items_config.length === 0) {
         toast('El combo seleccionado no tiene productos disponibles', 'warning');
         return;
     }
 
+    const parsedQty = Math.max(1, parseInt(qty, 10) || 1);
     const pricing = calculateComboPricing(combo);
-    const existing = state.cart.find(i => i.is_combo && i.combo_id === combo.id);
+    const existing = state.cart.find(i => i.is_combo && i.combo_id === combo.id && !i.notes);
 
     if (existing) {
-        existing.qty++;
+        existing.qty += parsedQty;
     } else {
         const comboItems = combo.items_config.map(it => ({
             product_id: it.product_id,
@@ -190,7 +191,7 @@ function handleAddCombo(combo) {
             price: pricing.finalPrice,
             base_price: pricing.basePrice,
             discount_amount: pricing.savings,
-            qty: 1,
+            qty: parsedQty,
             is_combo: true,
             combo_id: combo.id,
             combo_name: combo.name,
@@ -204,7 +205,7 @@ function handleAddCombo(combo) {
 
     searchTerm.value = '';
     updateCartUI();
-    toast(`Combo "${combo.name}" agregado al pedido`, 'success');
+    toast(`Combo "${combo.name}"${parsedQty > 1 ? ` (x${parsedQty})` : ''} agregado al pedido`, 'success');
 }
 
 onMounted(async () => {

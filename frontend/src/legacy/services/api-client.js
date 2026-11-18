@@ -502,7 +502,21 @@ export const ApiClient = {
                         if (req.body) fetchOptions.body = JSON.stringify(req.body);
                     }
 
-                    const res = await fetch(`${API_URL}${req.url}`, fetchOptions);
+                    let finalRes = await fetch(`${API_URL}${req.url}`, fetchOptions);
+
+                    // Si un POST /orders con comprobante falla con 400 (ej. imagen inválida), reintentar sin comprobante
+                    if (!finalRes.ok && finalRes.status === 400 && hasDataUrlProof && req.url === '/orders' && req.method === 'POST') {
+                        const firstErrBody = await finalRes.text().catch(() => '');
+                        console.warn(`⚠️ [Sync] POST /orders rechazado (400) por imagen, reintentando sin proof:`, firstErrBody);
+                        const { proof: _ignoredProof, ...bodyWithoutProof } = req.body;
+                        finalRes = await fetch(`${API_URL}${req.url}`, {
+                            method: 'POST',
+                            headers: this.getHeaders(),
+                            body: JSON.stringify(bodyWithoutProof)
+                        });
+                    }
+
+                    const res = finalRes;
                     if (res.ok) {
                         await OfflineDB.removeFromQueue(req.id);
                         syncedCount++;
@@ -596,6 +610,9 @@ export const ApiClient = {
                         const errorBody = await res.text().catch(() => '');
                         console.error("Failed offline request permanently:", req, "Status:", res.status, "Body:", errorBody);
                         await OfflineDB.removeFromQueue(req.id);
+                        if ((res.status === 400 || res.status === 404) && req._offlineId) {
+                            await OfflineDB.removeOfflineOrder(req._offlineId).catch(() => {});
+                        }
                     }
                 } catch (error) {
                     console.error("Retrying offline request failed. Still offline?", error);

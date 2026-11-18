@@ -10,29 +10,33 @@ const { v4: uuidv4 } = require('uuid');
  * @param {string} extension - File extension (e.g., '.jpg')
  * @returns {boolean} - Whether the buffer matches the expected type
  */
-function validateFileContent(buffer, extension) {
+function isRealImageBuffer(buffer) {
     if (!buffer || buffer.length < 12) return false;
 
     const header = buffer.toString('hex', 0, 12).toUpperCase();
 
-    switch (extension) {
-        case '.jpg':
-        case '.jpeg':
-            // JPEG starts with FF D8 FF
-            return header.startsWith('FFD8FF');
-        case '.png':
-            // PNG starts with 89 50 4E 47 0D 0A 1A 0A
-            return header.startsWith('89504E470D0A1A0A');
-        case '.webp':
-            // WebP starts with RIFF .... WEBP
-            return header.startsWith('52494646') && header.substring(8, 16) === '57454250';
-        case '.gif':
-            // GIF starts with 47 49 46 38
-            return header.startsWith('47494638');
-        default:
-            // For CSV and other non-magic-byte types, skip content check
-            return true;
+    // JPEG starts with FF D8 FF
+    if (header.startsWith('FFD8FF')) return true;
+    // PNG starts with 89 50 4E 47 0D 0A 1A 0A
+    if (header.startsWith('89504E470D0A1A0A')) return true;
+    // WebP starts with RIFF .... WEBP
+    if (header.startsWith('52494646') && header.substring(8, 16) === '57454250') return true;
+    // GIF starts with 47 49 46 38
+    if (header.startsWith('47494638')) return true;
+
+    return false;
+}
+
+function validateFileContent(buffer, extension) {
+    if (!buffer || buffer.length < 12) return false;
+    const ext = String(extension || '').toLowerCase();
+
+    if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+        return isRealImageBuffer(buffer);
     }
+
+    // For CSV and other non-magic-byte types, skip content check
+    return true;
 }
 
 const UPLOAD_DIR = path.join(__dirname, '../uploads/');

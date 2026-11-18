@@ -39,7 +39,7 @@ export const printOrder = (order) => {
     const itemsHtml = (order.items || []).map(item => {
         const isCombo = item.is_combo || (Array.isArray(item.combo_items) && item.combo_items.length > 0);
         const toppingsText = item.toppings_text || (Array.isArray(item.toppings) ? item.toppings.map(t => t.name || t).filter(Boolean).join(', ') : '');
-        const notesText = item.notes || item.note || '';
+        const notesText = String(item.notes || item.note || '').trim();
 
         let comboItemsHtml = '';
         if (isCombo && Array.isArray(item.combo_items) && item.combo_items.length > 0) {
@@ -58,7 +58,7 @@ export const printOrder = (order) => {
             ${item.combo_name && !isCombo ? `<div class="item-extra">* Combo: ${escapeHtml(item.combo_name)}</div>` : ''}
             ${item.variant_name ? `<div class="item-extra">* Tamaño: ${escapeHtml(item.variant_name)}</div>` : ''}
             ${toppingsText ? `<div class="item-extra">* Adic: ${escapeHtml(toppingsText)}</div>` : ''}
-            ${notesText ? `<div class="item-extra">* Nota: ${escapeHtml(notesText)}</div>` : ''}
+            ${notesText ? `<div class="item-extra item-note">* Nota: ${escapeHtml(notesText)}</div>` : ''}
         `;
     }).join('');
 
@@ -153,6 +153,15 @@ export const printOrder = (order) => {
                     padding-left: 8px;
                     font-weight: 700;
                     margin-bottom: 2px;
+                }
+                .item-note {
+                    border-left: 2px solid #000000;
+                    padding-left: 6px;
+                    margin-left: 6px;
+                    margin-top: 2px;
+                    font-weight: 800;
+                    font-style: italic;
+                    word-break: break-word;
                 }
                 .totals-section {
                     margin-top: 4px;

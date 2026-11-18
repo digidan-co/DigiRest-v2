@@ -304,30 +304,27 @@ export function addToWaiterCart(productId) {
         renderWaiterProducts();
     }
 
-    if (product.has_toppings || product.has_variants) {
-        openClientToppingsModal(product, {
-            onConfirm: (customizedItem) => {
-                waiterCart.push(customizedItem);
-                updateFloatingCartButton();
-                toast(`${product.name} agregado`, 'success');
-                if (!$('waiter-review-modal')?.classList.contains('hidden')) {
-                    renderReviewCartList();
+    openClientToppingsModal(product, {
+        onConfirm: (customizedItem) => {
+            if (!customizedItem.variant_name && !customizedItem.toppings_text && !customizedItem.notes) {
+                const existing = waiterCart.find(
+                    i => !i.is_combo && String(i.productId || i.id) === String(productId) && !i.toppings_text && !i.variant_name && !i.notes
+                );
+                if (existing) {
+                    existing.qty += customizedItem.qty;
+                } else {
+                    waiterCart.push(customizedItem);
                 }
+            } else {
+                waiterCart.push(customizedItem);
             }
-        });
-        return;
-    }
-
-    const price = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
-    const existing = waiterCart.find(i => i.id === productId && !i.toppings_text && !i.variant_name && !i.notes);
-    if (existing) {
-        existing.qty++;
-    } else {
-        waiterCart.push({ ...product, price: price, qty: 1 });
-    }
-
-    updateFloatingCartButton();
-    toast(`${product.name} agregado`, 'success');
+            updateFloatingCartButton();
+            toast(`${product.name}${customizedItem.qty > 1 ? ` (x${customizedItem.qty})` : ''} agregado`, 'success');
+            if (!$('waiter-review-modal')?.classList.contains('hidden')) {
+                renderReviewCartList();
+            }
+        }
+    });
 }
 
 function updateFloatingCartButton() {
@@ -419,38 +416,61 @@ function renderReviewCartList() {
     list.innerHTML = waiterCart.map((item, index) => {
         total += item.price * item.qty;
         return `
-            <div class="flex items-start gap-2 bg-white p-2.5 rounded-lg border ${item.is_combo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-sm">
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
-                        ${item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>COMBO</span>` : ''}
-                        ${item.combo_name && !item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
-                        <h4 class="font-bold text-gray-800 text-xs leading-tight">${escapeHtml(item.name)}</h4>
-                    </div>
-                    ${item.is_combo && Array.isArray(item.combo_items) && item.combo_items.length > 0 ? `
-                        <div class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-600">
-                            ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[9px]">(Cortesía)</span>' : ''}</div>`).join('')}
+            <div class="flex flex-col bg-white p-2.5 rounded-lg border ${item.is_combo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-sm">
+                <div class="flex items-start gap-2">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                            ${item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>COMBO</span>` : ''}
+                            ${item.combo_name && !item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
+                            <h4 class="font-bold text-gray-800 text-xs leading-tight">${escapeHtml(item.name)}</h4>
                         </div>
-                    ` : ''}
-                    ${formatToppingsListHtml(item)}
-                    ${item.notes ? `<p class="text-[10px] text-gray-500 italic block mt-1"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>${escapeHtml(item.notes)}</p>` : ''}
-                    <span class="text-[10px] text-gray-500 font-bold block mt-1">${formatMoney(item.price)} c/u</span>
+                        ${item.is_combo && Array.isArray(item.combo_items) && item.combo_items.length > 0 ? `
+                            <div class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-600">
+                                ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[9px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                            </div>
+                        ` : ''}
+                        ${formatToppingsListHtml(item)}
+                        ${item.notes && !item._editingNote ? `<p class="text-[10px] text-orange-700 bg-orange-50/80 border border-orange-200/70 rounded px-1.5 py-0.5 italic inline-block mt-1"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>Nota: ${escapeHtml(item.notes)}</p>` : ''}
+                        <div class="flex items-center gap-2 mt-1 flex-wrap">
+                            <span class="text-[10px] text-gray-500 font-bold">${formatMoney(item.price)} c/u</span>
+                            <button type="button" onclick="toggleWaiterCartItemNote(${index})"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer border ${item.notes ? 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700'}">
+                                <i class="fas ${item.notes ? 'fa-pen' : 'fa-comment-dots'} text-[9px]"></i>
+                                <span>${item.notes ? 'Editar nota' : 'Añadir nota'}</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center bg-gray-100 rounded-md p-0.5 shrink-0 self-center">
+                        <button class="w-8 h-8 bg-white rounded shadow-sm text-gray-600 hover:text-red-500 font-bold text-base flex items-center justify-center active:scale-95 transition-transform" 
+                            onclick="updateWaiterCartQty(${index}, -1)" title="Disminuir / Eliminar">
+                            -
+                        </button>
+                        <span class="w-8 text-center font-bold text-gray-800 text-sm">${item.qty}</span>
+                        <button class="w-8 h-8 bg-white rounded shadow-sm text-gray-600 hover:text-[var(--system-primary)] font-bold text-base flex items-center justify-center active:scale-95 transition-transform" 
+                            onclick="updateWaiterCartQty(${index}, 1)" title="Aumentar">
+                            +
+                        </button>
+                    </div>
+                    
+                    <div class="w-16 text-right shrink-0 self-center">
+                        <span class="font-bold text-gray-900 text-xs">${formatMoney(item.price * item.qty)}</span>
+                    </div>
                 </div>
-                
-                <div class="flex items-center bg-gray-100 rounded-md p-0.5 shrink-0 self-center">
-                    <button class="w-8 h-8 bg-white rounded shadow-sm text-gray-600 hover:text-red-500 font-bold text-base flex items-center justify-center active:scale-95 transition-transform" 
-                        onclick="updateWaiterCartQty(${index}, -1)" title="Disminuir / Eliminar combo">
-                        -
-                    </button>
-                    <span class="w-8 text-center font-bold text-gray-800 text-sm">${item.qty}</span>
-                    <button class="w-8 h-8 bg-white rounded shadow-sm text-gray-600 hover:text-[var(--system-primary)] font-bold text-base flex items-center justify-center active:scale-95 transition-transform" 
-                        onclick="updateWaiterCartQty(${index}, 1)" title="Aumentar combo">
-                        +
-                    </button>
-                </div>
-                
-                <div class="w-16 text-right shrink-0 self-center">
-                    <span class="font-bold text-gray-900 text-xs">${formatMoney(item.price * item.qty)}</span>
-                </div>
+                ${item._editingNote ? `
+                    <div class="mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5">
+                        <input type="text" id="w-item-note-input-${index}"
+                            value="${escapeHtml(item.notes || '')}"
+                            oninput="updateWaiterCartItemNoteLive(${index}, this.value)"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();saveWaiterCartItemNote(${index});}"
+                            placeholder="Ej: Sin cebolla, término medio..."
+                            class="flex-1 px-2.5 py-1.5 text-xs bg-amber-50/40 border border-orange-200 rounded-lg outline-none focus:border-orange-400 focus:bg-white text-gray-700">
+                        <button type="button" onclick="saveWaiterCartItemNote(${index})"
+                            class="px-2.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold shrink-0 cursor-pointer">
+                            Listo
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');
@@ -487,6 +507,35 @@ function renderReviewCartList() {
         } else {
             renderReviewCartList();
         }
+    };
+
+    window.toggleWaiterCartItemNote = (idx) => {
+        const item = waiterCart[idx];
+        if (!item) return;
+        item._editingNote = !item._editingNote;
+        renderReviewCartList();
+        if (item._editingNote) {
+            const input = $(`w-item-note-input-${idx}`);
+            if (input) {
+                input.focus();
+                const len = input.value.length;
+                input.setSelectionRange(len, len);
+            }
+        }
+    };
+
+    window.updateWaiterCartItemNoteLive = (idx, val) => {
+        if (waiterCart[idx]) {
+            waiterCart[idx].notes = val;
+        }
+    };
+
+    window.saveWaiterCartItemNote = (idx) => {
+        if (waiterCart[idx]) {
+            waiterCart[idx].notes = (waiterCart[idx].notes || '').trim();
+            waiterCart[idx]._editingNote = false;
+        }
+        renderReviewCartList();
     };
 }
 
@@ -884,7 +933,10 @@ export async function handleSendWaiterOrder() {
         const orderData = {
             id: orderId,
             table: tableNum,
-            items: JSON.parse(JSON.stringify(waiterCart)),
+            items: waiterCart.map(({ _editingNote, ...rest }) => ({
+                ...rest,
+                notes: typeof rest.notes === 'string' ? rest.notes.trim() : rest.notes
+            })),
             total: finalTotal,
             discount: comboCalc.totalComboDiscount || 0,
             discount_reason: comboCalc.discountReason || '',
@@ -1382,26 +1434,24 @@ function addToWaiCart(productId) {
         renderWaiProducts('');
     }
 
-    if (product.has_toppings || product.has_variants) {
-        openClientToppingsModal(product, {
-            onConfirm: (customizedItem) => {
+    openClientToppingsModal(product, {
+        onConfirm: (customizedItem) => {
+            if (!customizedItem.variant_name && !customizedItem.toppings_text && !customizedItem.notes) {
+                const existing = itemsToAdd.find(
+                    i => !i.is_combo_component && String(i.productId || i.id) === String(productId) && !i.toppings_text && !i.variant_name && !i.notes
+                );
+                if (existing) {
+                    existing.qty += customizedItem.qty;
+                } else {
+                    itemsToAdd.push(customizedItem);
+                }
+            } else {
                 itemsToAdd.push(customizedItem);
-                updateWaiCart();
-                toast(`${product.name} agregado`, 'success');
             }
-        });
-        return;
-    }
-
-    const price = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
-    const existing = itemsToAdd.find(i => i.id === productId && !i.toppings_text && !i.variant_name && !i.notes);
-    if (existing) {
-        existing.qty++;
-    } else {
-        itemsToAdd.push({ ...product, price: price, qty: 1 });
-    }
-    updateWaiCart();
-    toast(`${product.name} agregado`, 'success');
+            updateWaiCart();
+            toast(`${product.name}${customizedItem.qty > 1 ? ` (x${customizedItem.qty})` : ''} agregado`, 'success');
+        }
+    });
 }
 
 function updateWaiCart() {
@@ -1421,29 +1471,52 @@ function updateWaiCart() {
     list.innerHTML = itemsToAdd.map((item, index) => {
         total += item.price * item.qty;
         return `
-            <div class="flex items-start gap-2 bg-white p-2 rounded-lg border border-gray-100 shadow-sm mb-2 animate-fade-in-right">
-                <div class="flex-1 min-w-0">
-                    <h4 class="font-bold text-gray-800 text-xs leading-tight mb-0.5">${escapeHtml(item.name)}</h4>
-                    ${formatToppingsListHtml(item)}
-                    ${item.notes ? `<p class="text-[10px] text-gray-500 italic block mt-1"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>${escapeHtml(item.notes)}</p>` : ''}
-                    <span class="text-[10px] text-gray-500 font-bold block mt-1">${formatMoney(item.price)} c/u</span>
+            <div class="flex flex-col bg-white p-2 rounded-lg border border-gray-100 shadow-sm mb-2 animate-fade-in-right">
+                <div class="flex items-start gap-2">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-gray-800 text-xs leading-tight mb-0.5">${escapeHtml(item.name)}</h4>
+                        ${formatToppingsListHtml(item)}
+                        ${item.notes && !item._editingNote ? `<p class="text-[10px] text-orange-700 bg-orange-50/80 border border-orange-200/70 rounded px-1.5 py-0.5 italic inline-block mt-1"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>Nota: ${escapeHtml(item.notes)}</p>` : ''}
+                        <div class="flex items-center gap-2 mt-1 flex-wrap">
+                            <span class="text-[10px] text-gray-500 font-bold">${formatMoney(item.price)} c/u</span>
+                            <button type="button" onclick="toggleWaiItemNote(${index})"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer border ${item.notes ? 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700'}">
+                                <i class="fas ${item.notes ? 'fa-pen' : 'fa-comment-dots'} text-[9px]"></i>
+                                <span>${item.notes ? 'Editar nota' : 'Añadir nota'}</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center bg-gray-100 rounded-md p-0.5 shrink-0">
+                        <button class="w-6 h-6 bg-white rounded shadow-sm text-gray-600 hover:text-red-500 font-bold text-sm flex items-center justify-center active:scale-95 transition-transform" 
+                            onclick="updateWaiQty(${index}, -1)">
+                            -
+                        </button>
+                        <span class="w-6 text-center font-bold text-gray-800 text-xs">${item.qty}</span>
+                        <button class="w-6 h-6 bg-white rounded shadow-sm text-gray-600 hover:text-[var(--system-primary)] font-bold text-sm flex items-center justify-center active:scale-95 transition-transform" 
+                            onclick="updateWaiQty(${index}, 1)">
+                            +
+                        </button>
+                    </div>
+                    
+                    <div class="w-14 text-right shrink-0">
+                        <span class="font-bold text-gray-900 text-xs">${formatMoney(item.price * item.qty)}</span>
+                    </div>
                 </div>
-                
-                <div class="flex items-center bg-gray-100 rounded-md p-0.5">
-                    <button class="w-6 h-6 bg-white rounded shadow-sm text-gray-600 hover:text-red-500 font-bold text-sm flex items-center justify-center active:scale-95 transition-transform" 
-                        onclick="updateWaiQty(${index}, -1)">
-                        -
-                    </button>
-                    <span class="w-6 text-center font-bold text-gray-800 text-xs">${item.qty}</span>
-                    <button class="w-6 h-6 bg-white rounded shadow-sm text-gray-600 hover:text-[var(--system-primary)] font-bold text-sm flex items-center justify-center active:scale-95 transition-transform" 
-                        onclick="updateWaiQty(${index}, 1)">
-                        +
-                    </button>
-                </div>
-                
-                <div class="w-14 text-right">
-                    <span class="font-bold text-gray-900 text-xs">${formatMoney(item.price * item.qty)}</span>
-                </div>
+                ${item._editingNote ? `
+                    <div class="mt-2 pt-1.5 border-t border-gray-100 flex items-center gap-1.5">
+                        <input type="text" id="wai-item-note-input-${index}"
+                            value="${escapeHtml(item.notes || '')}"
+                            oninput="updateWaiItemNoteLive(${index}, this.value)"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();saveWaiItemNote(${index});}"
+                            placeholder="Ej: Sin cebolla, término medio..."
+                            class="flex-1 px-2 py-1 text-xs bg-amber-50/40 border border-orange-200 rounded-lg outline-none focus:border-orange-400 focus:bg-white text-gray-700">
+                        <button type="button" onclick="saveWaiItemNote(${index})"
+                            class="px-2.5 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold shrink-0 cursor-pointer">
+                            Listo
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');
@@ -1458,6 +1531,35 @@ function updateWaiCart() {
             if (item.qty <= 0) {
                 itemsToAdd.splice(idx, 1);
             }
+        }
+        updateWaiCart();
+    };
+
+    window.toggleWaiItemNote = (idx) => {
+        const item = itemsToAdd[idx];
+        if (!item) return;
+        item._editingNote = !item._editingNote;
+        updateWaiCart();
+        if (item._editingNote) {
+            const input = $(`wai-item-note-input-${idx}`);
+            if (input) {
+                input.focus();
+                const len = input.value.length;
+                input.setSelectionRange(len, len);
+            }
+        }
+    };
+
+    window.updateWaiItemNoteLive = (idx, val) => {
+        if (itemsToAdd[idx]) {
+            itemsToAdd[idx].notes = val;
+        }
+    };
+
+    window.saveWaiItemNote = (idx) => {
+        if (itemsToAdd[idx]) {
+            itemsToAdd[idx].notes = (itemsToAdd[idx].notes || '').trim();
+            itemsToAdd[idx]._editingNote = false;
         }
         updateWaiCart();
     };
@@ -1478,7 +1580,11 @@ async function handleSendAddedItems() {
     setLoading('btn-wai-send', true, 'Enviando...');
 
     try {
-        await addItemsToOrder(currentAddOrderId, itemsToAdd);
+        const cleanItems = itemsToAdd.map(({ _editingNote, ...rest }) => ({
+            ...rest,
+            notes: typeof rest.notes === 'string' ? rest.notes.trim() : rest.notes
+        }));
+        await addItemsToOrder(currentAddOrderId, cleanItems);
         toast("Items agregados correctamente", "success");
         $('waiter-add-item-modal').classList.add('hidden');
         itemsToAdd = [];

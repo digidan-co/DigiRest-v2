@@ -70,7 +70,9 @@ export function initPaymentModal() {
             if (file) {
                 try {
                     const blob = await compressProof(file);
-                    transferProofFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' });
+                    const mime = blob.type || 'image/webp';
+                    const ext = mime.includes('png') ? '.png' : (mime.includes('jp') ? '.jpg' : '.webp');
+                    transferProofFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ext, { type: mime });
                     previewProof('pm-transfer-proof-preview-container', 'pm-transfer-proof-img', transferProofFile);
                     toast("Comprobante optimizado", "success");
                 } catch (err) {
@@ -96,7 +98,9 @@ export function initPaymentModal() {
             if (file) {
                 try {
                     const blob = await compressProof(file);
-                    mixedProofFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' });
+                    const mime = blob.type || 'image/webp';
+                    const ext = mime.includes('png') ? '.png' : (mime.includes('jp') ? '.jpg' : '.webp');
+                    mixedProofFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ext, { type: mime });
                     previewProof('pm-mixed-proof-preview-container', 'pm-mixed-proof-img', mixedProofFile);
                     toast("Comprobante optimizado", "success");
                 } catch (err) {
@@ -138,7 +142,11 @@ function previewProof(containerId, imgId, fileOrUrl) {
 
 export async function openPaymentModal(order, onComplete = null) {
     if (!order) return;
-    currentOrder = order;
+    try {
+        currentOrder = JSON.parse(JSON.stringify(order));
+    } catch (_) {
+        currentOrder = { ...order };
+    }
     onPaymentCompleteCallback = onComplete;
     transferProofFile = null;
     mixedProofFile = null;
@@ -608,12 +616,17 @@ async function handleConfirmCobro() {
             };
 
             await OfflineDB.saveOfflineOrder(updatedOrder);
+            await OfflineDB.updateQueuedRequestByOfflineId(orderId, updatedOrder).catch(() => {});
 
             // Update in-memory state
             const targetList = currentOrder.type === 'Local' ? state.waiterOrders : state.orders;
             if (targetList) {
                 const idx = targetList.findIndex(o => o.id == orderId);
                 if (idx !== -1) targetList[idx] = updatedOrder;
+            }
+
+            if (navigator.onLine) {
+                ApiClient.syncOfflineRequests().catch(() => {});
             }
 
             toast(`Pedido #${orderId} cobrado localmente`, "success");

@@ -5017,16 +5017,27 @@
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto gap-3 flex-wrap">
                     <div>
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Precio</span>
                         <div id="display-price" class="text-2xl sm:text-3xl font-extrabold text-gray-900"></div>
                     </div>
-                    <button id="btn-display-modal-add" type="button"
-                        class="hidden px-5 py-2.5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm shadow-lg shadow-orange-500/25 flex items-center gap-2 transition-all active:scale-95 cursor-pointer">
-                        <i class="fas fa-plus"></i>
-                        <span id="btn-display-modal-add-text">Añadir al Pedido</span>
-                    </button>
+                    <div id="display-modal-actions" class="flex items-center gap-2.5 ml-auto">
+                        <div id="display-modal-qty-box" class="hidden flex items-center gap-1.5 bg-gray-100 px-2.5 py-1.5 rounded-2xl border border-gray-200">
+                            <button type="button" id="btn-display-qty-minus" class="w-7 h-7 rounded-xl bg-white shadow-xs font-bold text-gray-700 flex items-center justify-center active:scale-90 transition-transform cursor-pointer">
+                                <i class="fas fa-minus text-[10px]"></i>
+                            </button>
+                            <span id="display-modal-qty" class="font-black text-sm text-gray-900 w-6 text-center">1</span>
+                            <button type="button" id="btn-display-qty-plus" class="w-7 h-7 rounded-xl bg-white shadow-xs font-bold text-gray-700 flex items-center justify-center active:scale-90 transition-transform cursor-pointer">
+                                <i class="fas fa-plus text-[10px]"></i>
+                            </button>
+                        </div>
+                        <button id="btn-display-modal-add" type="button"
+                            class="hidden px-5 py-2.5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm shadow-lg shadow-orange-500/25 flex items-center gap-2 transition-all active:scale-95 cursor-pointer">
+                            <i class="fas fa-plus"></i>
+                            <span id="btn-display-modal-add-text">Añadir al Pedido</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

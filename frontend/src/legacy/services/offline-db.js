@@ -6,6 +6,15 @@ const STORE_QUEUE = 'request_queue';
 const STORE_CACHE = 'api_cache';
 const STORE_OFFLINE_ORDERS = 'offline_orders';
 
+function toPlainData(val) {
+    if (val === null || val === undefined || typeof val !== 'object') return val;
+    try {
+        return JSON.parse(JSON.stringify(val));
+    } catch (_) {
+        return Array.isArray(val) ? [...val] : { ...val };
+    }
+}
+
 export const OfflineDB = {
     db: null,
 
@@ -51,12 +60,7 @@ export const OfflineDB = {
 
     async enqueueRequest(requestObj) {
         const db = await this.ensureDb();
-        let cleanObj;
-        try {
-            cleanObj = JSON.parse(JSON.stringify(requestObj));
-        } catch (_) {
-            cleanObj = { ...requestObj };
-        }
+        const cleanObj = toPlainData(requestObj);
         return new Promise((resolve, reject) => {
             const transaction = db.transaction([STORE_QUEUE], 'readwrite');
             const store = transaction.objectStore(STORE_QUEUE);
@@ -137,6 +141,7 @@ export const OfflineDB = {
     /** Update the body of a queued request by its _offlineId */
     async updateQueuedRequestByOfflineId(offlineId, newBody) {
         const db = await this.ensureDb();
+        const cleanBody = toPlainData(newBody);
         return new Promise((resolve, reject) => {
             const transaction = db.transaction([STORE_QUEUE], 'readwrite');
             const store = transaction.objectStore(STORE_QUEUE);
@@ -145,7 +150,7 @@ export const OfflineDB = {
                 const items = request.result || [];
                 const match = items.find(item => item._offlineId === offlineId);
                 if (match) {
-                    match.body = newBody;
+                    match.body = cleanBody;
                     const updateReq = store.put(match);
                     updateReq.onsuccess = () => resolve(true);
                     updateReq.onerror = (e) => reject(e.target.error);
@@ -160,6 +165,7 @@ export const OfflineDB = {
     /** Update any fields of a queued request by its auto-increment ID */
     async updateQueuedRequest(id, updates) {
         const db = await this.ensureDb();
+        const cleanUpdates = toPlainData(updates);
         return new Promise((resolve, reject) => {
             const transaction = db.transaction([STORE_QUEUE], 'readwrite');
             const store = transaction.objectStore(STORE_QUEUE);
@@ -167,7 +173,7 @@ export const OfflineDB = {
             getReq.onsuccess = () => {
                 const item = getReq.result;
                 if (!item) { resolve(false); return; }
-                const updated = { ...item, ...updates };
+                const updated = { ...item, ...cleanUpdates };
                 const putReq = store.put(updated);
                 putReq.onsuccess = () => resolve(true);
                 putReq.onerror = (e) => reject(e.target.error);
@@ -180,10 +186,11 @@ export const OfflineDB = {
 
     async setCache(url, data) {
         const db = await this.ensureDb();
+        const cleanData = toPlainData(data);
         return new Promise((resolve, reject) => {
             const transaction = db.transaction([STORE_CACHE], 'readwrite');
             const store = transaction.objectStore(STORE_CACHE);
-            const request = store.put({ url, data, timestamp: Date.now() });
+            const request = store.put({ url, data: cleanData, timestamp: Date.now() });
             request.onsuccess = () => resolve(request.result);
             request.onerror = (e) => reject(e.target.error);
         });
@@ -226,10 +233,11 @@ export const OfflineDB = {
 
     async saveOfflineOrder(order) {
         const db = await this.ensureDb();
+        const cleanOrder = toPlainData(order);
         return new Promise((resolve, reject) => {
             const transaction = db.transaction([STORE_OFFLINE_ORDERS], 'readwrite');
             const store = transaction.objectStore(STORE_OFFLINE_ORDERS);
-            const request = store.put(order);
+            const request = store.put(cleanOrder);
 
             request.onsuccess = () => resolve(request.result);
             request.onerror = (e) => reject(e.target.error);

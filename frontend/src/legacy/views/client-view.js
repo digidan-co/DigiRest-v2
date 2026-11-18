@@ -347,19 +347,52 @@ export function openDisplayDetail(id, cardElement) {
     // Client ordering button inside detail modal
     const addBtn = $('btn-display-modal-add');
     const addText = $('btn-display-modal-add-text');
+    const qtyBox = $('display-modal-qty-box');
+    const qtyEl = $('display-modal-qty');
+    const btnQtyMinus = $('btn-display-qty-minus');
+    const btnQtyPlus = $('btn-display-qty-plus');
+
     if (addBtn) {
         const isClientView = !$('client-view')?.classList.contains('hidden');
         if (isClientView) {
+            const requiresCustomization = Boolean(product.has_variants || product.has_toppings);
             addBtn.classList.remove('hidden');
             if (addText) {
-                addText.innerText = (product.has_variants || product.has_toppings) ? 'Elegir Opciones' : 'Añadir al Pedido';
+                addText.innerText = requiresCustomization ? 'Elegir Opciones' : 'Añadir al Pedido';
             }
-            addBtn.onclick = () => {
-                closeHandler();
-                addToCart(product.id);
-            };
+
+            if (requiresCustomization) {
+                if (qtyBox) qtyBox.classList.add('hidden');
+                addBtn.onclick = () => {
+                    closeHandler();
+                    addToCart(product.id);
+                };
+            } else {
+                let displayQty = 1;
+                if (qtyBox) qtyBox.classList.remove('hidden');
+                if (qtyEl) qtyEl.innerText = '1';
+                if (btnQtyMinus) {
+                    btnQtyMinus.onclick = () => {
+                        if (displayQty > 1) {
+                            displayQty--;
+                            if (qtyEl) qtyEl.innerText = displayQty;
+                        }
+                    };
+                }
+                if (btnQtyPlus) {
+                    btnQtyPlus.onclick = () => {
+                        displayQty++;
+                        if (qtyEl) qtyEl.innerText = displayQty;
+                    };
+                }
+                addBtn.onclick = () => {
+                    closeHandler();
+                    addToCart(product.id, displayQty);
+                };
+            }
         } else {
             addBtn.classList.add('hidden');
+            if (qtyBox) qtyBox.classList.add('hidden');
         }
     }
 
@@ -507,7 +540,29 @@ export function openComboDisplayDetail(combo, onAddCallback) {
     // Client ordering button inside detail modal
     const addBtn = $('btn-display-modal-add');
     const addText = $('btn-display-modal-add-text');
+    const qtyBox = $('display-modal-qty-box');
+    const qtyEl = $('display-modal-qty');
+    const btnQtyMinus = $('btn-display-qty-minus');
+    const btnQtyPlus = $('btn-display-qty-plus');
+
     if (addBtn) {
+        let displayQty = 1;
+        if (qtyBox) qtyBox.classList.remove('hidden');
+        if (qtyEl) qtyEl.innerText = '1';
+        if (btnQtyMinus) {
+            btnQtyMinus.onclick = () => {
+                if (displayQty > 1) {
+                    displayQty--;
+                    if (qtyEl) qtyEl.innerText = displayQty;
+                }
+            };
+        }
+        if (btnQtyPlus) {
+            btnQtyPlus.onclick = () => {
+                displayQty++;
+                if (qtyEl) qtyEl.innerText = displayQty;
+            };
+        }
         addBtn.classList.remove('hidden');
         if (addText) {
             addText.innerText = 'Agregar Combo';
@@ -515,7 +570,7 @@ export function openComboDisplayDetail(combo, onAddCallback) {
         addBtn.onclick = () => {
             closeHandler();
             if (typeof onAddCallback === 'function') {
-                onAddCallback(combo);
+                onAddCallback(combo, displayQty);
             }
         };
     }
@@ -1128,15 +1183,14 @@ export function openClientToppingsModal(product, { onConfirm = null } = {}) {
     if (!container) return;
 
     if ((!configs || configs.length === 0) && _ctmVariants.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-6 bg-white rounded-2xl border border-gray-100">
-                <p class="text-xs text-gray-500">Este plato no tiene opciones ni adiciones configuradas actualmente.</p>
-            </div>
-        `;
+        container.innerHTML = '';
+        container.classList.add('hidden');
         updateClientToppingsTotal();
         modal.classList.remove('hidden');
         return;
     }
+
+    container.classList.remove('hidden');
 
     // Separate mandatory vs optional
     const mandMap = new Map();
@@ -1687,7 +1741,18 @@ function handleAddCustomizedDishToCart() {
     if (typeof _ctmCustomCallback === 'function') {
         _ctmCustomCallback(cartItem);
     } else {
-        state.cart.push(cartItem);
+        if (!selectedVariant && selectedToppings.length === 0 && !notes) {
+            const existing = state.cart.find(
+                i => String(i.productId) === String(product.id) && !i.variant_name && !i.toppings_text && !i.notes && !i.is_combo
+            );
+            if (existing) {
+                existing.qty += _ctmQty;
+            } else {
+                state.cart.push(cartItem);
+            }
+        } else {
+            state.cart.push(cartItem);
+        }
         updateCartUI();
         const displayName = selectedVariant ? `${product.name} (${selectedVariant.name})` : product.name;
         toast(`Añadido: ${displayName} (x${_ctmQty})`, 'success');
@@ -1699,35 +1764,36 @@ function handleAddCustomizedDishToCart() {
 // CART & ORDERING
 // ====================================================================
 
-export function addToCart(id) {
+export function addToCart(id, explicitQty = null) {
     const prod = (state.products || []).find(p => String(p.id) === String(id));
     if (!prod) {
         console.warn('addToCart: Producto no encontrado para id:', id);
         return;
     }
 
-    if (prod.has_toppings || prod.has_variants) {
+    if (prod.has_toppings || prod.has_variants || explicitQty === null || typeof explicitQty !== 'number') {
         openClientToppingsModal(prod);
         return;
     }
 
+    const qtyToAdd = Math.max(1, parseInt(explicitQty, 10) || 1);
     const price = (prod.is_promo && prod.promo_price) ? prod.promo_price : prod.price;
-    const existing = state.cart.find(i => String(i.productId) === String(id) && !i.toppings_text && !i.variant_name && !i.notes);
+    const existing = state.cart.find(i => String(i.productId) === String(id) && !i.toppings_text && !i.variant_name && !i.notes && !i.is_combo);
 
     if (existing) {
-        existing.qty++;
+        existing.qty += qtyToAdd;
     } else {
         state.cart.push({
             id: `${prod.id}_${Date.now()}`,
             productId: prod.id,
             name: prod.name,
             price: price,
-            qty: 1
+            qty: qtyToAdd
         });
     }
 
     updateCartUI();
-    toast('Añadido: ' + prod.name, 'success');
+    toast(`Añadido: ${prod.name}${qtyToAdd > 1 ? ` (x${qtyToAdd})` : ''}`, 'success');
 }
 
 export function updateCheckoutTotals() {
@@ -1831,33 +1897,136 @@ export function renderCartList() {
         return;
     }
 
-    list.innerHTML = state.cart.map(item => `
-        <div class="flex justify-between items-start bg-white p-3 rounded-2xl border ${item.is_combo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-xs">
-            <div class="flex items-start gap-2.5 min-w-0 flex-1">
-                <div class="bg-orange-50 text-orange-600 font-bold w-6 h-6 flex items-center justify-center rounded-lg text-xs shrink-0 mt-0.5">${item.qty}</div>
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
-                        ${item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>COMBO</span>` : ''}
-                        ${item.combo_name && !item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
-                        <p class="font-bold text-xs text-gray-800 leading-tight">${escapeHtml(item.name)}</p>
+    list.innerHTML = state.cart.map((item, idx) => `
+        <div class="flex flex-col bg-white p-3 rounded-2xl border ${item.is_combo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-xs">
+            <div class="flex justify-between items-start gap-2">
+                <div class="flex items-start gap-2 min-w-0 flex-1">
+                    <div class="flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0 mt-0.5 border border-gray-200/70">
+                        <button type="button" class="cart-qty-minus w-5 h-5 bg-white rounded-md shadow-2xs text-gray-600 hover:text-red-500 font-bold text-xs flex items-center justify-center active:scale-90 transition-transform cursor-pointer" data-index="${idx}" aria-label="Disminuir cantidad" title="Disminuir">
+                            -
+                        </button>
+                        <span class="w-5 text-center font-extrabold text-gray-800 text-xs">${item.qty}</span>
+                        <button type="button" class="cart-qty-plus w-5 h-5 bg-white rounded-md shadow-2xs text-gray-600 hover:text-[var(--system-primary)] font-bold text-xs flex items-center justify-center active:scale-90 transition-transform cursor-pointer" data-index="${idx}" aria-label="Aumentar cantidad" title="Aumentar">
+                            +
+                        </button>
                     </div>
-                    ${item.is_combo && Array.isArray(item.combo_items) && item.combo_items.length > 0 ? `
-                        <div class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-[11px] text-gray-600">
-                            ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[9px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                            ${item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>COMBO</span>` : ''}
+                            ${item.combo_name && !item.is_combo ? `<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded inline-flex items-center gap-1"><i class="fas fa-tags text-[8px]"></i>${escapeHtml(item.combo_name)}</span>` : ''}
+                            <p class="font-bold text-xs text-gray-800 leading-tight">${escapeHtml(item.name)}</p>
                         </div>
-                    ` : ''}
-                    ${item.variant_name ? `<p class="text-[10px] text-indigo-700 font-bold leading-tight mt-0.5"><i class="fas fa-layer-group text-[8px] mr-1"></i>Tamaño: ${escapeHtml(item.variant_name)}</p>` : ''}
-                    ${item.toppings_text ? `<p class="text-[10px] text-amber-700 font-medium leading-tight mt-0.5"><i class="fas fa-cookie-bite mr-1 text-[8px]"></i>${escapeHtml(item.toppings_text)}</p>` : ''}
-                    ${item.notes ? `<p class="text-[9px] text-gray-400 italic leading-tight mt-0.5">Nota: ${escapeHtml(item.notes)}</p>` : ''}
-                    <p class="text-[10px] text-gray-400 font-semibold mt-1">${formatMoney(item.price)} c/u</p>
+                        ${item.is_combo && Array.isArray(item.combo_items) && item.combo_items.length > 0 ? `
+                            <div class="mt-1 mb-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-[11px] text-gray-600">
+                                ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[9px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                            </div>
+                        ` : ''}
+                        ${item.variant_name ? `<p class="text-[10px] text-indigo-700 font-bold leading-tight mt-0.5"><i class="fas fa-layer-group text-[8px] mr-1"></i>Tamaño: ${escapeHtml(item.variant_name)}</p>` : ''}
+                        ${item.toppings_text ? `<p class="text-[10px] text-amber-700 font-medium leading-tight mt-0.5"><i class="fas fa-cookie-bite mr-1 text-[8px]"></i>${escapeHtml(item.toppings_text)}</p>` : ''}
+                        ${item.notes && !item._editingNote ? `<p class="text-[10px] text-orange-700 bg-orange-50/80 border border-orange-200/70 rounded-md px-1.5 py-0.5 italic leading-tight mt-1 inline-block"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>Nota: ${escapeHtml(item.notes)}</p>` : ''}
+                        <div class="flex items-center gap-2 mt-1 flex-wrap">
+                            <span class="text-[10px] text-gray-400 font-semibold">${formatMoney(item.price)} c/u</span>
+                            <button type="button" class="toggle-cart-item-note inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer border ${item.notes ? 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700'}" data-index="${idx}">
+                                <i class="fas ${item.notes ? 'fa-pen' : 'fa-comment-dots'} text-[9px]"></i>
+                                <span>${item.notes ? 'Editar nota' : 'Añadir nota'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="font-bold text-xs text-gray-900">${formatMoney(item.price * item.qty)}</span>
+                    <button class="text-gray-300 hover:text-red-500 remove-item-btn p-1 cursor-pointer transition-colors" data-id="${item.id}" aria-label="Eliminar del carrito" title="Eliminar"><i class="fas fa-trash text-xs"></i></button>
                 </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0 ml-2">
-                <span class="font-bold text-xs text-gray-900">${formatMoney(item.price * item.qty)}</span>
-                <button class="text-gray-300 hover:text-red-500 remove-item-btn p-1 cursor-pointer transition-colors" data-id="${item.id}" aria-label="Eliminar del carrito" title="Eliminar combo"><i class="fas fa-trash text-xs"></i></button>
-            </div>
+            ${item._editingNote ? `
+                <div class="cart-item-note-editor mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5">
+                    <input type="text" class="cart-item-note-input flex-1 px-2.5 py-1.5 text-xs bg-amber-50/40 border border-orange-200 rounded-lg outline-none focus:border-orange-400 focus:bg-white text-gray-700"
+                        data-index="${idx}"
+                        value="${escapeHtml(item.notes || '')}"
+                        placeholder="Observación para este plato (ej: sin cebolla)...">
+                    <button type="button" class="save-cart-item-note px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold shrink-0 cursor-pointer transition-colors" data-index="${idx}">
+                        Listo
+                    </button>
+                </div>
+            ` : ''}
         </div>
     `).join('');
+
+    list.querySelectorAll('.cart-qty-minus').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.index, 10);
+            const item = state.cart[idx];
+            if (!item) return;
+            if (item.qty > 1) {
+                item.qty--;
+            } else {
+                state.cart.splice(idx, 1);
+            }
+            updateCartUI();
+            renderCartList();
+        });
+    });
+
+    list.querySelectorAll('.cart-qty-plus').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.index, 10);
+            const item = state.cart[idx];
+            if (!item) return;
+            item.qty++;
+            updateCartUI();
+            renderCartList();
+        });
+    });
+
+    list.querySelectorAll('.toggle-cart-item-note').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.index, 10);
+            const item = state.cart[idx];
+            if (!item) return;
+            item._editingNote = !item._editingNote;
+            renderCartList();
+            if (item._editingNote) {
+                const input = list.querySelector(`.cart-item-note-input[data-index="${idx}"]`);
+                if (input) {
+                    input.focus();
+                    const len = input.value.length;
+                    input.setSelectionRange(len, len);
+                }
+            }
+        });
+    });
+
+    list.querySelectorAll('.cart-item-note-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const idx = parseInt(input.dataset.index, 10);
+            if (state.cart[idx]) {
+                state.cart[idx].notes = e.target.value;
+            }
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const idx = parseInt(input.dataset.index, 10);
+                if (state.cart[idx]) {
+                    state.cart[idx].notes = (e.target.value || '').trim();
+                    state.cart[idx]._editingNote = false;
+                }
+                renderCartList();
+            }
+        });
+    });
+
+    list.querySelectorAll('.save-cart-item-note').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.index, 10);
+            const item = state.cart[idx];
+            if (item) {
+                item.notes = (item.notes || '').trim();
+                item._editingNote = false;
+            }
+            renderCartList();
+        });
+    });
 
     list.querySelectorAll('.remove-item-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1989,7 +2158,10 @@ export async function handleSendOrder() {
         delivery_fee: deliveryFee,
         discount: comboDiscount,
         discount_reason: comboCalc.discountReason || '',
-        items: JSON.parse(JSON.stringify(state.cart)),
+        items: state.cart.map(({ _editingNote, ...rest }) => ({
+            ...rest,
+            notes: typeof rest.notes === 'string' ? rest.notes.trim() : rest.notes
+        })),
         total: totalWithDelivery,
         status: 'Pendiente'
     };

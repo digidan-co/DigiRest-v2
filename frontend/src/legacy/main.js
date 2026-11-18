@@ -2096,10 +2096,12 @@ $('c-proof').addEventListener('change', async (e) => {
 
         try {
             const compressedBlob = await compressProof(file);
-            // Create a new File object with WebP extension and mime type
-            const newName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+            // Create a new File object matching actual compressed blob MIME type and extension
+            const actualMime = compressedBlob.type || 'image/webp';
+            const actualExt = actualMime.includes('png') ? '.png' : (actualMime.includes('jp') ? '.jpg' : '.webp');
+            const newName = file.name.replace(/\.[^/.]+$/, "") + actualExt;
             const compressedFile = new File([compressedBlob], newName, {
-                type: 'image/webp',
+                type: actualMime,
                 lastModified: Date.now()
             });
 
@@ -3135,10 +3137,12 @@ $('oe-proof').addEventListener('change', async (e) => {
     if (file) {
         try {
             const compressedBlob = await compressProof(file);
-            // Convert Blob to File with WebP extension
-            const newName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+            // Convert Blob to File matching actual compressed MIME type
+            const actualMime = compressedBlob.type || 'image/webp';
+            const actualExt = actualMime.includes('png') ? '.png' : (actualMime.includes('jp') ? '.jpg' : '.webp');
+            const newName = file.name.replace(/\.[^/.]+$/, "") + actualExt;
             const compressedFile = new File([compressedBlob], newName, {
-                type: 'image/webp',
+                type: actualMime,
                 lastModified: Date.now()
             });
             // Store compressed file for later use
