@@ -220,17 +220,18 @@ app.use('/server/uploads', express.static(path.join(__dirname, 'uploads'), uploa
 
 // Shared cache strategy for static assets
 function staticCacheHeaders(res, filePath) {
-    if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+    const cleanPath = filePath.replace(/\.(br|gz)$/i, '');
+    if (cleanPath.endsWith('index.html') || cleanPath.endsWith('sw.js')) {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     } else if (
-        filePath.includes(`${path.sep}assets${path.sep}`) &&
-        /\.(js|css|woff2?|ttf|eot|webp|png|jpg|jpeg|svg)$/.test(filePath)
+        cleanPath.includes(`${path.sep}assets${path.sep}`) &&
+        /\.(js|css|woff2?|ttf|eot|webp|png|jpg|jpeg|svg)$/.test(cleanPath)
     ) {
         // Hashed Vite assets: cache for 1 year (immutable)
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    } else if (/\.(webp|png|jpg|jpeg|gif|ico|svg|mp3|mp4|woff2?|ttf|eot)$/.test(filePath)) {
+    } else if (/\.(webp|png|jpg|jpeg|gif|ico|svg|mp3|mp4|woff2?|ttf|eot)$/.test(cleanPath)) {
         res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-    } else if (/\.(js|css)$/.test(filePath)) {
+    } else if (/\.(js|css)$/.test(cleanPath)) {
         res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     }
 }

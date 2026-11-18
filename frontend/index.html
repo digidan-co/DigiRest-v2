@@ -5194,8 +5194,9 @@
                 }
             } else {
                 window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('/sw.js')
+                    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
                         .then(registration => {
+                            registration.update().catch(() => {});
                             console.log('ServiceWorker registrado con éxito');
                         })
                         .catch(error => {
