@@ -118,7 +118,7 @@ const upload = multer({
 const csvUpload = multer({
     storage: storage,
     limits: {
-        fileSize: 2 * 1024 * 1024, // 2MB max CSV
+        fileSize: 50 * 1024 * 1024, // 50MB max CSV (soporta imágenes embebidas en Base64)
         files: 1
     },
     fileFilter: csvFileFilter

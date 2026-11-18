@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
-const { upload, csvUpload, validateUploadedFile } = require('../middleware/upload');
+const { upload, csvUpload, validateUploadedFile, invalidateUploadsStorageCache } = require('../middleware/upload');
 const { validateProduct } = require('../middleware/validators');
 const { processImage } = require('../utils/imageProcessor');
 const { v4: uuidv4 } = require('uuid');
@@ -200,6 +200,99 @@ module.exports = (io) => {
         });
     });
 
+    // --- CSV IMAGE HELPERS (EXPORTAR E IMPORTAR CON IMÁGENES) ---
+
+    function encodeDishImageForExport(imgValue) {
+        if (!imgValue) return '/img/noimage.png';
+        const raw = String(imgValue).trim();
+        if (!raw || raw === '/img/noimage.png' || raw.includes('noimage.png')) return '/img/noimage.png';
+        if (raw.startsWith('data:image/') || /^https?:\/\//i.test(raw)) return raw;
+
+        const cleanPath = raw.split('?')[0];
+        const filename = path.basename(cleanPath);
+        const candidates = [
+            path.join(__dirname, '../uploads', filename),
+            path.join(__dirname, '../../', cleanPath.replace(/^\/+/, ''))
+        ];
+
+        for (const candidate of candidates) {
+            try {
+                if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                    const ext = path.extname(candidate).toLowerCase();
+                    const mimeMap = {
+                        '.webp': 'image/webp',
+                        '.png': 'image/png',
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.gif': 'image/gif'
+                    };
+                    const mime = mimeMap[ext] || 'image/webp';
+                    const buffer = fs.readFileSync(candidate);
+                    return `data:${mime};base64,${buffer.toString('base64')}`;
+                }
+            } catch (_) {}
+        }
+
+        return raw;
+    }
+
+    async function materializeImportedImage(rawImg) {
+        if (!rawImg) return '/img/noimage.png';
+        const raw = String(rawImg).trim();
+        if (!raw || raw === '/img/noimage.png' || raw.includes('noimage.png')) return '/img/noimage.png';
+
+        const uploadsDir = path.join(__dirname, '../uploads');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+
+        if (raw.startsWith('data:image/')) {
+            const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+            if (match) {
+                const mime = match[1].toLowerCase();
+                const buffer = Buffer.from(match[2].trim(), 'base64');
+
+                if (mime === 'image/webp') {
+                    const outName = `${uuidv4()}_opt.webp`;
+                    fs.writeFileSync(path.join(uploadsDir, outName), buffer);
+                    invalidateUploadsStorageCache();
+                    return `/server/uploads/${outName}`;
+                }
+
+                const ext = mime.includes('png') ? '.png' : (mime.includes('gif') ? '.gif' : '.jpg');
+                const tempPath = path.join(uploadsDir, `${uuidv4()}${ext}`);
+                fs.writeFileSync(tempPath, buffer);
+                const optimizedPath = await processImage(tempPath);
+                invalidateUploadsStorageCache();
+                return `/server/uploads/${path.basename(optimizedPath)}`;
+            }
+        }
+
+        if (/^https?:\/\//i.test(raw)) {
+            return raw;
+        }
+
+        // Si el CSV trae una ruta local de uploads (ej. exportado previamente sin base64)
+        const cleanPath = raw.split('?')[0];
+        if (cleanPath.includes('/uploads/')) {
+            const filename = path.basename(cleanPath);
+            const destPath = path.join(uploadsDir, filename);
+            if (fs.existsSync(destPath)) {
+                return `/server/uploads/${filename}`;
+            }
+
+            // Fallback: intentar copiar desde DigiRest v1/server/uploads si existe en el mismo entorno
+            const v1Candidate = path.resolve(__dirname, '../../../DigiRest v1/server/uploads', filename);
+            if (fs.existsSync(v1Candidate)) {
+                fs.copyFileSync(v1Candidate, destPath);
+                invalidateUploadsStorageCache();
+                return `/server/uploads/${filename}`;
+            }
+        }
+
+        return raw;
+    }
+
     // --- CSV PRODUCTS ---
 
     router.get('/products/export', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
@@ -207,6 +300,11 @@ module.exports = (io) => {
             if (err) return res.status(500).json({ error: err.message });
 
             try {
+                const exportRows = (rows || []).map(row => ({
+                    ...row,
+                    img: encodeDishImageForExport(row.img)
+                }));
+
                 // Fields to export (includes all current v2 fields and preserves legacy fields)
                 const fields = [
                     'id', 'name', 'desc', 'price', 'category', 'available', 'img',
@@ -215,7 +313,7 @@ module.exports = (io) => {
                 ];
                 const opts = { fields };
                 const parser = new Parser(opts);
-                const csvData = parser.parse(rows);
+                const csvData = parser.parse(exportRows);
 
                 res.header('Content-Type', 'text/csv; charset=utf-8');
                 res.header('Content-Disposition', 'attachment; filename=platos_digirest.csv');
@@ -268,7 +366,8 @@ module.exports = (io) => {
                             const rawAvail = row.available !== undefined ? row.available : row.disponible;
                             const available = (rawAvail === undefined || rawAvail === '' || rawAvail === '1' || rawAvail === 1 || rawAvail === 'true' || rawAvail === true || String(rawAvail).toLowerCase() === 'si' || String(rawAvail).toLowerCase() === 'sí') ? 1 : 0;
 
-                            const img = (row.img || row.imagen || row.foto || '/img/noimage.png').trim() || '/img/noimage.png';
+                            const rawImg = row.img || row.imagen || row.foto || '/img/noimage.png';
+                            const img = await materializeImportedImage(rawImg);
 
                             // New v2 fields with safe defaults for older CSV exports
                             const rawHasTop = row.has_toppings !== undefined ? row.has_toppings : (row.tiene_toppings !== undefined ? row.tiene_toppings : 0);
