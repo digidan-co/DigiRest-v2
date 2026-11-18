@@ -230,10 +230,16 @@ module.exports = (io) => {
     let cachedStats = null;
     let lastStatsFetch = 0;
 
+    function invalidateStatsCache() {
+        cachedStats = null;
+        lastStatsFetch = 0;
+    }
+    router.invalidateStatsCache = invalidateStatsCache;
+
     router.get('/system/stats', verifyToken, requireRole(['admin', 'cajero']), async (req, res) => {
         const now = Date.now();
-        // 15 seconds TTL cache to prevent disk/db thrashing on fast reloads
-        if (cachedStats && (now - lastStatsFetch) < 15000) {
+        // 15 seconds TTL cache to prevent disk/db thrashing on fast reloads (bypass si se pide _t o force)
+        if (!req.query._t && !req.query.force && cachedStats && (now - lastStatsFetch) < 15000) {
             return res.json(cachedStats);
         }
 
@@ -267,8 +273,8 @@ module.exports = (io) => {
                 queryCount("SELECT COUNT(*) as count FROM tasks"),
                 queryCount("SELECT COUNT(*) as count FROM reservations"),
                 queryCount("SELECT COUNT(*) as count FROM order_notes"),
-                queryCount("SELECT COUNT(*) as count FROM orders WHERE proof IS NOT NULL AND proof != ''"),
-                queryCount("SELECT COUNT(*) as count FROM products WHERE img IS NOT NULL AND img != ''")
+                queryCount("SELECT COUNT(*) as count FROM orders WHERE proof IS NOT NULL AND proof != '' AND proof != 'null' AND proof != 'undefined'"),
+                queryCount("SELECT COUNT(*) as count FROM products WHERE img IS NOT NULL AND img != '' AND img != 'null' AND img NOT LIKE '%noimage%' AND img NOT LIKE '%placeholder%'")
             ]);
 
             const otherRecords = usersCount + gastosCount + cierreCount + tasksCount + reservationsCount + notesCount;

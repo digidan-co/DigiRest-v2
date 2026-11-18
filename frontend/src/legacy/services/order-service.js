@@ -140,7 +140,7 @@ export async function createOrder(orderData) {
         return await handleSaveOffline();
     }
 
-    const hasFile = orderData.proof instanceof File;
+    const hasFile = (orderData.proof instanceof File) || (orderData.proof instanceof Blob);
     try {
         if (hasFile) {
             const formData = new FormData();
@@ -148,7 +148,11 @@ export async function createOrder(orderData) {
                 if (key === 'items') {
                     formData.append('items', JSON.stringify(orderData.items));
                 } else if (key === 'proof') {
-                    formData.append('proof', orderData.proof);
+                    if (orderData.proof instanceof File) {
+                        formData.append('proof', orderData.proof);
+                    } else if (orderData.proof instanceof Blob) {
+                        formData.append('proof', orderData.proof, 'comprobante.webp');
+                    }
                 } else if (typeof orderData[key] === 'object' && orderData[key] !== null) {
                     formData.append(key, JSON.stringify(orderData[key]));
                 } else {

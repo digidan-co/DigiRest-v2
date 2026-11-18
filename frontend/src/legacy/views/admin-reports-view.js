@@ -211,7 +211,7 @@ export function openReportWindow(customData = null) {
 export async function updateQuotaWidget() {
     let stats = null;
     try {
-        stats = await ApiClient.get('/admin/system/stats');
+        stats = await ApiClient.get(`/admin/system/stats?_t=${Date.now()}`);
     } catch (e) {
         // Continue with fallbacks on transient network issues
     }
@@ -255,44 +255,39 @@ export async function updateQuotaWidget() {
         }
     }
 
-    const readsBar = document.getElementById('cap-reads-bar');
-    const readsText = document.getElementById('cap-reads-text');
+    // Actualizar barras y textos en todos los contenedores coincidentes (Soporta vista Cajero y Admin)
+    document.querySelectorAll('#cap-reads-bar').forEach(el => {
+        el.style.width = `${recordsPct}%`;
+        el.className = `h-1.5 rounded-full transition-all duration-500 ${recordsPct > 90 ? 'bg-red-500' : recordsPct > 70 ? 'bg-yellow-500' : 'bg-emerald-500'}`;
+    });
+    document.querySelectorAll('#cap-reads-text').forEach(el => {
+        el.innerText = `${totalRecords.toLocaleString()} / ${RECORDS_LIMIT.toLocaleString()}`;
+    });
 
-    if (readsBar) {
-        readsBar.style.width = `${recordsPct}%`;
-        readsBar.className = `h-1.5 rounded-full transition-all duration-500 ${recordsPct > 90 ? 'bg-red-500' : recordsPct > 70 ? 'bg-yellow-500' : 'bg-emerald-500'}`;
-    }
-    if (readsText) readsText.innerText = `${totalRecords.toLocaleString()} / ${RECORDS_LIMIT.toLocaleString()}`;
-
-    // Storage progress bar (Real MBs used vs Dokploy Limit)
-    const storageBar = document.getElementById('cap-storage-bar');
-    const storageText = document.getElementById('cap-storage-text');
-
-    if (storageBar) {
-        storageBar.style.width = `${storagePct}%`;
-        storageBar.className = `h-1.5 rounded-full transition-all duration-500 ${storagePct > 90 ? 'bg-red-500' : storagePct > 70 ? 'bg-yellow-500' : 'bg-blue-500'}`;
-    }
-    if (storageText) {
-        storageText.innerText = `${imgSizeFormatted} / ${maxStorageMB} MB (${storagePct.toFixed(0)}%)`;
-    }
+    // Storage progress bar
+    document.querySelectorAll('#cap-storage-bar').forEach(el => {
+        el.style.width = `${storagePct}%`;
+        el.className = `h-1.5 rounded-full transition-all duration-500 ${storagePct > 90 ? 'bg-red-500' : storagePct > 70 ? 'bg-yellow-500' : 'bg-blue-500'}`;
+    });
+    document.querySelectorAll('#cap-storage-text').forEach(el => {
+        el.innerText = `${imgSizeFormatted} / ${maxStorageMB} MB (${storagePct.toFixed(0)}%)`;
+    });
 
     // Health Status
-    const healthEl = document.getElementById('cap-health-status');
-    if (healthEl) {
+    document.querySelectorAll('#cap-health-status').forEach(el => {
         if (recordsPct > 90 || storagePct > 90) {
-            healthEl.innerHTML = '<span class="text-red-500"><i class="fas fa-exclamation-triangle mr-1"></i>Purga recomendada</span>';
+            el.innerHTML = '<span class="text-red-500"><i class="fas fa-exclamation-triangle mr-1"></i>Purga recomendada</span>';
         } else if (recordsPct > 70 || storagePct > 70) {
-            healthEl.innerHTML = '<span class="text-yellow-600"><i class="fas fa-info-circle mr-1"></i>Monitorear</span>';
+            el.innerHTML = '<span class="text-yellow-600"><i class="fas fa-info-circle mr-1"></i>Monitorear</span>';
         } else {
-            healthEl.innerHTML = '<span class="text-emerald-600"><i class="fas fa-check-circle mr-1"></i>Estado: OK</span>';
+            el.innerHTML = '<span class="text-emerald-600"><i class="fas fa-check-circle mr-1"></i>Estado: OK</span>';
         }
-    }
+    });
 
     // Files count and breakdown (Dishes vs Receipts)
-    const imgText = document.getElementById('cap-images-count');
-    if (imgText) {
-        imgText.innerHTML = `<i class="fas fa-images mr-1"></i>${imgCount} archivos (${productsImgCount} platos • ${proofsCount} comp.)`;
-    }
+    document.querySelectorAll('#cap-images-count').forEach(el => {
+        el.innerHTML = `<i class="fas fa-images mr-1"></i>${imgCount} archivos (${productsImgCount} platos • ${proofsCount} comp.)`;
+    });
 }
 
 /**

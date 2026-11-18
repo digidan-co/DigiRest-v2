@@ -640,7 +640,11 @@ async function handleConfirmCobro() {
         let response;
         if (proofToUpload) {
             const formData = new FormData();
-            formData.append('proof', proofToUpload);
+            if (proofToUpload instanceof File) {
+                formData.append('proof', proofToUpload);
+            } else if (proofToUpload instanceof Blob) {
+                formData.append('proof', proofToUpload, 'comprobante_cobro.webp');
+            }
             for (const key in payload) {
                 if (payload[key] !== null && payload[key] !== undefined) {
                     if (typeof payload[key] === 'object') {
