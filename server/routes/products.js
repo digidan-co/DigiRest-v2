@@ -636,6 +636,44 @@ module.exports = (io) => {
         });
     });
 
+    // Función temporal: Eliminar todos los platos y sus imágenes físicas asociadas
+    router.delete('/products/purge-all/all', verifyToken, requireRole(['admin']), (req, res) => {
+        db.all("SELECT id, img FROM products", [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const uploadsDir = path.resolve(__dirname, '../uploads');
+            let deletedImages = 0;
+
+            (rows || []).forEach(prod => {
+                if (prod && prod.img && (prod.img.startsWith('/uploads/') || prod.img.startsWith('/server/uploads/'))) {
+                    try {
+                        const filename = path.basename(prod.img.split('?')[0]);
+                        const full = path.join(uploadsDir, filename);
+                        if (fs.existsSync(full)) {
+                            fs.unlinkSync(full);
+                            deletedImages++;
+                        }
+                    } catch (_) {}
+                }
+            });
+
+            db.run("DELETE FROM products", [], function (deleteErr) {
+                if (deleteErr) return res.status(500).json({ error: deleteErr.message });
+
+                if (typeof invalidateUploadsStorageCache === 'function') {
+                    invalidateUploadsStorageCache();
+                }
+
+                io.emit('products_updated');
+                res.json({
+                    message: 'Todos los platos y sus imágenes asociadas fueron eliminados correctamente',
+                    deletedCount: rows ? rows.length : 0,
+                    deletedImages
+                });
+            });
+        });
+    });
+
     router.delete('/products/:id', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
         db.get("SELECT img, name FROM products WHERE id = ?", [req.params.id], (findErr, prod) => {
             db.run("DELETE FROM products WHERE id = ?", [req.params.id], function (err) {

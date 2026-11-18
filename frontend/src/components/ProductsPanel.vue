@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { state } from '@/legacy/core/state.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
-import { importProductsCSV, importCategoriesCSV, exportProductsCSV, exportCategoriesCSV } from '@/legacy/services/product-service.js';
+import { importProductsCSV, importCategoriesCSV, exportProductsCSV, exportCategoriesCSV, purgeAllProducts } from '@/legacy/services/product-service.js';
 import { populateDishFormExtensions, resetDishToppingsConfig } from '@/legacy/features/toppings-manager.js';
 import { resetDishVariantsConfig } from '@/legacy/features/variants-manager.js';
 import { toast } from '@/legacy/components/ui.js';
@@ -14,6 +14,7 @@ const categoriesPage = ref(1);
 const PER_PAGE = 14;
 const importingProducts = ref(false);
 const importingCategories = ref(false);
+const purgingProducts = ref(false);
 
 const filteredProducts = computed(() => {
     const s = prodSearch.value.toLowerCase().trim();
@@ -95,6 +96,23 @@ function newCategory() {
 function exportProducts() { exportProductsCSV(); }
 function exportCategories() { exportCategoriesCSV(); }
 
+async function onPurgeAllProducts() {
+    if (!confirm('⚠️ ¿Estás seguro de que deseas eliminar TODOS los platos y sus imágenes asociadas? Esta acción es temporal y permanente.')) {
+        return;
+    }
+    purgingProducts.value = true;
+    try {
+        const res = await purgeAllProducts();
+        toast(res.message || 'Todos los platos fueron eliminados correctamente', 'success');
+        if (state.products) state.products = [];
+    } catch (err) {
+        console.error(err);
+        toast(err.message || 'Error al eliminar todos los platos', 'error');
+    } finally {
+        purgingProducts.value = false;
+    }
+}
+
 async function onImportProducts(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -154,7 +172,14 @@ async function onImportCategories(e) {
                 <input v-model="prodSearch" type="text" placeholder="Buscar plato..."
                     class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm">
             </div>
-            <div class="flex gap-2 w-full sm:w-auto">
+            <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                <button type="button" @click="onPurgeAllProducts" :disabled="purgingProducts || filteredProducts.length === 0"
+                    class="px-3.5 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Función temporal: Eliminar todos los platos y sus imágenes físicas">
+                    <i v-if="purgingProducts" class="fas fa-spinner fa-spin"></i>
+                    <i v-else class="fas fa-trash-alt"></i>
+                    <span>Vaciar Platos</span>
+                </button>
                 <button type="button" @click="exportProducts" class="btn-import-export px-4 py-2.5 rounded-xl shadow-xs flex items-center gap-2 transition-transform hover:scale-105 justify-center text-xs cursor-pointer font-bold"><i class="fas fa-file-export"></i> Exportar</button>
                 <button type="button" @click="$refs.prodFile.click()" class="btn-import-export px-4 py-2.5 rounded-xl shadow-xs flex items-center gap-2 transition-transform hover:scale-105 justify-center text-xs cursor-pointer font-bold">
                     <i v-if="importingProducts" class="fas fa-spinner fa-spin"></i><i v-else class="fas fa-file-import"></i> Importar

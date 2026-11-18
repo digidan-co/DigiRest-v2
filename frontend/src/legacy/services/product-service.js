@@ -28,6 +28,10 @@ export async function deleteProduct(id) {
     return await ApiClient.delete(`/products/${id}`);
 }
 
+export async function purgeAllProducts() {
+    return await ApiClient.delete('/products/purge-all/all');
+}
+
 export async function getCategories() {
     return await ApiClient.get('/categories');
 }
