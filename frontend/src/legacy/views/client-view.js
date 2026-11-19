@@ -16,6 +16,7 @@ import { compressProof } from '../utils/image-utils.js';
 import { getTopDishes7d } from '../services/product-service.js';
 import { calculateOrderCombos } from '../utils/combo-calculator.js';
 import { calculateComboPricing } from '../services/promotions-service.js';
+import { validateCoupon } from '../services/coupons-service.js';
 
 let currentDisplayCategory = 'Todos';
 let currentClientCategory = 'Todos';
@@ -1771,12 +1772,12 @@ export function addToCart(id, explicitQty = null) {
         return;
     }
 
-    if (prod.has_toppings || prod.has_variants || explicitQty === null || typeof explicitQty !== 'number') {
+    if (prod.has_toppings || prod.has_variants) {
         openClientToppingsModal(prod);
         return;
     }
 
-    const qtyToAdd = Math.max(1, parseInt(explicitQty, 10) || 1);
+    const qtyToAdd = (typeof explicitQty === 'number' && explicitQty > 0) ? explicitQty : 1;
     const price = (prod.is_promo && prod.promo_price) ? prod.promo_price : prod.price;
     const existing = state.cart.find(i => String(i.productId) === String(id) && !i.toppings_text && !i.variant_name && !i.notes && !i.is_combo);
 
@@ -1788,7 +1789,8 @@ export function addToCart(id, explicitQty = null) {
             productId: prod.id,
             name: prod.name,
             price: price,
-            qty: qtyToAdd
+            qty: qtyToAdd,
+            notes: ''
         });
     }
 
@@ -1835,6 +1837,32 @@ export function updateCheckoutTotals() {
         }
     }
 
+    // Fila de ahorro por cupón de descuento
+    const couponRow = $('cart-coupon-row');
+    const couponDiscountEl = $('cart-coupon-discount');
+    const couponLabel = $('cart-coupon-label');
+    let couponDiscount = 0;
+
+    if (state.appliedCoupon) {
+        const currentSub = comboCalc.netItemsTotal || subtotal;
+        if (state.appliedCoupon.discount_type === 'PERCENT') {
+            couponDiscount = Math.round((currentSub * state.appliedCoupon.discount_value) / 100);
+        } else {
+            couponDiscount = Math.min(currentSub, state.appliedCoupon.discount_value);
+        }
+        state.appliedCoupon.discountAmount = couponDiscount;
+
+        if (couponRow && couponDiscountEl) {
+            couponRow.classList.remove('hidden');
+            couponDiscountEl.textContent = `-${formatMoney(couponDiscount)}`;
+            if (couponLabel) {
+                couponLabel.innerHTML = `<i class="fas fa-ticket text-emerald-600 mr-1 text-[11px]"></i> Descuento (${escapeHtml(state.appliedCoupon.code)}):`;
+            }
+        }
+    } else {
+        if (couponRow) couponRow.classList.add('hidden');
+    }
+
     if (isDomicilio) {
         if (selectedZone) {
             deliveryFee = parseFloat(selectedZone.fee) || 0;
@@ -1857,7 +1885,7 @@ export function updateCheckoutTotals() {
     } else {
         if (zoneInfo) zoneInfo.classList.add('hidden');
         if (deliveryRow) deliveryRow.classList.add('hidden');
-        if (breakdownContainer && (subtotal > 0 || comboDiscount > 0)) {
+        if (breakdownContainer && (subtotal > 0 || comboDiscount > 0 || couponDiscount > 0)) {
             breakdownContainer.classList.remove('hidden');
         } else if (breakdownContainer && !isDomicilio) {
             breakdownContainer.classList.add('hidden');
@@ -1865,12 +1893,110 @@ export function updateCheckoutTotals() {
     }
 
     if (subtotalEl) subtotalEl.textContent = formatMoney(subtotal);
-    const grandTotal = Math.max(0, subtotal - comboDiscount + deliveryFee);
+    const grandTotal = Math.max(0, subtotal - comboDiscount - couponDiscount + deliveryFee);
     if (totalEl) totalEl.textContent = formatMoney(grandTotal);
 
     if ($('c-pay')?.value === 'Mixto' && typeof window.updateClientMixedBalance === 'function') {
         window.updateClientMixedBalance();
     }
+}
+
+function extractCleanCouponErrorMessage(rawMsg) {
+    if (!rawMsg) return 'Cupón inválido';
+    let msg = String(rawMsg).trim();
+    if (msg.startsWith('Error: ')) {
+        msg = msg.substring(7).trim();
+    }
+    if (msg.startsWith('{') && msg.endsWith('}')) {
+        try {
+            const parsed = JSON.parse(msg);
+            if (parsed.error) msg = parsed.error;
+            else if (parsed.message) msg = parsed.message;
+        } catch (_) {}
+    }
+    return String(msg).replace(/<[^>]*>/g, '').trim();
+}
+
+function showCartCouponError(msg) {
+    const errorEl = $('cart-coupon-error');
+    const errorText = $('cart-coupon-error-text');
+    if (!errorEl) return;
+    const cleanMsg = extractCleanCouponErrorMessage(msg);
+    if (errorText) errorText.textContent = cleanMsg;
+    else errorEl.textContent = cleanMsg;
+    errorEl.classList.remove('hidden');
+}
+
+function hideCartCouponError() {
+    const errorEl = $('cart-coupon-error');
+    if (errorEl) errorEl.classList.add('hidden');
+}
+
+export async function applyCartCoupon() {
+    const input = $('cart-coupon-input');
+    const badgeEl = $('cart-coupon-applied-badge');
+    const badgeText = $('cart-coupon-badge-text');
+
+    if (!input) return;
+    const code = input.value.trim().toUpperCase();
+    if (!code) {
+        showCartCouponError('Ingresa un código de cupón');
+        return;
+    }
+
+    hideCartCouponError();
+
+    const comboCalc = calculateOrderCombos(state.cart);
+    const subtotal = comboCalc.netItemsTotal || comboCalc.subtotalBase;
+    const orderType = $('c-type')?.value || 'Domicilio';
+
+    try {
+        setLoading('btn-apply-coupon', true, '...');
+        const res = await validateCoupon(code, subtotal, orderType);
+        if (res && res.valid) {
+            state.appliedCoupon = {
+                code: res.coupon.code,
+                discount_type: res.coupon.discount_type,
+                discount_value: res.coupon.discount_value,
+                discountAmount: res.discountAmount,
+                discountReason: res.discountReason
+            };
+
+            // Ocultar toda la fila del input para que ningún icono quede huérfano
+            $('cart-coupon-input-row')?.classList.add('hidden');
+            hideCartCouponError();
+
+            if (badgeEl) badgeEl.classList.remove('hidden');
+            if (badgeText) {
+                badgeText.innerHTML = `<i class="fas fa-ticket text-emerald-600 mr-1"></i> Cupón <strong>${escapeHtml(res.coupon.code)}</strong> (-${formatMoney(res.discountAmount)})`;
+            }
+            toast(`Cupón ${res.coupon.code} aplicado con éxito`, 'success');
+            updateCheckoutTotals();
+        } else {
+            showCartCouponError(res?.error || 'Cupón inválido');
+        }
+    } catch (err) {
+        showCartCouponError(err.message || 'Error al validar cupón');
+    } finally {
+        setLoading('btn-apply-coupon', false, 'Aplicar');
+    }
+}
+
+export function removeCartCoupon() {
+    state.appliedCoupon = null;
+    const input = $('cart-coupon-input');
+    const badgeEl = $('cart-coupon-applied-badge');
+
+    if (input) {
+        input.value = '';
+    }
+    // Mostrar la fila de input completa
+    $('cart-coupon-input-row')?.classList.remove('hidden');
+    if (badgeEl) badgeEl.classList.add('hidden');
+    hideCartCouponError();
+
+    updateCheckoutTotals();
+    toast('Cupón removido', 'info');
 }
 
 export function updateCartUI() {
@@ -2098,7 +2224,8 @@ export async function handleSendOrder() {
         deliveryZoneName = selectedZone.name;
     }
 
-    const totalWithDelivery = Math.max(0, cartSubtotal - comboDiscount + deliveryFee);
+    const couponDiscount = state.appliedCoupon ? (state.appliedCoupon.discountAmount || 0) : 0;
+    const totalWithDelivery = Math.max(0, cartSubtotal - comboDiscount - couponDiscount + deliveryFee);
 
     const role = state.user ? state.user.role : null;
     const isStaffOrder = role === 'admin' ||
@@ -2156,8 +2283,9 @@ export async function handleSendOrder() {
         address: orderType === 'Domicilio' ? $('c-address').value : 'N/A',
         delivery_zone: deliveryZoneName,
         delivery_fee: deliveryFee,
-        discount: comboDiscount,
-        discount_reason: comboCalc.discountReason || '',
+        discount: comboDiscount + couponDiscount,
+        discount_reason: [comboCalc.discountReason, state.appliedCoupon ? state.appliedCoupon.discountReason : ''].filter(Boolean).join(' + '),
+        coupon_code: state.appliedCoupon ? state.appliedCoupon.code : undefined,
         items: state.cart.map(({ _editingNote, ...rest }) => ({
             ...rest,
             notes: typeof rest.notes === 'string' ? rest.notes.trim() : rest.notes
@@ -2286,5 +2414,6 @@ function resetOrderForm() {
     $('delivery-zone-container')?.classList.add('hidden');
     $('c-zone-info')?.classList.add('hidden');
     $('cart-breakdown-container')?.classList.add('hidden');
+    removeCartCoupon();
     updateCheckoutTotals();
 }

@@ -365,6 +365,46 @@ module.exports = (io) => {
                 }
             }
 
+            // Validación y aplicación de cupón de descuento si fue suministrado
+            let appliedCouponId = null;
+            const inputCouponCode = (req.body.coupon_code || '').trim().toUpperCase();
+            if (inputCouponCode) {
+                const couponRow = await new Promise((resolve) => {
+                    db.get("SELECT * FROM coupons WHERE code = ?", [inputCouponCode], (err, row) => resolve(row || null));
+                });
+                if (couponRow && couponRow.active) {
+                    let channels = ['Local', 'Domicilio', 'Para Llevar'];
+                    try { channels = JSON.parse(couponRow.channels || '[]'); } catch (e) { }
+                    const orderChannel = type || 'Domicilio';
+                    const channelMatch = channels.length === 0 || channels.includes(orderChannel);
+
+                    const now = new Date();
+                    const validUntil = couponRow.valid_until ? new Date(couponRow.valid_until) : null;
+                    const notExpired = !validUntil || isNaN(validUntil.getTime()) || now <= validUntil;
+                    const underLimit = couponRow.max_uses === 0 || couponRow.used_count < couponRow.max_uses;
+
+                    const subtotalBase = !staffUser ? (pricing?.comboCalc?.netItemsTotal || finalOrderTotal) : finalOrderTotal;
+                    const meetsMin = couponRow.min_order_total === 0 || subtotalBase >= couponRow.min_order_total;
+
+                    if (channelMatch && notExpired && underLimit && meetsMin) {
+                        let couponDisc = 0;
+                        if (couponRow.discount_type === 'PERCENT') {
+                            couponDisc = Math.round((subtotalBase * couponRow.discount_value) / 100);
+                        } else {
+                            couponDisc = Math.min(subtotalBase, couponRow.discount_value);
+                        }
+
+                        if (couponDisc > 0) {
+                            discount += couponDisc;
+                            finalOrderTotal = Math.max(0, finalOrderTotal - couponDisc);
+                            const couponReason = `Cupón: ${couponRow.code}`;
+                            discount_reason = discount_reason ? `${discount_reason} (${couponReason})` : couponReason;
+                            appliedCouponId = couponRow.id;
+                        }
+                    }
+                }
+            }
+
             const itemsJson = JSON.stringify(parsedItems);
 
             const account_id = (staffUser && req.body.account_id) ? parseInt(req.body.account_id, 10) : null;
@@ -414,6 +454,13 @@ module.exports = (io) => {
 
                 // Al turnero público ('tracker') solo se emite ID y estado sin PII ni comprobantes
                 io.to('tracker').emit('new_order', sanitizeOrderForPublicTracker(newOrder));
+
+                // Incrementar contador de uso de cupón si aplica
+                if (appliedCouponId) {
+                    db.run("UPDATE coupons SET used_count = used_count + 1 WHERE id = ?", [appliedCouponId], (cErr) => {
+                        if (cErr) console.error("Error updating coupon used_count:", cErr);
+                    });
+                }
 
                 // Log initial note to history if present
                 if (notes && notes.trim().length > 0) {

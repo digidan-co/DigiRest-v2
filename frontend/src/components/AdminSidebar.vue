@@ -12,6 +12,7 @@ const sections = [
         { tab: 'dashboard', icon: 'fa-chart-pie', label: 'Dashboard' },
         { tab: 'orders', icon: 'fa-receipt', label: 'Pedidos' },
         { tab: 'reservations', icon: 'fa-calendar-check', label: 'Reservas' },
+        { tab: 'coupons-discounts', icon: 'fa-ticket', label: 'Cupones y Descuentos' },
         { tab: 'delivery-zones', icon: 'fa-motorcycle', label: 'Zonas de Domicilio' },
         { tab: 'crm', icon: 'fa-users', label: 'Clientes' },
     ]},
@@ -31,7 +32,7 @@ const sections = [
     ]},
 ];
 
-const forbiddenForCajero = ['products', 'categories', 'users', 'config', 'supplies', 'recipes', 'toppings', 'delivery-zones', 'promotions-combos'];
+const forbiddenForCajero = ['products', 'categories', 'users', 'config', 'supplies', 'recipes', 'toppings', 'delivery-zones', 'promotions-combos', 'coupons-discounts'];
 const forbiddenForSupervisor = ['users', 'config'];
 
 const userRole = computed(() => {

@@ -8,9 +8,11 @@ import { calculateOrderCombos } from '../utils/combo-calculator.js';
 import { addOrderNotes, getOrderNotes, deleteOrderNote } from '../services/note-service.js';
 import { compressProof } from '../utils/image-utils.js';
 import { openClientToppingsModal } from './client-view.js';
+import { validateCoupon } from '../services/coupons-service.js';
 
 let waiterCart = [];
 let waiterCurrentCategory = 'all';
+let waiterAppliedCoupon = null;
 
 // Initialize events once
 export function initWaiterEvents() {
@@ -41,6 +43,19 @@ export function initWaiterEvents() {
     if (btnFinalSendReview) {
         btnFinalSendReview.onclick = handleSendWaiterOrder;
     }
+
+    $('btn-w-apply-coupon')?.addEventListener('click', applyWaiterCoupon);
+    $('w-coupon-input')?.addEventListener('input', () => hideWaiterCouponError());
+    $('w-coupon-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            applyWaiterCoupon();
+        }
+    });
+    $('btn-w-remove-coupon')?.addEventListener('click', () => {
+        removeWaiterCoupon();
+        toast('Cupón removido', 'info');
+    });
 }
 
 export function renderWaiterCategories() {
@@ -304,27 +319,52 @@ export function addToWaiterCart(productId) {
         renderWaiterProducts();
     }
 
-    openClientToppingsModal(product, {
-        onConfirm: (customizedItem) => {
-            if (!customizedItem.variant_name && !customizedItem.toppings_text && !customizedItem.notes) {
-                const existing = waiterCart.find(
-                    i => !i.is_combo && String(i.productId || i.id) === String(productId) && !i.toppings_text && !i.variant_name && !i.notes
-                );
-                if (existing) {
-                    existing.qty += customizedItem.qty;
+    if (product.has_toppings || product.has_variants) {
+        openClientToppingsModal(product, {
+            onConfirm: (customizedItem) => {
+                if (!customizedItem.variant_name && !customizedItem.toppings_text && !customizedItem.notes) {
+                    const existing = waiterCart.find(
+                        i => !i.is_combo && String(i.productId || i.id) === String(productId) && !i.toppings_text && !i.variant_name && !i.notes
+                    );
+                    if (existing) {
+                        existing.qty += customizedItem.qty;
+                    } else {
+                        waiterCart.push(customizedItem);
+                    }
                 } else {
                     waiterCart.push(customizedItem);
                 }
-            } else {
-                waiterCart.push(customizedItem);
+                updateFloatingCartButton();
+                toast(`${product.name}${customizedItem.qty > 1 ? ` (x${customizedItem.qty})` : ''} agregado`, 'success');
+                if (!$('waiter-review-modal')?.classList.contains('hidden')) {
+                    renderReviewCartList();
+                }
             }
-            updateFloatingCartButton();
-            toast(`${product.name}${customizedItem.qty > 1 ? ` (x${customizedItem.qty})` : ''} agregado`, 'success');
-            if (!$('waiter-review-modal')?.classList.contains('hidden')) {
-                renderReviewCartList();
-            }
+        });
+    } else {
+        const existing = waiterCart.find(
+            i => !i.is_combo && String(i.productId || i.id) === String(productId) && !i.toppings_text && !i.variant_name && !i.notes
+        );
+        if (existing) {
+            existing.qty += 1;
+        } else {
+            const price = (product.is_promo && product.promo_price) ? product.promo_price : product.price;
+            waiterCart.push({
+                id: `${product.id}_${Date.now()}`,
+                productId: product.id,
+                name: product.name,
+                price: price,
+                qty: 1,
+                notes: '',
+                is_combo: false
+            });
         }
-    });
+        updateFloatingCartButton();
+        toast(`${product.name} agregado`, 'success');
+        if (!$('waiter-review-modal')?.classList.contains('hidden')) {
+            renderReviewCartList();
+        }
+    }
 }
 
 function updateFloatingCartButton() {
@@ -486,10 +526,30 @@ function renderReviewCartList() {
                 <span class="font-black text-emerald-700">-${formatMoney(comboCalc.totalComboDiscount)}</span>
             </div>
         `;
-        if (totalEl) totalEl.innerText = formatMoney(comboCalc.netItemsTotal);
-    } else {
-        if (totalEl) totalEl.innerText = formatMoney(total);
     }
+
+    let subtotalBase = comboCalc.totalComboDiscount > 0 ? comboCalc.netItemsTotal : total;
+    let couponDiscount = 0;
+    if (waiterAppliedCoupon) {
+        if (waiterAppliedCoupon.discount_type === 'PERCENT') {
+            couponDiscount = Math.round((subtotalBase * waiterAppliedCoupon.discount_value) / 100);
+        } else {
+            couponDiscount = Math.min(subtotalBase, waiterAppliedCoupon.discount_value);
+        }
+        waiterAppliedCoupon.discountAmount = couponDiscount;
+        list.innerHTML += `
+            <div class="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-xs flex justify-between items-center font-bold mt-2 shadow-2xs">
+                <span class="flex items-center gap-1.5">
+                    <i class="fas fa-ticket text-emerald-600 mr-0.5"></i>
+                    <span>Descuento Cupón (${escapeHtml(waiterAppliedCoupon.code)}):</span>
+                </span>
+                <span class="font-black text-emerald-700">-${formatMoney(couponDiscount)}</span>
+            </div>
+        `;
+    }
+
+    const finalCartTotal = Math.max(0, subtotalBase - couponDiscount);
+    if (totalEl) totalEl.innerText = formatMoney(finalCartTotal);
 
     // Explicitly expose function again to ensure it's available
     window.updateWaiterCartQty = (idx, change) => {
@@ -802,9 +862,103 @@ export function resetWaiterOrderForm() {
     const clearBtn = $('btn-clear-waiter-search');
     if (clearBtn) clearBtn.classList.add('hidden');
 
+    removeWaiterCoupon();
     renderWaiterProducts();
 }
 window.resetWaiterOrderForm = resetWaiterOrderForm;
+
+function extractCleanCouponErrorMessage(rawMsg) {
+    if (!rawMsg) return 'Cupón inválido';
+    let msg = String(rawMsg).trim();
+    if (msg.startsWith('Error: ')) {
+        msg = msg.substring(7).trim();
+    }
+    if (msg.startsWith('{') && msg.endsWith('}')) {
+        try {
+            const parsed = JSON.parse(msg);
+            if (parsed.error) msg = parsed.error;
+            else if (parsed.message) msg = parsed.message;
+        } catch (_) {}
+    }
+    return String(msg).replace(/<[^>]*>/g, '').trim();
+}
+
+function showWaiterCouponError(msg) {
+    const errorEl = $('w-coupon-error');
+    const errorText = $('w-coupon-error-text');
+    if (!errorEl) return;
+    const cleanMsg = extractCleanCouponErrorMessage(msg);
+    if (errorText) errorText.textContent = cleanMsg;
+    else errorEl.textContent = cleanMsg;
+    errorEl.classList.remove('hidden');
+}
+
+function hideWaiterCouponError() {
+    const errorEl = $('w-coupon-error');
+    if (errorEl) errorEl.classList.add('hidden');
+}
+
+export async function applyWaiterCoupon() {
+    const input = $('w-coupon-input');
+    const badge = $('w-coupon-badge');
+    const badgeText = $('w-coupon-badge-text');
+    if (!input) return;
+    const code = input.value.trim().toUpperCase();
+    if (!code) {
+        showWaiterCouponError('Ingresa un código de cupón');
+        return;
+    }
+
+    hideWaiterCouponError();
+
+    const comboCalc = calculateOrderCombos(waiterCart);
+    const subtotal = comboCalc.netItemsTotal || waiterCart.reduce((s, it) => s + (it.price * it.qty), 0);
+
+    try {
+        setLoading('btn-w-apply-coupon', true, '...');
+        const res = await validateCoupon(code, subtotal, 'Local');
+        if (res && res.valid) {
+            waiterAppliedCoupon = {
+                code: res.coupon.code,
+                discount_type: res.coupon.discount_type,
+                discount_value: res.coupon.discount_value,
+                discountAmount: res.discountAmount,
+                discountReason: res.discountReason
+            };
+
+            // Ocultar la fila de input completa para que ningún icono quede huérfano ni distorsionado
+            $('w-coupon-input-row')?.classList.add('hidden');
+            hideWaiterCouponError();
+
+            if (badge) badge.classList.remove('hidden');
+            if (badgeText) {
+                badgeText.innerHTML = `<i class="fas fa-ticket text-emerald-600 mr-1 text-xs"></i> Cupón <strong>${escapeHtml(res.coupon.code)}</strong> (-${formatMoney(res.discountAmount)})`;
+            }
+            renderReviewCartList();
+            toast(`Cupón ${res.coupon.code} aplicado con éxito`, 'success');
+        } else {
+            showWaiterCouponError(res?.error || 'Cupón inválido');
+        }
+    } catch (e) {
+        showWaiterCouponError(e.message || 'Error al validar cupón');
+    } finally {
+        setLoading('btn-w-apply-coupon', false, 'Aplicar');
+    }
+}
+
+export function removeWaiterCoupon() {
+    waiterAppliedCoupon = null;
+    const input = $('w-coupon-input');
+    const badge = $('w-coupon-badge');
+    if (input) {
+        input.value = '';
+    }
+    // Restaurar fila de input completa
+    $('w-coupon-input-row')?.classList.remove('hidden');
+    if (badge) badge.classList.add('hidden');
+    hideWaiterCouponError();
+    renderReviewCartList();
+}
 
 export async function openWaiterModal() {
     console.log('🔵 openWaiterModal called');
@@ -926,9 +1080,14 @@ export async function handleSendWaiterOrder() {
         const notesInput = $('w-order-notes');
 
         const comboCalc = calculateOrderCombos(waiterCart);
-        const finalTotal = comboCalc.totalComboDiscount > 0
+        const baseItemsTotal = comboCalc.totalComboDiscount > 0
             ? comboCalc.netItemsTotal
             : waiterCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+        const couponDisc = waiterAppliedCoupon ? (waiterAppliedCoupon.discountAmount || 0) : 0;
+        const totalDiscount = (comboCalc.totalComboDiscount || 0) + couponDisc;
+        const totalDiscountReason = [comboCalc.discountReason, waiterAppliedCoupon?.discountReason].filter(Boolean).join(' + ');
+        const finalTotal = Math.max(0, baseItemsTotal - couponDisc);
 
         const orderData = {
             id: orderId,
@@ -938,8 +1097,9 @@ export async function handleSendWaiterOrder() {
                 notes: typeof rest.notes === 'string' ? rest.notes.trim() : rest.notes
             })),
             total: finalTotal,
-            discount: comboCalc.totalComboDiscount || 0,
-            discount_reason: comboCalc.discountReason || '',
+            discount: totalDiscount,
+            discount_reason: totalDiscountReason,
+            coupon_code: waiterAppliedCoupon ? waiterAppliedCoupon.code : undefined,
             status: 'Recibido',
             waiterId: state.user.id,
             waiterName: state.user.name,

@@ -16,6 +16,7 @@ import InventoryPanel from './components/InventoryPanel.vue';
 import ToppingsPanel from './components/ToppingsPanel.vue';
 import DeliveryZonesPanel from './components/DeliveryZonesPanel.vue';
 import PromotionsCombosPanel from './components/PromotionsCombosPanel.vue';
+import CouponsDiscountsPanel from './components/CouponsDiscountsPanel.vue';
 import CrmPanel from './components/CrmPanel.vue';
 import UsersPanel from './components/UsersPanel.vue';
 import ReservationsList from './components/ReservationsList.vue';
@@ -169,6 +170,14 @@ if (promotionsCombosMount) {
     const promotionsCombosApp = createApp(PromotionsCombosPanel);
     promotionsCombosApp.use(pinia);
     promotionsCombosApp.mount(promotionsCombosMount);
+}
+
+// Admin coupons and discounts panel: Vue SFC.
+const couponsDiscountsMount = document.getElementById('panel-coupons-discounts');
+if (couponsDiscountsMount) {
+    const couponsDiscountsApp = createApp(CouponsDiscountsPanel);
+    couponsDiscountsApp.use(pinia);
+    couponsDiscountsApp.mount(couponsDiscountsMount);
 }
 
 // Admin delivery zones panel: Vue SFC.

@@ -443,6 +443,46 @@ function initSchema() {
         channels TEXT DEFAULT '["Local","Domicilio","Para Llevar"]',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- =============================================
+    -- CUPONES DE DESCUENTO
+    -- =============================================
+    CREATE TABLE IF NOT EXISTS coupons (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        description TEXT,
+        discount_type TEXT NOT NULL DEFAULT 'PERCENT', -- 'PERCENT' o 'FIXED'
+        discount_value REAL NOT NULL DEFAULT 0,
+        min_order_total REAL DEFAULT 0,
+        max_uses INTEGER DEFAULT 0, -- 0 = ilimitado
+        used_count INTEGER DEFAULT 0,
+        valid_until DATETIME,
+        channels TEXT DEFAULT '["Local","Domicilio","Para Llevar"]',
+        active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- =============================================
+    -- CAMPAÑAS DE DESCUENTO
+    -- =============================================
+    CREATE TABLE IF NOT EXISTS discount_campaigns (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        discount_percent REAL NOT NULL DEFAULT 0,
+        scope TEXT NOT NULL DEFAULT 'ALL', -- 'ALL', 'CATEGORY', 'SELECTED_PRODUCTS'
+        category_id TEXT,
+        category_name TEXT,
+        product_ids TEXT DEFAULT '[]',
+        start_date DATE,
+        end_date DATE,
+        start_time TEXT,
+        end_time TEXT,
+        days_of_week TEXT DEFAULT '["1","2","3","4","5","6","7"]',
+        channels TEXT DEFAULT '["Local","Domicilio","Para Llevar"]',
+        active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
     `;
 
     db.exec(schema, (err) => {

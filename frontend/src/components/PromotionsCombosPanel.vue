@@ -13,6 +13,7 @@ import {
     importPromotionsCSV,
     exportPromotionsCSV
 } from '@/legacy/services/promotions-service.js';
+const categoriesList = computed(() => state.categories || []);
 
 const combos = ref([]);
 const loading = ref(false);
@@ -444,6 +445,7 @@ onMounted(() => {
     listenToPromotionsCombos((updatedList) => {
         combos.value = updatedList;
     });
+
     window.addEventListener('keydown', handleEscapeKey);
     window.addEventListener('app:escape', handleAppEscape);
 });
@@ -457,7 +459,7 @@ onUnmounted(() => {
 <template>
     <div class="space-y-4">
         <!-- Top Toolbar: Controls, Search, Filter & New Button -->
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-gray-100">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-gray-100">
             <div class="flex flex-1 flex-wrap items-center gap-2.5 w-full sm:w-auto">
                 <div class="relative w-full sm:w-64 sm:flex-initial">
                     <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
@@ -646,7 +648,6 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
-
         <!-- MODAL: Crear / Editar Combo -->
         <Teleport to="body">
             <div v-if="showModal" class="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs fade-in overflow-y-auto" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;">
@@ -1118,5 +1119,6 @@ onUnmounted(() => {
             </div>
         </div>
         </Teleport>
-    </div>
+
+        </div>
 </template>

@@ -68,7 +68,7 @@ import { compressImage, compressImageAsBlob, compressProof, compressBanner } fro
 import { setLoading } from './components/ui.js';
 
 // Views
-import { updateCartUI, renderCartList, handleSendOrder, addToCart, updateCheckoutTotals, renderClientView } from './views/client-view.js';
+import { updateCartUI, renderCartList, handleSendOrder, addToCart, updateCheckoutTotals, renderClientView, applyCartCoupon, removeCartCoupon } from './views/client-view.js';
 window.renderClientView = renderClientView;
 import { handleUpdateChefStatus, handleUpdateWaiterOrderStatus } from './views/chef-view.js';
 import { handleUpdateOrderStatus } from './views/delivery-view.js';
@@ -2063,6 +2063,17 @@ $('btn-open-cart').addEventListener('click', () => {
 });
 $('btn-close-cart').addEventListener('click', () => $('cart-modal').classList.add('hidden'));
 $('btn-send-wa').addEventListener('click', handleSendOrder);
+
+// Cupón de descuento en carrito
+$('btn-apply-coupon')?.addEventListener('click', applyCartCoupon);
+$('cart-coupon-input')?.addEventListener('input', () => $('cart-coupon-error')?.classList.add('hidden'));
+$('cart-coupon-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        applyCartCoupon();
+    }
+});
+$('btn-remove-coupon')?.addEventListener('click', removeCartCoupon);
 
 // Step 2: continue to delivery data (collapse the dish list)
 $('btn-go-checkout').addEventListener('click', () => {

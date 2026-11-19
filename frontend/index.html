@@ -882,6 +882,9 @@
                 <!-- TAB: PROMOCIONES Y COMBOS -->
                 <div id="panel-promotions-combos" class="admin-panel hidden space-y-4 fade-in"></div>
 
+                <!-- TAB: CUPONES Y DESCUENTOS -->
+                <div id="panel-coupons-discounts" class="admin-panel hidden space-y-4 fade-in"></div>
+
                 <!-- TAB: ZONAS DE DOMICILIO -->
                 <div id="panel-delivery-zones" class="admin-panel hidden space-y-4 fade-in">
                     <!-- Controls: Search, Add -->
@@ -2320,6 +2323,34 @@
                 </div>
             </div>
             <div class="p-5 border-t border-gray-100 bg-white">
+                <!-- Cupón de Descuento en Carrito -->
+                <div class="mb-3 pt-1" id="cart-coupon-container">
+                    <div class="flex items-center gap-1.5" id="cart-coupon-input-row">
+                        <div class="relative flex-1">
+                            <i class="fas fa-ticket absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+                            <input id="cart-coupon-input" type="text" placeholder="¿Tienes un cupón?"
+                                class="w-full pl-8 pr-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs uppercase tracking-wider font-semibold focus:border-[var(--system-primary)] focus:bg-white outline-none">
+                        </div>
+                        <button id="btn-apply-coupon" type="button" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0">
+                            Aplicar
+                        </button>
+                    </div>
+
+                    <!-- Mini contenedor rojo para errores debajo del input -->
+                    <div id="cart-coupon-error" class="hidden mt-2 p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium flex items-center gap-2 animate-fade-in">
+                        <i class="fas fa-exclamation-circle text-red-500 shrink-0 text-xs"></i>
+                        <span id="cart-coupon-error-text" class="flex-1 leading-snug"></span>
+                    </div>
+
+                    <!-- Insignia de cupón aplicado -->
+                    <div id="cart-coupon-applied-badge" class="hidden mt-1.5 flex items-center justify-between bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1 text-xs font-semibold">
+                        <span id="cart-coupon-badge-text" class="flex items-center gap-1.5"><i class="fas fa-ticket text-emerald-600"></i> Cupón aplicado</span>
+                        <button id="btn-remove-coupon" type="button" class="text-emerald-700 hover:text-red-500 transition-colors cursor-pointer text-xs ml-2" title="Quitar cupón">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
                 <div id="cart-breakdown-container" class="space-y-1 text-xs text-gray-500 pb-3 mb-3 border-b border-gray-100 hidden">
                     <div class="flex justify-between items-center">
                         <span>Subtotal productos:</span>
@@ -2328,6 +2359,10 @@
                     <div id="cart-combo-row" class="flex justify-between items-center text-emerald-600 hidden font-semibold">
                         <span id="cart-combo-label" class="flex items-center gap-1"><i class="fas fa-tags text-[10px]"></i> Ahorro Combos:</span>
                         <span id="cart-combo-discount" class="font-bold">-$0</span>
+                    </div>
+                    <div id="cart-coupon-row" class="flex justify-between items-center text-emerald-600 hidden font-semibold">
+                        <span id="cart-coupon-label" class="flex items-center gap-1"><i class="fas fa-ticket-alt text-[10px]"></i> Descuento Cupón:</span>
+                        <span id="cart-coupon-discount" class="font-bold">-$0</span>
                     </div>
                     <div id="cart-delivery-row" class="flex justify-between items-center text-orange-600 hidden">
                         <span id="cart-delivery-label" class="flex items-center gap-1"><i class="fas fa-motorcycle text-[10px]"></i> Domicilio:</span>
@@ -4877,16 +4912,44 @@
             </div>
 
             <div class="p-4 border-t border-gray-100 bg-white shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-10">
-                <div class="grid grid-cols-2 gap-2 mb-3">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1 ml-1">Mesa</label>
-                        <input type="text" id="w-table-num-review" placeholder="Mesa #"
+                <div class="flex gap-2 mb-3">
+                    <div class="w-20 shrink-0">
+                        <label class="block text-xs font-bold text-gray-500 mb-1 ml-1 text-center">Mesa</label>
+                        <input type="text" id="w-table-num-review" placeholder="Mesa"
                             class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-center font-bold text-gray-800 focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none transition-all">
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1 ml-1">Notas</label>
-                        <input type="text" id="w-order-notes-review" placeholder="Notas opcionales..."
+                    <div class="flex-1 min-w-0">
+                        <label class="block text-xs font-bold text-gray-500 mb-1 ml-1">Observaciones</label>
+                        <input type="text" id="w-order-notes-review" placeholder="Observaciones opcionales..."
                             class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none transition-all">
+                    </div>
+                </div>
+
+                <!-- Cupón en Comanda Mesero -->
+                <div class="mb-3" id="w-coupon-container">
+                    <div class="flex items-center gap-1.5" id="w-coupon-input-row">
+                        <div class="relative flex-1">
+                            <i class="fas fa-ticket absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+                            <input type="text" id="w-coupon-input" placeholder="Cupón (Opcional)"
+                                class="w-full pl-8 pr-2 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs uppercase font-bold text-gray-800 outline-none focus:border-amber-500">
+                        </div>
+                        <button type="button" id="btn-w-apply-coupon" class="px-3 py-2 bg-gray-800 text-white rounded-xl text-xs font-bold hover:bg-gray-900 cursor-pointer shrink-0">
+                            Aplicar
+                        </button>
+                    </div>
+
+                    <!-- Mini contenedor rojo para errores debajo del input -->
+                    <div id="w-coupon-error" class="hidden mt-2 p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium flex items-center gap-2 animate-fade-in">
+                        <i class="fas fa-exclamation-circle text-red-500 shrink-0 text-xs"></i>
+                        <span id="w-coupon-error-text" class="flex-1 leading-snug"></span>
+                    </div>
+
+                    <!-- Insignia de cupón aplicado -->
+                    <div id="w-coupon-badge" class="hidden mt-1.5 flex items-center justify-between bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl px-3 py-2 text-xs font-semibold">
+                        <span id="w-coupon-badge-text" class="flex items-center gap-1.5"></span>
+                        <button type="button" id="btn-w-remove-coupon" class="text-red-500 hover:text-red-700 ml-2 cursor-pointer p-0.5" title="Quitar cupón">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
                     </div>
                 </div>
 
