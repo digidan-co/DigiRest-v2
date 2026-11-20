@@ -72,7 +72,7 @@
     <script src="js/libs/chart.umd.min.js" defer></script>
     <!-- Socket.io -->
     <script src="/socket.io/socket.io.js" defer></script>
-    <link rel="stylesheet" href="style.css?v=2.9">
+    <link rel="stylesheet" href="style.css?v=3.0">
     <link rel="stylesheet" href="css/sidebar.css">
 </head>
 
@@ -176,24 +176,24 @@
                         <!-- Logo con minifunción de cambio de contraseña para digidanMasterAdmin -->
                         <div class="relative group mb-2" id="sidebar-logo-container">
                             <img id="sidebar-logo" src="img/icon.png" alt="Logo del negocio"
-                                class="w-24 h-24 rounded-full object-cover bg-white/10 border-2 border-[var(--system-primary)]/40 shadow-md cursor-pointer transition-transform duration-200 group-hover:scale-105">
+                                class="sidebar-logo-ring w-24 h-24 rounded-full object-cover bg-white/10 border-2 shadow-md cursor-pointer transition-transform duration-200 group-hover:scale-105">
                             <button type="button" id="btn-master-change-pwd" class="hidden absolute bottom-0 right-0 w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 cursor-pointer border-2 border-slate-900 z-10" title="Cambiar clave (Administrador Maestro)">
                                 <i class="fas fa-key text-xs"></i>
                             </button>
                         </div>
-                        <h2 id="sidebar-business-name" class="text-sm font-black text-[var(--system-primary)] tracking-tight leading-tight max-w-full truncate px-4">Cargando...</h2>
-                        <p id="sidebar-business-slogan" class="text-[10px] text-[var(--system-primary)]/75 font-semibold max-w-full truncate px-4">...</p>
+                        <h2 id="sidebar-business-name" class="sidebar-brand-title text-sm font-black tracking-tight leading-tight max-w-full truncate px-4">Cargando...</h2>
+                        <p id="sidebar-business-slogan" class="sidebar-slogan text-[10px] font-semibold max-w-full truncate px-4">...</p>
                     </div>
                     <!-- User Greeting -->
                     <div id="sidebar-user-greeting" class="hidden px-1 mb-1 shrink-0">
-                        <div class="bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-center">
-                            <p class="text-xs text-[var(--system-primary)]"><i class="fas fa-user text-[var(--system-primary)] mr-1.5"></i>Hola, <span id="sidebar-user-name" class="font-bold text-[var(--system-primary)] text-xs"></span></p>
+                        <div class="sidebar-user-card border rounded-xl px-3 py-1.5 text-center">
+                            <p class="sidebar-brand-greeting text-xs"><i class="fas fa-user mr-1.5"></i>Hola, <span id="sidebar-user-name" class="font-bold text-xs"></span></p>
                         </div>
                     </div>
                     <hr class="w-full border-white/10 my-1 shrink-0">
 
                     <!-- Middle Navigation (Scrollable & Acordeón) -->
-                    <div class="flex-1 overflow-y-auto custom-scroll pr-1 flex flex-col gap-1 w-full min-h-0">
+                    <div class="flex-1 overflow-y-auto custom-scroll pr-1 pb-3 flex flex-col gap-1 w-full min-h-0">
                         <!-- Sección: Operación -->
                         <div class="admin-nav-section relative flex flex-col">
                             <button type="button" class="admin-section-toggle flex items-center justify-between px-2 py-1.5 text-white transition-colors w-full text-left cursor-pointer group select-none">
@@ -203,9 +203,9 @@
                                 </div>
                                 <i class="fas fa-chevron-down text-[9px] text-white/50 group-hover:text-white transition-transform duration-200 section-chevron"></i>
                             </button>
-                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 border-l-2 border-white/20 my-0.5">
+                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 pr-1 pt-0.5 pb-2.5 border-l-2 border-white/20 my-0.5">
                                 <button data-tab="dashboard"
-                                    class="admin-tab-btn active flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg shadow-md transition-all flex items-center gap-2 whitespace-nowrap">
+                                    class="admin-tab-btn active flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
                                     <i class="fas fa-chart-pie w-4 text-center px-1 text-xs"></i> <span class="text-xs">Dashboard</span>
                                 </button>
                                 <button data-tab="orders"
@@ -236,7 +236,7 @@
                                 </div>
                                 <i class="fas fa-chevron-down text-[9px] text-white/50 group-hover:text-white transition-transform duration-200 section-chevron"></i>
                             </button>
-                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 border-l-2 border-white/20 my-0.5">
+                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 pr-1 pt-0.5 pb-2.5 border-l-2 border-white/20 my-0.5">
                                 <button data-tab="products"
                                     class="admin-tab-btn flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg bg-white/5 text-gray-400 font-medium transition-all flex items-center gap-2 whitespace-nowrap group">
                                     <i class="fas fa-utensils w-4 text-center px-1 text-xs"></i> <span class="text-xs">Platos y Categorías</span>
@@ -261,7 +261,7 @@
                                 </div>
                                 <i class="fas fa-chevron-down text-[9px] text-white/50 group-hover:text-white transition-transform duration-200 section-chevron"></i>
                             </button>
-                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 border-l-2 border-white/20 my-0.5">
+                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 pr-1 pt-0.5 pb-2.5 border-l-2 border-white/20 my-0.5">
                                 <button data-tab="flujocaja"
                                     class="admin-tab-btn flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg bg-white/5 text-gray-400 font-medium transition-all flex items-center gap-2 whitespace-nowrap group">
                                     <i class="fas fa-chart-line w-4 text-center px-1 text-xs"></i> <span class="text-xs">Flujo Monetario</span>
@@ -282,7 +282,7 @@
                                 </div>
                                 <i class="fas fa-chevron-down text-[9px] text-white/50 group-hover:text-white transition-transform duration-200 section-chevron"></i>
                             </button>
-                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 border-l-2 border-white/20 my-0.5">
+                            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 pr-1 pt-0.5 pb-2.5 border-l-2 border-white/20 my-0.5">
                                 <button data-tab="users"
                                     class="admin-tab-btn flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg bg-white/5 text-gray-400 font-medium transition-all flex items-center gap-2 whitespace-nowrap group">
                                     <i class="fas fa-users w-4 text-center px-1 text-xs"></i> <span class="text-xs">Usuarios</span>
@@ -328,8 +328,8 @@
                         <!-- Reloj en Desktop (Al lado de Notas y Modo GR) -->
                         <div class="topbar-clock-desktop">
                             <div class="flex flex-col items-end">
-                                <span class="clock-display-time" style="color: var(--system-primary, #f5b55f); font-size: 3rem; font-weight: 400;">--:-- --</span>
-                                <span class="clock-display-date" style="color: var(--system-bg-aside, #052244);">Hoy es: --</span>
+                                <span class="clock-display-time" style="color: var(--system-primary-text-safe, #f59e0b); font-size: 3rem; font-weight: 400;">--:-- --</span>
+                                <span class="clock-display-date text-gray-500 font-medium">Hoy es: --</span>
                             </div>
                         </div>
 
@@ -351,8 +351,8 @@
 
                 <!-- Reloj en Mobile (Debajo del contenedor Panel de Control) -->
                 <div class="topbar-clock-mobile">
-                    <span class="clock-display-time" style="color: var(--system-primary, #f5b55f);">--:-- --</span>
-                    <span class="clock-display-date" style="color: var(--system-bg-aside, #052244);">Hoy es: --</span>
+                    <span class="clock-display-time" style="color: var(--system-primary-text-safe, #f59e0b);">--:-- --</span>
+                    <span class="clock-display-date text-gray-500 font-medium">Hoy es: --</span>
                 </div>
 
                 <script>
@@ -1430,53 +1430,68 @@
                                         </div>
                                     </div>
 
-                                    <!-- Card 3: Color de Realce & Contraste -->
+                                    <!-- Card 3: Color de Marca (Acento) -->
                                     <div class="bg-white p-4 rounded-xl border border-gray-200/70 shadow-2xs flex flex-col justify-between gap-3">
-                                        <div class="flex items-center justify-between">
-                                            <div class="flex items-center gap-3">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-3 min-w-0">
                                                 <div class="relative w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden shrink-0 shadow-inner group">
-                                                    <input type="color" id="conf-primary-color" value="#f5b55f"
-                                                        class="absolute -inset-2 w-14 h-14 cursor-pointer border-0 p-0 bg-transparent">
+                                                    <input type="color" id="conf-primary-color" value="#f59e0b"
+                                                        class="absolute -inset-2 w-14 h-14 cursor-pointer border-0 p-0 bg-transparent" title="Seleccionar color personalizado">
                                                 </div>
-                                                <div>
-                                                    <h5 class="font-bold text-gray-800 text-xs">Color de Marca / Realce</h5>
-                                                    <p class="text-[10px] text-gray-400 leading-tight">Nombre y acentos</p>
+                                                <div class="min-w-0">
+                                                    <h5 class="font-bold text-gray-800 text-xs truncate">Color de Marca</h5>
+                                                    <p class="text-[10px] text-gray-400 leading-tight truncate">Acentos y botones</p>
                                                 </div>
                                             </div>
+                                            <!-- Live Preview Pill -->
+                                            <span id="brand-color-preview-btn" class="px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-2xs transition-all flex items-center gap-1 shrink-0"
+                                                style="background-color: var(--system-primary); color: var(--system-primary-contrast-text); border: var(--system-primary-border);">
+                                                <i class="fas fa-check text-[9px]"></i> Activo
+                                            </span>
                                         </div>
-                                        <div class="flex items-center justify-between pt-2 border-t border-gray-100">
-                                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Texto en Módulos:</span>
-                                            <div class="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs">
-                                                <button type="button" id="btn-contrast-white" onclick="setModuleContrast('#ffffff')"
-                                                    class="px-2 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 hover:bg-white text-gray-700">
-                                                    <span class="w-2.5 h-2.5 rounded-full bg-white border border-gray-300"></span> Blanco
-                                                </button>
-                                                <button type="button" id="btn-contrast-black" onclick="setModuleContrast('#1e2122')"
-                                                    class="px-2 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 hover:bg-white text-gray-700">
-                                                    <span class="w-2.5 h-2.5 rounded-full bg-gray-900 border border-gray-700"></span> Negro
-                                                </button>
-                                            </div>
+
+                                        <!-- Paleta rápida de colores gastronómicos recomendados -->
+                                        <div class="flex items-center justify-between gap-1 pt-2 border-t border-gray-100">
+                                            <button type="button" data-brand-color="#f59e0b" onclick="selectBrandColor('#f59e0b')" title="Ámbar Dorado" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #f59e0b;"></button>
+                                            <button type="button" data-brand-color="#ea580c" onclick="selectBrandColor('#ea580c')" title="Naranja Fuego" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #ea580c;"></button>
+                                            <button type="button" data-brand-color="#dc2626" onclick="selectBrandColor('#dc2626')" title="Rojo Carmesí" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #dc2626;"></button>
+                                            <button type="button" data-brand-color="#059669" onclick="selectBrandColor('#059669')" title="Verde Esmeralda" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #059669;"></button>
+                                            <button type="button" data-brand-color="#0284c7" onclick="selectBrandColor('#0284c7')" title="Azul Océano" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #0284c7;"></button>
+                                            <button type="button" data-brand-color="#7c3aed" onclick="selectBrandColor('#7c3aed')" title="Púrpura Real" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #7c3aed;"></button>
+                                            <button type="button" data-brand-color="#78350f" onclick="selectBrandColor('#78350f')" title="Café Espresso" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #78350f;"></button>
+                                            <button type="button" data-brand-color="#334155" onclick="selectBrandColor('#334155')" title="Grafito Carbón" class="brand-palette-dot w-5 h-5 rounded-full border border-gray-300 shadow-2xs transition-transform hover:scale-110 cursor-pointer shrink-0" style="background-color: #334155;"></button>
                                         </div>
                                     </div>
 
-                                    <!-- Card 4: Color de Fondo del Menú Lateral (Aside) -->
+                                    <!-- Card 4: Menú Lateral (Aside) -->
                                     <div class="bg-white p-4 rounded-xl border border-gray-200/70 shadow-2xs flex flex-col justify-between gap-3">
-                                        <div class="flex items-center justify-between">
-                                            <div class="flex items-center gap-3">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-3 min-w-0">
                                                 <div class="relative w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden shrink-0 shadow-inner group">
-                                                    <input type="color" id="conf-sidebar-color" value="#052244"
-                                                        class="absolute -inset-2 w-14 h-14 cursor-pointer border-0 p-0 bg-transparent">
+                                                    <input type="color" id="conf-sidebar-color" value="#0b1329"
+                                                        class="absolute -inset-2 w-14 h-14 cursor-pointer border-0 p-0 bg-transparent" title="Seleccionar color personalizado del menú">
                                                 </div>
-                                                <div>
-                                                    <h5 class="font-bold text-gray-800 text-xs">Menú Lateral (Aside)</h5>
-                                                    <p class="text-[10px] text-gray-400 leading-tight">Fondo de navegación</p>
+                                                <div class="min-w-0">
+                                                    <h5 class="font-bold text-gray-800 text-xs truncate">Menú Lateral (Aside)</h5>
+                                                    <p class="text-[10px] text-gray-400 leading-tight truncate">Estilo de navegación</p>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="flex items-center justify-between pt-2 border-t border-gray-100">
-                                            <span id="sidebar-contrast-badge" class="text-[10px] font-bold px-2 py-0.5 w-full rounded-md bg-gray-100 text-gray-700 flex items-center gap-1 justify-center">
-                                                <i class="fas fa-magic text-[9px] text-indigo-500"></i> Auto-adaptativo
-                                            </span>
+
+                                        <!-- Modos de navegación: Oscuro / Claro / Marca -->
+                                        <div class="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs gap-1">
+                                            <button type="button" id="btn-aside-mode-dark" onclick="setSidebarStyleMode('dark')"
+                                                class="flex-1 py-1 px-1.5 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1 hover:bg-white text-gray-700">
+                                                <i class="fas fa-moon text-[10px] text-indigo-600"></i> Oscuro
+                                            </button>
+                                            <button type="button" id="btn-aside-mode-light" onclick="setSidebarStyleMode('light')"
+                                                class="flex-1 py-1 px-1.5 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1 hover:bg-white text-gray-700">
+                                                <i class="fas fa-sun text-[10px] text-amber-500"></i> Claro
+                                            </button>
+                                            <button type="button" id="btn-aside-mode-brand" onclick="setSidebarStyleMode('brand')"
+                                                class="flex-1 py-1 px-1.5 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1 hover:bg-white text-gray-700">
+                                                <i class="fas fa-wand-magic-sparkles text-[10px] text-purple-500"></i> Marca
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1819,8 +1834,8 @@
                     <!-- Mantenimiento y Reportes del Sistema -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <div class="flex items-center gap-3 mb-6 border-b pb-4">
-                            <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-secondary)] flex items-center justify-center text-lg shadow-sm">
-                                <i class="fas fa-sliders-h text-[var(--system-secondary)]"></i>
+                            <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-primary-contrast-text)] flex items-center justify-center text-lg shadow-sm">
+                                <i class="fas fa-sliders-h text-[var(--system-primary-contrast-text)]"></i>
                             </div>
                             <div>
                                 <h3 class="font-bold text-lg text-gray-800">Mantenimiento y Reportes del Sistema</h3>
@@ -1832,15 +1847,15 @@
                             <!-- Historial de Pedidos -->
                             <div class="p-5 rounded-2xl border border-gray-100 bg-gray-50/50 flex flex-col justify-between hover:border-[var(--system-primary)]/40 transition-all group">
                                 <div class="flex items-start gap-3.5 mb-4">
-                                    <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-secondary)] flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
-                                        <i class="fas fa-calendar-alt text-[var(--system-secondary)]"></i>
+                                    <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-primary-contrast-text)] flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
+                                        <i class="fas fa-calendar-alt text-[var(--system-primary-contrast-text)]"></i>
                                     </div>
                                     <div>
                                         <h4 class="font-bold text-gray-800 text-sm">Historial Completo de Pedidos</h4>
                                         <p class="text-xs text-gray-500 mt-1">Consulta y genera reportes filtrando por rango de fechas de todos los pedidos históricos del restaurante.</p>
                                     </div>
                                 </div>
-                                <button type="button" id="btn-history-report" class="w-full py-2.5 px-4 rounded-xl btn-system-tertiary text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
+                                <button type="button" id="btn-history-report" class="w-full py-2.5 px-4 rounded-xl btn-system-primary text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
                                     <i class="fas fa-file-invoice"></i>
                                     <span>Abrir Historial de Pedidos</span>
                                 </button>
@@ -1849,15 +1864,15 @@
                             <!-- Eliminación y Depuración de Registros -->
                             <div class="p-5 rounded-2xl border border-gray-100 bg-gray-50/50 flex flex-col justify-between hover:border-[var(--system-primary)]/40 transition-all group">
                                 <div class="flex items-start gap-3.5 mb-4">
-                                    <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-secondary)] flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
-                                        <i class="fas fa-bolt text-[var(--system-secondary)]"></i>
+                                    <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-primary-contrast-text)] flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
+                                        <i class="fas fa-bolt text-[var(--system-primary-contrast-text)]"></i>
                                     </div>
                                     <div>
                                         <h4 class="font-bold text-gray-800 text-sm">Eliminación y Depuración de Registros</h4>
                                         <p class="text-xs text-gray-500 mt-1">Limpia pedidos antiguos, optimiza el tamaño de la base de datos y libera espacio del servidor.</p>
                                     </div>
                                 </div>
-                                <button type="button" id="btn-open-optimization" aria-label="Optimizar base de datos" class="w-full py-2.5 px-4 rounded-xl btn-system-tertiary text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
+                                <button type="button" id="btn-open-optimization" aria-label="Optimizar base de datos" class="w-full py-2.5 px-4 rounded-xl btn-system-primary text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
                                     <i class="fas fa-trash-alt"></i>
                                     <span>Eliminación y Optimización</span>
                                 </button>
@@ -1866,15 +1881,15 @@
                             <!-- Copia de Seguridad de Base de Datos (Backup SQLite) -->
                             <div class="p-5 rounded-2xl border border-gray-100 bg-gray-50/50 flex flex-col justify-between hover:border-[var(--system-primary)]/40 transition-all group">
                                 <div class="flex items-start gap-3.5 mb-4">
-                                    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
-                                        <i class="fas fa-database text-white"></i>
+                                    <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-primary-contrast-text)] flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
+                                        <i class="fas fa-database text-[var(--system-primary-contrast-text)]"></i>
                                     </div>
                                     <div>
                                         <h4 class="font-bold text-gray-800 text-sm">Copia de Seguridad de Datos</h4>
                                         <p class="text-xs text-gray-500 mt-1">Descarga un respaldo instantáneo completo (.sqlite) con ventas, inventario, clientes y cierres de caja.</p>
                                     </div>
                                 </div>
-                                <button type="button" id="btn-download-backup" aria-label="Descargar copia de seguridad" class="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
+                                <button type="button" id="btn-download-backup" aria-label="Descargar copia de seguridad" class="w-full py-2.5 px-4 rounded-xl btn-system-primary text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
                                     <i class="fas fa-download"></i>
                                     <span>Descargar Copia de Seguridad (.sqlite)</span>
                                 </button>
@@ -1883,15 +1898,15 @@
                             <!-- Registro de Auditoría y Trazabilidad Antifraude -->
                             <div class="p-5 rounded-2xl border border-gray-100 bg-gray-50/50 flex flex-col justify-between hover:border-[var(--system-primary)]/40 transition-all group">
                                 <div class="flex items-start gap-3.5 mb-4">
-                                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
-                                        <i class="fas fa-shield-alt text-white"></i>
+                                    <div class="w-10 h-10 rounded-xl bg-[var(--system-primary)] text-[var(--system-primary-contrast-text)] flex items-center justify-center shrink-0 text-base group-hover:scale-105 transition-transform shadow-sm">
+                                        <i class="fas fa-shield-alt text-[var(--system-primary-contrast-text)]"></i>
                                     </div>
                                     <div>
                                         <h4 class="font-bold text-gray-800 text-sm">Registro de Auditoría Antifraude</h4>
                                         <p class="text-xs text-gray-500 mt-1">Supervisa en tiempo real quién anuló pedidos, borró registros, reinició contadores o cerró la caja.</p>
                                     </div>
                                 </div>
-                                <button type="button" id="btn-open-audit-logs" aria-label="Ver registro de auditoría" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
+                                <button type="button" id="btn-open-audit-logs" aria-label="Ver registro de auditoría" class="w-full py-2.5 px-4 rounded-xl btn-system-primary text-xs shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
                                     <i class="fas fa-clipboard-list"></i>
                                     <span>Ver Registro de Auditoría</span>
                                 </button>

@@ -280,26 +280,26 @@ onUnmounted(() => {
     <!-- Sidebar Header -->
     <div class="mb-1 px-1 relative flex flex-col items-center text-center mt-1 md:mt-0 shrink-0">
         <button type="button" aria-label="Cerrar menú lateral"
-            class="sidebar-close-btn md:hidden absolute right-1 top-1 z-30 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white transition-all text-lg cursor-pointer"
+            class="sidebar-close-btn md:hidden absolute right-1 top-1 z-30 w-10 h-10 flex items-center justify-center rounded-xl active:scale-95 transition-all text-lg cursor-pointer"
             @click.stop="closeSidebar">
             <i class="fas fa-times"></i>
         </button>
         <img :src="logoUrl" alt="Logo del negocio"
-            class="w-24 h-24 rounded-full object-cover bg-white/10 border-2 border-[var(--system-primary)]/40 shadow-md mb-2">
-        <h2 class="text-sm font-black text-[var(--system-primary)] tracking-tight leading-tight max-w-full truncate px-4">{{ businessName }}</h2>
+            class="sidebar-logo-ring w-24 h-24 rounded-full object-cover bg-white/10 border-2 shadow-md mb-2">
+        <h2 class="sidebar-brand-title text-sm font-black tracking-tight leading-tight max-w-full truncate px-4">{{ businessName }}</h2>
         <p class="sidebar-slogan text-[10px] font-semibold max-w-full truncate px-4 transition-colors">{{ businessSlogan }}</p>
     </div>
 
     <!-- User Greeting -->
     <div v-show="userName" class="px-1 mb-1 shrink-0">
         <div class="sidebar-user-card border rounded-xl px-3 py-1.5 text-center">
-            <p class="text-xs text-[var(--system-primary)]"><i class="fas fa-user text-[var(--system-primary)] mr-1.5"></i>Hola, <span class="font-bold text-[var(--system-primary)] text-xs">{{ userName }}</span></p>
+            <p class="sidebar-brand-greeting text-xs"><i class="fas fa-user mr-1.5"></i>Hola, <span class="font-bold text-xs">{{ userName }}</span></p>
         </div>
     </div>
     <hr class="sidebar-divider w-full my-1 shrink-0">
 
     <!-- Middle Navigation -->
-    <div class="flex-1 overflow-y-auto custom-scroll pr-1 flex flex-col gap-1 w-full min-h-0">
+    <div class="flex-1 overflow-y-auto custom-scroll pr-1 pb-3 flex flex-col gap-1 w-full min-h-0">
         <div v-for="section in visibleSections" :key="section.name" class="admin-nav-section relative flex flex-col"
             :class="{ collapsed: collapsedSections.has(section.name) }">
             <button type="button" @click="toggleSection(section.name)"
@@ -310,12 +310,12 @@ onUnmounted(() => {
                 </div>
                 <i class="fas fa-chevron-down text-[9px] section-chevron group-hover:opacity-100 transition-transform duration-200"></i>
             </button>
-            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 border-l-2 my-0.5">
+            <div class="admin-section-content flex flex-col gap-1 ml-2.5 pl-2.5 pr-1 pt-0.5 pb-2.5 border-l-2 my-0.5">
                 <button v-for="t in section.tabs" :key="t.tab" type="button" :data-tab="t.tab"
                     @mousedown.prevent
                     @click="switchTab(t.tab, $event)"
                     class="admin-tab-btn flex-1 md:flex-none text-left px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap"
-                    :class="activeTab === t.tab ? 'active shadow-md font-medium' : 'font-medium group'">
+                    :class="activeTab === t.tab ? 'active font-medium' : 'font-medium group'">
                     <i class="fas w-4 text-center px-1 text-xs" :class="t.icon"></i>
                     <span class="text-xs">{{ t.label }}</span>
                 </button>

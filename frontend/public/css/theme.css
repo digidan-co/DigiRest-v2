@@ -12,15 +12,16 @@ input:checked + .toggle-bg,
 input:checked ~ .toggle-bg,
 .peer:checked ~ div.peer-checked\:bg-\[\#f5b55f\],
 .peer:checked ~ [class*="peer-checked:bg-"] {
-    background-color: var(--system-primary, #f5b55f) !important;
+    background-color: var(--system-primary, #f59e0b) !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16) !important;
 }
 
 /* Ensure contrast: buttons or badges with primary color background have dynamic accent */
 .bg-\[\#f5b55f\],
 .bg-primary-solid,
 [class~="bg-[#f5b55f]"] {
-    background-color: var(--system-primary, #f5b55f) !important;
-    color: var(--system-secondary, #1e2122) !important;
+    background-color: var(--system-primary, #f59e0b) !important;
+    color: var(--system-primary-contrast-text, #ffffff) !important;
 }
 
 .text-\[\#f5b55f\],
@@ -76,6 +77,8 @@ a.bg-\[\#f5b55f\]:hover,
     overflow: hidden;
     max-height: 600px;
     opacity: 1;
+    padding-bottom: 8px;
+    padding-right: 4px;
 }
 
 .admin-nav-section.collapsed .admin-section-content {
@@ -170,26 +173,26 @@ a.bg-\[\#f5b55f\]:hover,
 }
 
 #admin-sidebar .admin-tab-btn:not(.active):hover {
-    background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.12)) !important;
-    color: var(--system-primary, #f5b55f) !important;
+    background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.14)) !important;
+    color: var(--sidebar-accent-safe, var(--system-primary, #f5b55f)) !important;
 }
 
 #admin-sidebar .admin-tab-btn:not(.active):hover i,
 #admin-sidebar .admin-tab-btn:not(.active):hover span {
-    color: var(--system-primary, #f5b55f) !important;
+    color: var(--sidebar-accent-safe, var(--system-primary, #f5b55f)) !important;
 }
 
-/* Active button: background --system-primary, icono y texto --system-secondary */
+/* Active button: background --system-primary, icono y texto --system-primary-contrast-text (Diseño Flat sin sombras) */
 #admin-sidebar .admin-tab-btn.active {
-    background-color: var(--system-primary, #f5b55f) !important;
-    color: var(--system-secondary, #64010e) !important;
-    border: 1px solid transparent !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18) !important;
+    background-color: var(--system-primary, #f59e0b) !important;
+    color: var(--system-primary-contrast-text, #ffffff) !important;
+    border: var(--system-primary-border, 1px solid transparent) !important;
+    box-shadow: none !important;
 }
 
 #admin-sidebar .admin-tab-btn.active i,
 #admin-sidebar .admin-tab-btn.active span {
-    color: var(--system-secondary, #64010e) !important;
+    color: var(--system-primary-contrast-text, #ffffff) !important;
 }
 
 /* Botón Cerrar Sesión y Cambiar Contraseña */
@@ -197,9 +200,9 @@ a.bg-\[\#f5b55f\]:hover,
 #admin-sidebar .btn-sidebar-logout,
 #admin-sidebar #btn-sidebar-change-pwd,
 #admin-sidebar .btn-sidebar-change-pwd {
-    background-color: var(--sidebar-inactive-bg, rgba(255, 255, 255, 0.05)) !important;
-    color: var(--sidebar-inactive-text, #cbd5e1) !important;
-    border: 1px solid var(--sidebar-inactive-border, rgba(255, 255, 255, 0.06)) !important;
+    background-color: var(--sidebar-inactive-bg, rgba(255, 255, 255, 0.07)) !important;
+    color: var(--sidebar-inactive-text, rgba(255, 255, 255, 0.90)) !important;
+    border: 1px solid var(--sidebar-inactive-border, rgba(255, 255, 255, 0.14)) !important;
 }
 
 #admin-sidebar #btn-sidebar-logout i,
@@ -208,7 +211,7 @@ a.bg-\[\#f5b55f\]:hover,
 #admin-sidebar .btn-sidebar-logout span,
 #admin-sidebar #btn-sidebar-change-pwd i,
 #admin-sidebar .btn-sidebar-change-pwd i {
-    color: var(--sidebar-inactive-text, #cbd5e1) !important;
+    color: var(--sidebar-inactive-text, rgba(255, 255, 255, 0.90)) !important;
     transition: color 0.2s ease;
 }
 
@@ -216,8 +219,8 @@ a.bg-\[\#f5b55f\]:hover,
 #admin-sidebar .btn-sidebar-logout:hover,
 #admin-sidebar #btn-sidebar-change-pwd:hover,
 #admin-sidebar .btn-sidebar-change-pwd:hover {
-    background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.12)) !important;
-    color: var(--system-primary, #f5b55f) !important;
+    background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.14)) !important;
+    color: var(--sidebar-accent-safe, var(--system-primary, #f5b55f)) !important;
 }
 
 #admin-sidebar #btn-sidebar-logout:hover i,
@@ -226,7 +229,7 @@ a.bg-\[\#f5b55f\]:hover,
 #admin-sidebar .btn-sidebar-logout:hover span,
 #admin-sidebar #btn-sidebar-change-pwd:hover i,
 #admin-sidebar .btn-sidebar-change-pwd:hover i {
-    color: var(--system-primary, #f5b55f) !important;
+    color: var(--sidebar-accent-safe, var(--system-primary, #f5b55f)) !important;
 }
 
 /* Module Section Toggles, Titulos, Puntos y Chevrons */
@@ -239,7 +242,7 @@ a.bg-\[\#f5b55f\]:hover,
 }
 
 #admin-sidebar .admin-section-toggle:hover span {
-    color: var(--system-primary, #f5b55f) !important;
+    color: var(--sidebar-accent-safe, var(--system-primary, #f5b55f)) !important;
 }
 
 #admin-sidebar .section-dot {
@@ -247,48 +250,63 @@ a.bg-\[\#f5b55f\]:hover,
 }
 
 #admin-sidebar .section-chevron {
-    color: var(--sidebar-inactive-icon, rgba(255, 255, 255, 0.5)) !important;
+    color: var(--sidebar-inactive-icon, rgba(255, 255, 255, 0.78)) !important;
 }
 
 #admin-sidebar .admin-section-content {
-    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.2)) !important;
+    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.18)) !important;
 }
 
 #admin-sidebar .sidebar-slogan {
-    color: var(--sidebar-slogan-color, var(--sidebar-muted, rgba(255, 255, 255, 0.75))) !important;
+    color: var(--sidebar-slogan-color, var(--sidebar-muted, rgba(255, 255, 255, 0.78))) !important;
+}
+
+#admin-sidebar .sidebar-brand-title,
+#admin-sidebar .sidebar-brand-greeting,
+#admin-sidebar .sidebar-brand-greeting i,
+#admin-sidebar .sidebar-brand-greeting span {
+    color: var(--sidebar-accent-safe, var(--system-primary, #f5b55f)) !important;
+}
+
+#admin-sidebar .sidebar-logo-ring {
+    border-color: var(--sidebar-accent-border, rgba(255, 255, 255, 0.25)) !important;
 }
 
 #admin-sidebar .sidebar-user-card {
-    background-color: var(--sidebar-greeting-bg, rgba(255, 255, 255, 0.05)) !important;
-    border-color: var(--sidebar-greeting-border, rgba(255, 255, 255, 0.1)) !important;
+    background-color: var(--sidebar-greeting-bg, rgba(255, 255, 255, 0.07)) !important;
+    border-color: var(--sidebar-greeting-border, rgba(255, 255, 255, 0.16)) !important;
 }
 
 #admin-sidebar .sidebar-divider {
-    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.1)) !important;
+    border-color: var(--sidebar-border, rgba(255, 255, 255, 0.18)) !important;
 }
 
 #admin-sidebar .sidebar-close-btn {
-    color: var(--sidebar-close-btn, rgba(255, 255, 255, 0.7)) !important;
+    color: var(--sidebar-close-btn, rgba(255, 255, 255, 0.92)) !important;
+    background-color: var(--sidebar-inactive-bg, rgba(255, 255, 255, 0.1)) !important;
+}
+#admin-sidebar .sidebar-close-btn:hover {
+    background-color: var(--sidebar-inactive-hover-bg, rgba(255, 255, 255, 0.2)) !important;
 }
 #admin-sidebar .admin-section-toggle:hover .rounded-full {
-    background-color: var(--system-primary, #f5b55f) !important;
+    background-color: var(--sidebar-accent-safe, var(--system-primary, #f5b55f)) !important;
 }
 
 /* ====================================================================
    MODULE BUTTONS DECORATION (--system-primary & --system-secondary)
    ==================================================================== */
 .btn-system-primary {
-    background-color: var(--system-primary, #f5b55f) !important;
-    color: var(--system-secondary, #1e2122) !important;
+    background-color: var(--system-primary, #f59e0b) !important;
+    color: var(--system-primary-contrast-text, #ffffff) !important;
     font-weight: 700 !important;
-    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    border: var(--system-primary-border, 1px solid rgba(0, 0, 0, 0.1)) !important;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15) !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 .btn-system-primary i,
 .btn-system-primary span,
 .btn-system-primary svg {
-    color: var(--system-secondary, #1e2122) !important;
+    color: var(--system-primary-contrast-text, #ffffff) !important;
 }
 .btn-system-primary:hover {
     filter: brightness(1.08) !important;
@@ -300,18 +318,28 @@ a.bg-\[\#f5b55f\]:hover,
 }
 
 .btn-system-tertiary {
-    background-color: var(--system-tertiary, #1e2122) !important;
-    color: var(--system-primary, #f5b55f) !important;
+    background-color: #0f172a !important;
+    color: #ffffff !important;
     font-weight: 700 !important;
     border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    box-shadow: 0 3px 10px rgba(30, 33, 34, 0.25) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22) !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
+.btn-system-tertiary i,
+.btn-system-tertiary span {
+    color: #ffffff !important;
+    transition: color 0.2s ease !important;
+}
 .btn-system-tertiary:hover {
-    background-color: #2b2f31 !important;
-    filter: brightness(1.1) !important;
+    background-color: var(--system-primary, #f59e0b) !important;
+    color: var(--system-primary-contrast-text, #ffffff) !important;
+    border-color: var(--system-primary, #f59e0b) !important;
     transform: translateY(-1px);
-    box-shadow: 0 5px 14px rgba(30, 33, 34, 0.35) !important;
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28) !important;
+}
+.btn-system-tertiary:hover i,
+.btn-system-tertiary:hover span {
+    color: var(--system-primary-contrast-text, #ffffff) !important;
 }
 .btn-system-tertiary:active {
     transform: translateY(0);
@@ -379,7 +407,12 @@ input:checked ~ div.rounded-full,
 .peer:checked ~ .peer-checked\:bg-\[\#f5b55f\],
 .peer:checked ~ .peer-checked-system-primary,
 .peer:checked ~ [class*="peer-checked:bg-"] {
-    background-color: var(--system-primary, #f5b55f) !important;
+    background-color: var(--system-primary, #f59e0b) !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16) !important;
+}
+
+#admin-sidebar {
+    border-right: var(--sidebar-outer-border, none) !important;
 }
 
 /* ====================================================================

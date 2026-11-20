@@ -235,26 +235,27 @@
     color: var(--system-primary, #f5b55f) !important;
 }
 
-/* Botones Topbar: Notas & Modo GR (Normal: fondo gris suave y realce; Hover: fondo de realce y texto/icono negro o blanco según apariencia) */
+/* Botones Topbar: Notas & Modo GR (Normal: fondo gris suave y realce seguro; Hover: fondo de realce y texto/icono con contraste automático) */
 .btn-topbar-quick {
     background-color: #f7f7f7 !important;
-    color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-primary-text-safe, #0f172a) !important;
+    border: 1px solid #e5e7eb !important;
     font-weight: 700 !important;
     padding: 1rem;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 .btn-topbar-quick i,
 .btn-topbar-quick span {
-    color: var(--system-primary, #f5b55f) !important;
+    color: var(--system-primary-text-safe, #0f172a) !important;
     transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 .btn-topbar-quick:hover {
-    background-color: var(--system-primary, #f5b55f) !important;
-    border-color: var(--system-primary, #f5b55f) !important;
+    background-color: var(--system-primary, #f59e0b) !important;
+    border-color: var(--system-primary, #f59e0b) !important;
 }
 .btn-topbar-quick:hover i,
 .btn-topbar-quick:hover span {
-    color: var(--system-secondary, #1e2122) !important;
+    color: var(--system-primary-contrast-text, #ffffff) !important;
 }
 
 /* Widget de Reloj en Topbar (Desktop y Mobile) */

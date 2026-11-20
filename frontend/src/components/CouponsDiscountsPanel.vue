@@ -557,7 +557,7 @@ watch(() => state.user, (u) => {
             </div>
 
             <!-- Empty State Cupones -->
-            <div v-else class="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm space-y-3">
+            <div v-else class="bg-white rounded-2xl p-4 text-center border border-gray-100 shadow-sm space-y-3">
                 <div class="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mx-auto text-2xl">
                     <i class="fas fa-ticket"></i>
                 </div>

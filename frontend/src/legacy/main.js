@@ -917,10 +917,10 @@ async function init() {
             }
 
             // Unified Theme and Colors Initialization
-            const savedPrimary = primaryColorData || colorData || localStorage.getItem('digirest_primary_color') || '#f5b55f';
-            const savedContrast = contrastColorData || localStorage.getItem('digirest_contrast_color') || '#64010e';
-            const savedSidebar = bgAsideData || localStorage.getItem('digirest_sidebar_color') || '#052244';
-            const savedThemeId = themeIdData || localStorage.getItem('digirest_theme_id') || 'amber';
+            const savedPrimary = primaryColorData || colorData || localStorage.getItem('digirest_primary_color') || '#f59e0b';
+            const savedContrast = contrastColorData || localStorage.getItem('digirest_contrast_color') || '#ffffff';
+            const savedSidebar = bgAsideData || localStorage.getItem('digirest_sidebar_color') || '#0b1329';
+            const savedThemeId = themeIdData || localStorage.getItem('digirest_theme_id') || 'custom';
 
             state.config.primaryColor = savedPrimary;
             state.config.nameColor = savedPrimary;
@@ -1268,9 +1268,9 @@ function applyConfig() {
     if (displayWelcome) displayWelcome.style.backgroundImage = bannerUrl ? `url(${bannerUrl})` : '';
 
     // Apply Unified Brand & System Theme
-    const primaryColor = state.config.primaryColor || localStorage.getItem('digirest_primary_color') || '#f5b55f';
-    const contrastColor = state.config.contrastColor || localStorage.getItem('digirest_contrast_color') || '#64010e';
-    const themeId = state.config.themeId || localStorage.getItem('digirest_theme_id') || 'amber';
+    const primaryColor = state.config.primaryColor || localStorage.getItem('digirest_primary_color') || '#f59e0b';
+    const contrastColor = state.config.contrastColor || localStorage.getItem('digirest_contrast_color') || '#ffffff';
+    const themeId = state.config.themeId || localStorage.getItem('digirest_theme_id') || 'custom';
     applySystemTheme(primaryColor, contrastColor, themeId);
 
     // Apply Social Networks
@@ -2511,9 +2511,9 @@ $('config-form').addEventListener('submit', async (e) => {
         }
 
         // Save Unified System Primary, Contrast, Sidebar Aside and Theme
-        const primaryColor = state.config.primaryColor || $('conf-primary-color')?.value || '#f5b55f';
-        const contrastColor = state.config.contrastColor || '#64010e';
-        const sidebarColor = state.config.sidebarColor || $('conf-sidebar-color')?.value || '#052244';
+        const primaryColor = state.config.primaryColor || $('conf-primary-color')?.value || '#f59e0b';
+        const contrastColor = state.config.contrastColor || '#ffffff';
+        const sidebarColor = state.config.sidebarColor || $('conf-sidebar-color')?.value || '#0b1329';
         const themeId = state.config.themeId || 'custom';
 
         await Promise.all([
