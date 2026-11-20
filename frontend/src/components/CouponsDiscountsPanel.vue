@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { state } from '@/legacy/core/state.js';
+import { ApiClient } from '@/legacy/services/api-client.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
 import {
@@ -41,7 +42,25 @@ const couponForm = ref({
     active: 1
 });
 
+function hasAuthToken() {
+    return Boolean(ApiClient.getToken() || localStorage.getItem('pos_token'));
+}
+
+function canAccessCoupons() {
+    let user = state.user;
+    if (!user) {
+        try {
+            user = JSON.parse(localStorage.getItem('pos_user') || 'null');
+        } catch (_) {
+            user = null;
+        }
+    }
+    const role = (user?.role || '').toLowerCase();
+    return Boolean(user && (role === 'admin' || role === 'cajero' || role === 'supervisor'));
+}
+
 async function loadCoupons() {
+    if (!hasAuthToken() || !canAccessCoupons()) return;
     loadingCoupons.value = true;
     try {
         coupons.value = await getCoupons();
@@ -196,6 +215,7 @@ const campaignForm = ref({
 });
 
 async function loadCampaigns() {
+    if (!hasAuthToken() || !canAccessCoupons()) return;
     loadingCampaigns.value = true;
     try {
         campaigns.value = await getDiscountCampaigns();
@@ -348,8 +368,14 @@ function handleEscapeKey(e) {
 }
 
 onMounted(() => {
-    loadCoupons();
-    loadCampaigns();
+    if (hasAuthToken() && canAccessCoupons()) {
+        loadCoupons();
+        loadCampaigns();
+    }
+    window._reloadCouponsDiscounts = () => {
+        loadCoupons();
+        loadCampaigns();
+    };
 
     const socket = window.socket || (typeof io !== 'undefined' ? io() : null);
     if (socket) {
@@ -360,12 +386,20 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    if (window._reloadCouponsDiscounts) delete window._reloadCouponsDiscounts;
     const socket = window.socket || (typeof io !== 'undefined' ? io() : null);
     if (socket) {
         socket.off('coupon_changed', loadCoupons);
         socket.off('campaign_changed', loadCampaigns);
     }
     window.removeEventListener('keydown', handleEscapeKey);
+});
+
+watch(() => state.user, (u) => {
+    if (u && hasAuthToken() && canAccessCoupons()) {
+        loadCoupons();
+        loadCampaigns();
+    }
 });
 </script>
 

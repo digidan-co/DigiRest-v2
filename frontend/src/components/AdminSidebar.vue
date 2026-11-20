@@ -120,6 +120,8 @@ function switchTab(tab, event) {
         if (window.renderAdminCashflowPage) window.renderAdminCashflowPage();
     } else if (tab === 'reservations') {
         if (window._reloadReservations) window._reloadReservations();
+    } else if (tab === 'coupons-discounts') {
+        if (window._reloadCouponsDiscounts) window._reloadCouponsDiscounts();
     } else if (tab === 'config') {
         if (window.loadAdminConfig) window.loadAdminConfig();
     }

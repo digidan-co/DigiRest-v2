@@ -68,7 +68,7 @@ import { compressImage, compressImageAsBlob, compressProof, compressBanner } fro
 import { setLoading } from './components/ui.js';
 
 // Views
-import { updateCartUI, renderCartList, handleSendOrder, addToCart, updateCheckoutTotals, renderClientView, applyCartCoupon, removeCartCoupon } from './views/client-view.js';
+import { updateCartUI, renderCartList, handleSendOrder, addToCart, updateCheckoutTotals, renderClientView, applyCartCoupon, removeCartCoupon, openClientToppingsModal } from './views/client-view.js';
 window.renderClientView = renderClientView;
 import { handleUpdateChefStatus, handleUpdateWaiterOrderStatus } from './views/chef-view.js';
 import { handleUpdateOrderStatus } from './views/delivery-view.js';
@@ -120,6 +120,18 @@ window.closeWaiterModal = () => {
 window.updateWaiterCartQty = (index, change) => { }; // Not needed but kept for safety
 
 let currentEditingOrder = null;
+
+function buildEditProductOptions() {
+    return '<option value="">Agregar producto...</option>' +
+        (state.products || []).map(p => {
+            const hasVar = p.has_variants === 1 || p.has_variants === '1' || p.has_variants === true;
+            const hasTop = p.has_toppings === 1 || p.has_toppings === '1' || p.has_toppings === true;
+            const displayPrice = (p.is_promo && p.promo_price && p.promo_price > 0) ? p.promo_price : p.price;
+            const tags = [hasVar ? 'Variantes' : '', hasTop ? 'Adiciones' : ''].filter(Boolean).join(' / ');
+            const priceLabel = hasVar ? `Desde ${formatMoney(displayPrice)}` : formatMoney(displayPrice);
+            return `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.name)} - ${priceLabel}${tags ? ` (${tags})` : ''}</option>`;
+        }).join('');
+}
 
 window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
     // Check if cashier requires authorization in strict mode
@@ -312,8 +324,7 @@ window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
 
         // Populate Add Product Select
         const sel = $('oe-add-product');
-        sel.innerHTML = '<option value="">Agregar producto...</option>' +
-            state.products.map(p => `<option value="${p.id}">${p.name} - $${p.price}</option>`).join('');
+        sel.innerHTML = buildEditProductOptions();
 
         $('order-edit-modal').classList.remove('hidden');
 
@@ -410,8 +421,7 @@ window.openOfflineOrderEditModal = (id) => {
     $('oe-tip').oninput = () => renderEditItems();
 
     const sel = $('oe-add-product');
-    sel.innerHTML = '<option value="">Agregar producto...</option>' +
-        state.products.map(p => `<option value="${p.id}">${p.name} - $${p.price}</option>`).join('');
+    sel.innerHTML = buildEditProductOptions();
 
     $('order-edit-modal').classList.remove('hidden');
 };
@@ -2979,15 +2989,23 @@ function renderEditItems() {
     if (!currentEditingOrder || !currentEditingOrder.items) return;
 
     currentEditingOrder.items.forEach((item, index) => {
-        const itemTotal = item.price * item.qty;
+        const itemPrice = parseFloat(item.price) || 0;
+        const itemQty = parseInt(item.qty, 10) || 1;
+        const itemTotal = itemPrice * itemQty;
         total += itemTotal;
         const isCombo = item.is_combo || (Array.isArray(item.combo_items) && item.combo_items.length > 0);
+        const variantName = item.variant_name || item.variant?.name || '';
+        const toppingsDisplay = item.toppings_text || (
+            Array.isArray(item.toppings) && item.toppings.length > 0
+                ? item.toppings.map(t => t.price > 0 ? `${t.name} (+${formatMoney(t.price)})` : t.name).filter(Boolean).join(', ')
+                : ''
+        );
 
         let comboItemsHtml = '';
         if (isCombo && Array.isArray(item.combo_items) && item.combo_items.length > 0) {
             comboItemsHtml = `
                 <div class="mt-1 pl-2 border-l-2 border-amber-400 space-y-0.5 text-xs text-gray-600 bg-amber-50/50 py-1 pr-2 rounded-r">
-                    ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * item.qty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[10px]">(Cortesía)</span>' : ''}</div>`).join('')}
+                    ${item.combo_items.map(ci => `<div>• ${(parseFloat(ci.qty) || 1) * itemQty}x ${escapeHtml(ci.name)}${ci.is_free ? ' <span class="text-emerald-700 font-bold text-[10px]">(Cortesía)</span>' : ''}</div>`).join('')}
                 </div>
             `;
         }
@@ -2995,21 +3013,24 @@ function renderEditItems() {
         const div = document.createElement('div');
         div.className = `flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-3 bg-white p-2 rounded-lg border ${isCombo ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-sm`;
         div.innerHTML = `
-            <div class="flex-1">
+            <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
                     ${isCombo ? '<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.2 rounded"><i class="fas fa-tags text-[8px] mr-1"></i>COMBO</span>' : ''}
                     <div class="font-bold text-gray-800 text-sm">${escapeHtml(item.name)}</div>
+                    ${variantName ? `<span class="text-[10px] bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold px-1.5 py-0.5 rounded">${escapeHtml(variantName)}</span>` : ''}
                 </div>
+                ${toppingsDisplay ? `<div class="text-[11px] text-amber-800 font-semibold mt-0.5">+ ${escapeHtml(toppingsDisplay)}</div>` : ''}
+                ${item.notes ? `<div class="text-[10px] text-orange-700 italic mt-0.5"><i class="fas fa-comment-alt mr-1 text-[8px]"></i>Nota: ${escapeHtml(item.notes)}</div>` : ''}
                 ${comboItemsHtml}
-                <div class="text-xs text-gray-400 mt-0.5">${formatMoney(item.price)} c/u</div>
+                <div class="text-xs text-gray-400 mt-0.5">${formatMoney(itemPrice)} c/u${itemQty > 1 ? ` · <strong class="text-gray-700">${formatMoney(itemTotal)}</strong>` : ''}</div>
             </div>
             <div class="flex items-center justify-between md:justify-end gap-3">
                 <div class="flex items-center bg-gray-50 rounded-lg border border-gray-200">
-                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, -1)" title="Disminuir / Eliminar combo">-</button>
-                    <span class="w-10 text-center font-bold text-sm text-gray-700">${item.qty}</span>
-                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, 1)" title="Aumentar combo">+</button>
+                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, -1)" title="Disminuir cantidad">-</button>
+                    <span class="w-10 text-center font-bold text-sm text-gray-700">${itemQty}</span>
+                    <button type="button" class="w-10 h-6 flex items-center justify-center text-gray-500 hover:text-orange-500 transition-colors" onclick="updateEditItemQty(${index}, 1)" title="Aumentar cantidad">+</button>
                 </div>
-                <button type="button" class="text-red-400 hover:text-red-600 w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors" onclick="removeEditItem(${index})" title="Eliminar combo">
+                <button type="button" class="text-red-400 hover:text-red-600 w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors" onclick="removeEditItem(${index})" title="Eliminar ${isCombo ? 'combo' : 'producto'}">
                     <i class="fas fa-trash-alt"></i>
                 </button>
             </div>
@@ -3039,26 +3060,67 @@ window.removeEditItem = (index) => {
     renderEditItems();
 };
 
+function addItemToEditingOrder(newItem) {
+    if (!currentEditingOrder) return;
+    if (!Array.isArray(currentEditingOrder.items)) currentEditingOrder.items = [];
+
+    const newProductKey = String(newItem.productId || newItem.id || '');
+    const newVarName = newItem.variant_name || '';
+    const newToppingsText = newItem.toppings_text || '';
+    const newNotes = newItem.notes || '';
+    const newPrice = Number(newItem.price) || 0;
+
+    const existing = currentEditingOrder.items.find(i =>
+        !i.is_combo &&
+        String(i.productId || i.id || '') === newProductKey &&
+        (i.variant_name || '') === newVarName &&
+        (i.toppings_text || '') === newToppingsText &&
+        (i.notes || '') === newNotes &&
+        Number(i.price) === newPrice
+    );
+
+    if (existing) {
+        if (!existing.id) existing.id = newItem.id;
+        if (!existing.productId) existing.productId = newItem.productId || newItem.id;
+        existing.qty = (parseInt(existing.qty, 10) || 1) + (parseInt(newItem.qty, 10) || 1);
+    } else {
+        currentEditingOrder.items.push(newItem);
+    }
+
+    renderEditItems();
+    const select = $('oe-add-product');
+    if (select) select.value = '';
+}
+
 $('btn-oe-add').addEventListener('click', () => {
     const select = $('oe-add-product');
     const productId = select.value;
     if (!productId) return;
 
-    const product = state.products.find(p => p.id === productId);
-    if (product) {
-        // Check if already exists
-        const existing = currentEditingOrder.items.find(i => i.name === product.name);
-        if (existing) {
-            existing.qty++;
-        } else {
-            currentEditingOrder.items.push({
-                name: product.name,
-                price: product.price,
-                qty: 1
-            });
-        }
-        renderEditItems();
-        select.value = "";
+    const product = state.products.find(p => String(p.id) === String(productId));
+    if (!product) return;
+
+    const hasVariants = product.has_variants === 1 || product.has_variants === '1' || product.has_variants === true;
+    const hasToppings = product.has_toppings === 1 || product.has_toppings === '1' || product.has_toppings === true;
+
+    if (hasVariants || hasToppings) {
+        openClientToppingsModal(product, {
+            onConfirm: (customizedItem) => {
+                addItemToEditingOrder(customizedItem);
+                const displayName = customizedItem.variant_name ? `${product.name} (${customizedItem.variant_name})` : product.name;
+                toast(`Añadido: ${displayName}${customizedItem.qty > 1 ? ` (x${customizedItem.qty})` : ''}`, 'success');
+            }
+        });
+    } else {
+        const unitPrice = (product.is_promo && product.promo_price && product.promo_price > 0) ? product.promo_price : product.price;
+        addItemToEditingOrder({
+            id: product.id,
+            productId: product.id,
+            name: product.name,
+            price: unitPrice,
+            qty: 1,
+            notes: ''
+        });
     }
 });
 
@@ -3181,6 +3243,19 @@ $('order-edit-form').addEventListener('submit', async (e) => {
         const tipVal = parseFloat($('oe-tip').value) || 0;
         const discountVal = parseFloat($('oe-discount').value) || 0;
         const discountReasonVal = $('oe-discount-reason').value || "";
+
+        // Normalize items so every item carries id/productId (recovers legacy items added without id)
+        currentEditingOrder.items = (currentEditingOrder.items || []).map(item => {
+            let resolvedId = item.id || item.productId || item.combo_id;
+            if (!resolvedId && item.name && Array.isArray(state.products)) {
+                const matched = state.products.find(p => p.name === item.name);
+                if (matched) resolvedId = matched.id;
+            }
+            return {
+                ...item,
+                ...(resolvedId ? { id: resolvedId, productId: item.productId || resolvedId } : {})
+            };
+        });
         
         // Base item total calculated from items logic
         const baseItemsTotal = currentEditingOrder.items.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0);
