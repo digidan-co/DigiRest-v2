@@ -938,7 +938,12 @@ export function renderAdminOrdersTable(orders) {
         return `
         <tr class="hover:bg-gray-50 transition-colors border-b border-gray-50 ${isOffline ? 'bg-amber-50/40' : ''}">
             <td class="p-2 text-center align-middle max-w-[90px] w-[90px] min-w-[70px]">
-                <div class="font-bold text-gray-800 text-[11px] md:text-sm text-center whitespace-nowrap overflow-hidden text-ellipsis" title="#${o.id}">${isOffline ? '<i class="fas fa-cloud-upload-alt text-amber-500 mr-1 text-[10px]" title="Pendiente de sincronizar"></i>' : ''}#${o.id}</div>
+                <button type="button" onclick="showOrderDetails('${o.id}')"
+                    class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 border border-blue-200/70 font-bold text-[11px] md:text-xs transition-all active:scale-95 cursor-pointer shadow-2xs max-w-full"
+                    title="Ver detalles del pedido #${o.id}">
+                    ${isOffline ? '<i class="fas fa-cloud-upload-alt text-amber-500 mr-0.5 text-[10px]" title="Pendiente de sincronizar"></i>' : ''}
+                    <span class="truncate">#${o.id}</span>
+                </button>
                 <div class="text-[10px] md:text-xs text-gray-500 font-medium text-center mt-0.5 whitespace-nowrap">
                     ${new Date(o.timestamp).toLocaleString('es-CO', { timeZone: 'America/Bogota', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 </div>
@@ -1144,7 +1149,11 @@ export function renderAdminWaiterOrders(orders) {
     tbody.innerHTML = pageItems.map(o => `
         <tr class="hover:bg-gray-50 transition-colors ${o._offline ? 'bg-yellow-50' : ''}">
             <td class="p-2 text-center align-middle max-w-[90px] w-[90px] min-w-[70px]">
-                <div class="font-bold text-gray-700 text-[11px] md:text-sm whitespace-nowrap overflow-hidden text-ellipsis" title="#${o.id}">#${o.id}</div>
+                <button type="button" onclick="showOrderDetails('${o.id}')"
+                    class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 border border-blue-200/70 font-bold text-[11px] md:text-xs transition-all active:scale-95 cursor-pointer shadow-2xs max-w-full"
+                    title="Ver detalles del pedido #${o.id}">
+                    <span class="truncate">#${o.id}</span>
+                </button>
                 <div class="text-[10px] md:text-xs text-gray-500 mt-0.5 whitespace-nowrap">
                     ${new Date(o.timestamp).toLocaleString('es-CO', { timeZone: 'America/Bogota', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
@@ -2311,8 +2320,109 @@ window.showOrderDetails = function (orderIdOrObj) {
         proofContainer.classList.add('hidden');
     }
 
+    // Store reference to current order for modal actions
+    window.currentDetailsOrder = order;
+    window.currentDetailsIsWaiter = !!order.table || String(order.type || '').toLowerCase() === 'local';
+
+    // Configure Details Modal Action Buttons
+    const btnCobrar = document.getElementById('btn-details-cobrar');
+    const btnEdit = document.getElementById('btn-details-edit');
+    const btnPrint = document.getElementById('btn-details-print');
+    const btnCancel = document.getElementById('btn-details-cancel');
+
+    const isCobrado = order.status === 'Cobrado';
+    const isAnulado = order.status === 'Anulado';
+
+    if (btnCobrar) {
+        if (isCobrado || isAnulado) {
+            btnCobrar.classList.add('hidden');
+        } else {
+            btnCobrar.classList.remove('hidden');
+        }
+    }
+
+    if (btnCancel) {
+        if (isAnulado) {
+            btnCancel.classList.add('hidden');
+        } else {
+            btnCancel.classList.remove('hidden');
+        }
+    }
+
+    if (btnEdit) {
+        if (isAnulado) {
+            btnEdit.classList.add('hidden');
+        } else {
+            btnEdit.classList.remove('hidden');
+        }
+    }
+
+    if (btnPrint) {
+        btnPrint.classList.remove('hidden');
+    }
+
     // Show Modal
     document.getElementById('order-details-modal').classList.remove('hidden');
+};
+
+// Expose printOrder to window
+window.printOrder = printOrder;
+
+// Actions from Details Modal
+window.cobrarFromDetails = function () {
+    const order = window.currentDetailsOrder;
+    if (!order) return;
+    document.getElementById('order-details-modal').classList.add('hidden');
+    if (window.openPaymentModal) {
+        window.openPaymentModal(order, () => {
+            if (window.reloadAdminData) window.reloadAdminData();
+        });
+    }
+};
+
+window.editOrderFromDetails = function () {
+    const order = window.currentDetailsOrder;
+    if (!order) return;
+    document.getElementById('order-details-modal').classList.add('hidden');
+    const isWaiter = window.currentDetailsIsWaiter;
+    if (order._offline && window.openOfflineOrderEditModal) {
+        window.openOfflineOrderEditModal(order.id);
+    } else if (window.openOrderEditModal) {
+        window.openOrderEditModal(order.id, isWaiter);
+    }
+};
+
+window.printOrderFromDetails = function () {
+    const order = window.currentDetailsOrder;
+    if (!order) return;
+    const isWaiter = window.currentDetailsIsWaiter;
+    printOrder(isWaiter ? { ...order, isWaiterOrder: true } : order);
+};
+
+window.cancelOrderFromDetails = function () {
+    const order = window.currentDetailsOrder;
+    if (!order) return;
+    if (order._offline && window.showConfirmModal && window.removeOfflineOrder) {
+        showConfirmModal(
+            'Cancelar Pedido Local',
+            '¿Estás seguro de cancelar este pedido local? No se enviará al servidor cuando recuperes la conexión.',
+            async () => {
+                try {
+                    await removeOfflineOrder(order.id);
+                    document.getElementById('order-details-modal').classList.add('hidden');
+                    toast('Pedido local cancelado', 'success');
+                    if (window.reloadAdminData) window.reloadAdminData();
+                } catch (e) {
+                    console.error('Error cancelando pedido local:', e);
+                    toast('Error al cancelar', 'error');
+                }
+            },
+            null,
+            'Sí, cancelar'
+        );
+    } else if (window.promptCancelOrder) {
+        window.promptCancelOrder(order.id, document.getElementById('order-details-modal'));
+    }
 };
 
 // Helper for proof inside details modal

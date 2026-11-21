@@ -408,8 +408,12 @@ export function openMaximizedView(type) {
         return `
             <tr class="hover:bg-blue-50/30 transition-colors border-b border-gray-100">
                 <td class="p-4 text-center align-middle">
-                    <div class="font-bold text-gray-800 text-lg">${idDisplay}</div>
-                    <div class="text-xs text-gray-400">${dateObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}</div>
+                    <button type="button" onclick="showOrderDetails('${id}')"
+                        class="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 border border-blue-200/70 font-bold text-sm transition-all active:scale-95 cursor-pointer shadow-2xs"
+                        title="Ver detalles del pedido ${idDisplay}">
+                        ${idDisplay}
+                    </button>
+                    <div class="text-xs text-gray-400 mt-1">${dateObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}</div>
                 </td>
                 <td class="p-4 align-middle">
                     <div class="font-bold text-gray-800">${escapeHtml(mainInfo)}</div>

@@ -1034,7 +1034,14 @@ export async function openWaiterModal() {
     }
 }
 
+let isSendingWaiterOrder = false;
+
 export async function handleSendWaiterOrder() {
+    if (isSendingWaiterOrder) {
+        console.warn("⚠️ [Waiter] Envío de pedido ya en proceso. Clic duplicado ignorado.");
+        return;
+    }
+
     if (waiterCart.length === 0) return toast("El carrito está vacío", "error");
 
     const tableInput = $('w-table-num');
@@ -1065,6 +1072,19 @@ export async function handleSendWaiterOrder() {
         return;
     }
 
+    // Activar bloqueo de concurrencia y deshabilitar interacción de inmediato
+    isSendingWaiterOrder = true;
+    const btnSend1 = $('btn-final-send-order');
+    const btnSendReview = $('btn-final-send-order-review');
+    if (btnSend1) {
+        btnSend1.disabled = true;
+        btnSend1.style.pointerEvents = 'none';
+    }
+    if (btnSendReview) {
+        btnSendReview.disabled = true;
+        btnSendReview.style.pointerEvents = 'none';
+    }
+
     setLoading('btn-final-send-order', true, "Enviando...");
     setLoading('btn-final-send-order-review', true, "Enviando...");
 
@@ -1089,8 +1109,11 @@ export async function handleSendWaiterOrder() {
         const totalDiscountReason = [comboCalc.discountReason, waiterAppliedCoupon?.discountReason].filter(Boolean).join(' + ');
         const finalTotal = Math.max(0, baseItemsTotal - couponDisc);
 
+        const clientOrderId = 'LOCAL_' + (state.user?.id || 'w') + '_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
         const orderData = {
             id: orderId,
+            client_order_id: clientOrderId,
             table: tableNum,
             items: waiterCart.map(({ _editingNote, ...rest }) => ({
                 ...rest,
@@ -1129,6 +1152,15 @@ export async function handleSendWaiterOrder() {
         console.error("Error in handleSendWaiterOrder:", e);
         toast("Error al enviar pedido: " + e.message, "error");
     } finally {
+        isSendingWaiterOrder = false;
+        if (btnSend1) {
+            btnSend1.disabled = false;
+            btnSend1.style.pointerEvents = '';
+        }
+        if (btnSendReview) {
+            btnSendReview.disabled = false;
+            btnSendReview.style.pointerEvents = '';
+        }
         setLoading('btn-final-send-order', false);
         setLoading('btn-final-send-order-review', false, "Confirmar Pedido"); // Reset text manually or through helper if supported
     }

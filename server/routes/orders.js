@@ -213,6 +213,17 @@ async function recalculatePublicOrderPricing(rawItems, rawDeliveryZone, orderTyp
     };
 }
 
+// Idempotency and anti-duplicate order cache (TTL: 60s)
+const recentOrdersCache = new Map();
+function cleanupRecentOrdersCache() {
+    const now = Date.now();
+    for (const [key, entry] of recentOrdersCache.entries()) {
+        if (now - entry.time > 60000) {
+            recentOrdersCache.delete(key);
+        }
+    }
+}
+
 // Rate limiter for public order creation (customers without valid staff JWT)
 const orderCreationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -322,6 +333,27 @@ module.exports = (io) => {
         let discount_reason = staffUser ? (req.body.discount_reason || "") : "";
         const delivery_zone = req.body.delivery_zone || "";
         let delivery_fee = Math.max(0, parseFloat(req.body.delivery_fee) || 0);
+
+        // Anti-duplicate protection: check client_order_id / _offlineId and short-window waiter duplicate
+        const clientOrderId = req.body.client_order_id || req.body._offlineId;
+        cleanupRecentOrdersCache();
+
+        if (clientOrderId && recentOrdersCache.has(clientOrderId)) {
+            const existing = recentOrdersCache.get(clientOrderId);
+            console.log(`🛡️ [Deduplication] Pedido duplicado prevenido por client_order_id: ${clientOrderId} -> #${existing.id}`);
+            return res.status(200).json({ id: existing.id, ...existing.order, message: 'Pedido ya registrado (idempotente)' });
+        }
+
+        const isLocalOrder = (type || '').toLowerCase() === 'local';
+        const waiterFingerprint = isLocalOrder
+            ? `waiter_${waiterId || 'anon'}_table_${table || 'none'}_total_${total || 0}`
+            : null;
+
+        if (waiterFingerprint && recentOrdersCache.has(waiterFingerprint)) {
+            const existing = recentOrdersCache.get(waiterFingerprint);
+            console.log(`🛡️ [Deduplication] Doble clic rápido de mesero prevenido para mesa ${table} -> #${existing.id}`);
+            return res.status(200).json({ id: existing.id, ...existing.order, message: 'Pedido ya registrado (doble clic prevenido)' });
+        }
 
         try {
             const newId = await generateOrderId(type || 'Domicilio');
@@ -504,6 +536,13 @@ module.exports = (io) => {
                         if (custErr) console.error("Error updating customer CRM on order:", custErr.message);
                         else io.to(['admin', 'cajero', 'supervisor']).emit('customers_updated');
                     });
+                }
+
+                if (clientOrderId) {
+                    recentOrdersCache.set(clientOrderId, { id: newId, order: newOrder, time: Date.now() });
+                }
+                if (waiterFingerprint) {
+                    recentOrdersCache.set(waiterFingerprint, { id: newId, order: newOrder, time: Date.now() });
                 }
 
                 res.json(newOrder);

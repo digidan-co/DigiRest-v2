@@ -186,9 +186,12 @@ function cancelOffline(id) {
                         class="hover:bg-gray-50 transition-colors border-b border-gray-50"
                         :class="o._offline ? 'bg-amber-50/40' : ''">
                         <td class="p-2 text-center align-middle max-w-[90px] w-[90px] min-w-[70px]">
-                            <div class="font-bold text-gray-800 text-[11px] md:text-sm text-center whitespace-nowrap overflow-hidden text-ellipsis" :title="'#' + o.id">
-                                <i v-if="o._offline" class="fas fa-cloud-upload-alt text-amber-500 mr-1 text-[10px]" title="Pendiente de sincronizar"></i>#{{ o.id }}
-                            </div>
+                            <button type="button" @click="showDetails(o.id)"
+                                class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 border border-blue-200/70 font-bold text-[11px] md:text-xs transition-all active:scale-95 cursor-pointer shadow-2xs max-w-full"
+                                :title="'Ver detalles del pedido #' + o.id">
+                                <i v-if="o._offline" class="fas fa-cloud-upload-alt text-amber-500 mr-0.5 text-[10px]" title="Pendiente de sincronizar"></i>
+                                <span class="truncate">#{{ o.id }}</span>
+                            </button>
                             <div class="text-[10px] md:text-xs text-gray-500 font-medium text-center mt-0.5 whitespace-nowrap">{{ fmtDate(o) }}</div>
                         </td>
                         <td class="p-2 text-center align-middle max-w-[100px] min-w-[70px]">
@@ -296,7 +299,12 @@ function cancelOffline(id) {
                         <tr v-for="o in waiterPageItems" :key="o.id"
                             class="hover:bg-gray-50 transition-colors" :class="o._offline ? 'bg-yellow-50' : ''">
                             <td class="p-2 text-center align-middle max-w-[90px] w-[90px] min-w-[70px]">
-                                <div class="font-bold text-gray-700 text-[11px] md:text-sm whitespace-nowrap overflow-hidden text-ellipsis" :title="'#' + o.id">#{{ o.id }}</div>
+                                <button type="button" @click="showDetails(o.id)"
+                                    class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 border border-blue-200/70 font-bold text-[11px] md:text-xs transition-all active:scale-95 cursor-pointer shadow-2xs max-w-full"
+                                    :title="'Ver detalles del pedido #' + o.id">
+                                    <i v-if="o._offline" class="fas fa-cloud-upload-alt text-amber-500 mr-0.5 text-[10px]" title="Pendiente de sincronizar"></i>
+                                    <span class="truncate">#{{ o.id }}</span>
+                                </button>
                                 <div class="text-[10px] md:text-xs text-gray-500 mt-0.5 whitespace-nowrap">{{ fmtDate(o) }}</div>
                             </td>
                             <td class="p-2 text-center align-middle max-w-[100px] min-w-[70px]">

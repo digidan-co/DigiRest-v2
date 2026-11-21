@@ -200,6 +200,10 @@ export const ApiClient = {
         if (!navigator.onLine) {
             if (isOfflineQueueable(endpoint)) {
                 if (isFormData) throw new Error("No se pueden subir archivos sin conexión.");
+                if (endpoint === '/orders') {
+                    // createOrder handles its own offline persistence with _offlineId and offline_orders store to avoid duplicates
+                    return { offline: true, message: 'Operación guardada localmente. Se sincronizará al conectar.' };
+                }
                 await OfflineDB.enqueueRequest({ url: endpoint, method: 'POST', body });
                 return { offline: true, message: 'Operación guardada localmente. Se sincronizará al conectar.' };
             }
@@ -237,6 +241,10 @@ export const ApiClient = {
                 networkErr.name === 'TypeError';
 
             if (isNetworkFailure && !isFormData && isOfflineQueueable(endpoint)) {
+                if (endpoint === '/orders') {
+                    // createOrder handles its own offline persistence with _offlineId and offline_orders store to avoid duplicates
+                    return { offline: true, message: 'Fallo de red: Operación guardada localmente.' };
+                }
                 console.warn(`⚠️ Fallo de conexión en POST ${endpoint}. Guardando en cola offline...`);
                 await OfflineDB.enqueueRequest({ url: endpoint, method: 'POST', body });
                 return { offline: true, message: 'Fallo de red: Operación guardada localmente.' };
