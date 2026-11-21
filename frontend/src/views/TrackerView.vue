@@ -92,7 +92,6 @@ let unsub = null;
 onMounted(() => {
     unsub = listenToOrders('tracker', (list) => {
         orders.value = list;
-        state.orders = list; // keep legacy search in sync
     });
 });
 onUnmounted(() => { if (unsub) unsub(); });

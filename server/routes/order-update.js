@@ -165,6 +165,11 @@ module.exports = (io) => {
                 io.to(editRooms).emit('order_status_update', updateData);
                 io.to('tracker').emit('order_updated', { id, status: status || currentOrder.status, type: type || currentOrder.type });
 
+                // Si el pedido se actualizó a Cobrado, emitir cashflow_updated para sincronizar arqueos y saldos
+                if (status === 'Cobrado') {
+                    io.to(['admin', 'cajero', 'supervisor']).emit('cashflow_updated', { type: 'order_updated', orderId: id });
+                }
+
                 // Log audit for order edit
                 const isExtemp = !isSameDayOrder(currentOrder.timestamp);
                 const auditAction = isExtemp && (status === 'Anulado' || status === 'Cancelado') ? 'ORDER_CANCELLED_EXTEMPORARY' : 'ORDER_EDITED';

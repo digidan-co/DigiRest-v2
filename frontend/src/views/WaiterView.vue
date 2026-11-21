@@ -58,11 +58,6 @@ const activeGeneralOrders = computed(() => {
     );
 });
 
-// Sync state.waiterOrders with my local orders for legacy compatibility
-watch([activeLocalOrders, activeGeneralOrders], () => {
-    state.waiterOrders = [...activeLocalOrders.value, ...activeGeneralOrders.value];
-}, { immediate: true });
-
 function itemCheckedQty(i) {
     return i.checkedQty !== undefined ? i.checkedQty : (i.checked ? (i.qty || 1) : 0);
 }

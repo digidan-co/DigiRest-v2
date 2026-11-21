@@ -162,6 +162,63 @@ async function populateOrderEditDeliveryZones(currentZoneName, currentFee) {
     }
 }
 
+let editModalAccounts = [];
+
+function getEditModalAccountsForMethod(method) {
+    if (!editModalAccounts || editModalAccounts.length === 0) return [];
+    if (method === 'Efectivo') {
+        const list = editModalAccounts.filter(a => a.type === 'Efectivo');
+        return list.length > 0 ? list : editModalAccounts;
+    } else if (method === 'Transferencia') {
+        const list = editModalAccounts.filter(a => a.type === 'Transferencia');
+        return list.length > 0 ? list : editModalAccounts;
+    } else if (method === 'Datáfono') {
+        const list = editModalAccounts.filter(a => a.type === 'Datáfono' || a.type === 'Transferencia');
+        return list.length > 0 ? list : editModalAccounts;
+    }
+    return editModalAccounts;
+}
+
+function getDefaultEditModalAccountId(method) {
+    const list = getEditModalAccountsForMethod(method);
+    const def = list.find(a => a.is_default) || list[0];
+    return def ? String(def.id) : '';
+}
+
+async function loadAndPopulateOrderEditAccounts(order) {
+    try {
+        editModalAccounts = await getAccounts({ active: true }) || [];
+    } catch (accErr) {
+        console.warn("Could not load accounts for edit modal:", accErr);
+        editModalAccounts = [];
+    }
+
+    const payMethod = $('oe-pay')?.value || order?.payment || 'Efectivo';
+
+    const populateSelectOptions = (selectEl, accounts, selectedVal, fallbackMethod) => {
+        if (!selectEl) return;
+        if (!accounts || accounts.length === 0) {
+            selectEl.innerHTML = '<option value="">(Sin cuentas registradas)</option>';
+            return;
+        }
+
+        selectEl.innerHTML = accounts.map(a => 
+            `<option value="${a.id}">${escapeHtml(a.name)} (${a.type || 'General'})${a.is_default ? ' ★' : ''}</option>`
+        ).join('');
+
+        let finalVal = selectedVal;
+        const exists = accounts.some(a => String(a.id) === String(finalVal));
+        if (!finalVal || !exists) {
+            finalVal = getDefaultEditModalAccountId(fallbackMethod);
+        }
+        if (finalVal) selectEl.value = String(finalVal);
+    };
+
+    populateSelectOptions($('oe-account'), editModalAccounts, order?.account_id, payMethod);
+    populateSelectOptions($('oe-mixed-cash-account'), getEditModalAccountsForMethod('Efectivo'), order?.cash_account_id, 'Efectivo');
+    populateSelectOptions($('oe-mixed-transfer-account'), getEditModalAccountsForMethod('Transferencia'), order?.transfer_account_id, 'Transferencia');
+}
+
 window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
     // Check if cashier requires authorization in strict mode
     const isCajero = state.user?.role === 'cajero';
@@ -296,21 +353,7 @@ window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
         $('oe-discount-reason').disabled = parseFloat(order.discount || 0) <= 0;
 
         // Populate accounts for destination routing
-        try {
-            const accounts = await getAccounts({ active: true }) || [];
-            const populateSel = (selectEl, defaultVal) => {
-                if (!selectEl) return;
-                selectEl.innerHTML = '<option value="">(Cuenta predeterminada / Ninguna)</option>' +
-                    accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)} (${a.type || 'General'})</option>`).join('');
-                if (defaultVal) selectEl.value = String(defaultVal);
-            };
-
-            populateSel($('oe-account'), order.account_id);
-            populateSel($('oe-mixed-cash-account'), order.cash_account_id);
-            populateSel($('oe-mixed-transfer-account'), order.transfer_account_id);
-        } catch (accErr) {
-            console.warn("Could not load accounts for edit modal:", accErr);
-        }
+        await loadAndPopulateOrderEditAccounts(order);
 
         // Set mixed values if payment is Mixto
         if ($('oe-mixed-cash')) $('oe-mixed-cash').value = order.cash_amount || '';
@@ -439,6 +482,9 @@ window.openOfflineOrderEditModal = async (id) => {
 
     // Cargar y seleccionar zona y costo de domicilio
     await populateOrderEditDeliveryZones(order.delivery_zone || '', order.delivery_fee || 0);
+
+    // Cargar y preseleccionar cuentas financieras
+    await loadAndPopulateOrderEditAccounts(order);
 
     notesField.value = order.notes || "";
     $('oe-tip').value = order.tip || 0;
@@ -3292,7 +3338,52 @@ $('oe-type').addEventListener('change', () => {
     renderEditItems();
 });
 
-$('oe-pay').addEventListener('change', toggleEditFields);
+$('oe-pay').addEventListener('change', () => {
+    const newPay = $('oe-pay').value;
+    toggleEditFields();
+    
+    // Auto-select first/default account matching the chosen payment method
+    if (newPay !== 'Mixto') {
+        const accSelect = $('oe-account');
+        if (accSelect) {
+            const defId = getDefaultEditModalAccountId(newPay);
+            if (defId) accSelect.value = defId;
+        }
+    } else {
+        const cashSel = $('oe-mixed-cash-account');
+        const transSel = $('oe-mixed-transfer-account');
+        if (cashSel && (!cashSel.value || cashSel.value === '')) {
+            const defCash = getDefaultEditModalAccountId('Efectivo');
+            if (defCash) cashSel.value = defCash;
+        }
+        if (transSel && (!transSel.value || transSel.value === '')) {
+            const defTrans = getDefaultEditModalAccountId('Transferencia');
+            if (defTrans) transSel.value = defTrans;
+        }
+    }
+});
+
+$('oe-status').addEventListener('change', () => {
+    const newStatus = $('oe-status').value;
+    const currentPay = $('oe-pay')?.value || 'Efectivo';
+    if (newStatus === 'Cobrado') {
+        const accSelect = $('oe-account');
+        if (accSelect && (!accSelect.value || accSelect.value === '')) {
+            const defId = getDefaultEditModalAccountId(currentPay);
+            if (defId) accSelect.value = defId;
+        }
+        const cashSel = $('oe-mixed-cash-account');
+        if (cashSel && (!cashSel.value || cashSel.value === '')) {
+            const defCash = getDefaultEditModalAccountId('Efectivo');
+            if (defCash) cashSel.value = defCash;
+        }
+        const transSel = $('oe-mixed-transfer-account');
+        if (transSel && (!transSel.value || transSel.value === '')) {
+            const defTrans = getDefaultEditModalAccountId('Transferencia');
+            if (defTrans) transSel.value = defTrans;
+        }
+    }
+});
 
 if ($('oe-delivery-zone')) {
     $('oe-delivery-zone').addEventListener('change', (e) => {
@@ -3402,9 +3493,20 @@ $('order-edit-form').addEventListener('submit', async (e) => {
         const isTransferOrMixed = payMethod === 'Transferencia' || payMethod === 'Mixto';
         const cashAmt = payMethod === 'Mixto' ? (parseFloat($('oe-mixed-cash')?.value) || 0) : (payMethod === 'Efectivo' ? calculatedTotal : 0);
         const transAmt = payMethod === 'Mixto' ? (parseFloat($('oe-mixed-transfer')?.value) || 0) : (payMethod === 'Transferencia' ? calculatedTotal : 0);
-        const cashAccId = payMethod === 'Mixto' ? ($('oe-mixed-cash-account')?.value ? parseInt($('oe-mixed-cash-account').value) : null) : (payMethod === 'Efectivo' && $('oe-account')?.value ? parseInt($('oe-account').value) : null);
-        const transAccId = payMethod === 'Mixto' ? ($('oe-mixed-transfer-account')?.value ? parseInt($('oe-mixed-transfer-account').value) : null) : (payMethod === 'Transferencia' && $('oe-account')?.value ? parseInt($('oe-account').value) : null);
-        const accId = payMethod !== 'Mixto' && $('oe-account')?.value ? parseInt($('oe-account').value) : null;
+        let resolvedCashAccId = $('oe-mixed-cash-account')?.value ? parseInt($('oe-mixed-cash-account').value, 10) : null;
+        let resolvedTransAccId = $('oe-mixed-transfer-account')?.value ? parseInt($('oe-mixed-transfer-account').value, 10) : null;
+        let resolvedAccId = $('oe-account')?.value ? parseInt($('oe-account').value, 10) : null;
+
+        if (payMethod === 'Mixto') {
+            if (!resolvedCashAccId) resolvedCashAccId = parseInt(getDefaultEditModalAccountId('Efectivo'), 10) || null;
+            if (!resolvedTransAccId) resolvedTransAccId = parseInt(getDefaultEditModalAccountId('Transferencia'), 10) || null;
+        } else {
+            if (!resolvedAccId) resolvedAccId = parseInt(getDefaultEditModalAccountId(payMethod), 10) || null;
+        }
+
+        const cashAccId = payMethod === 'Mixto' ? resolvedCashAccId : (payMethod === 'Efectivo' ? resolvedAccId : null);
+        const transAccId = payMethod === 'Mixto' ? resolvedTransAccId : (payMethod === 'Transferencia' ? resolvedAccId : null);
+        const accId = payMethod !== 'Mixto' ? resolvedAccId : null;
 
         // Save locally when: offline, has temp ID, or has _offline flag
         if (currentEditingOrder._offline === true || isTempId || !navigator.onLine) {

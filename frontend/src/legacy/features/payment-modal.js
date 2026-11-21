@@ -662,16 +662,23 @@ async function handleConfirmCobro() {
         toast(`Pedido #${orderId} cobrado exitosamente`, "success");
         closePaymentModal();
 
-        // Update local state optimistic
-        const targetList = currentOrder?.type === 'Local' ? state.waiterOrders : state.orders;
-        if (targetList) {
-            const idx = targetList.findIndex(o => o.id == orderId);
+        // Update local state optimistic across orders and waiterOrders
+        const updateInList = (list) => {
+            if (!list) return;
+            const idx = list.findIndex(o => o.id == orderId);
             if (idx !== -1) {
-                targetList[idx].status = 'Cobrado';
-                targetList[idx].payment = payload.payment;
-                if (payload.proof) targetList[idx].proof = payload.proof;
+                list[idx].status = 'Cobrado';
+                list[idx].payment = payload.payment;
+                if (payload.account_id) list[idx].account_id = payload.account_id;
+                if (payload.cash_amount !== undefined) list[idx].cash_amount = payload.cash_amount;
+                if (payload.transfer_amount !== undefined) list[idx].transfer_amount = payload.transfer_amount;
+                if (payload.cash_account_id) list[idx].cash_account_id = payload.cash_account_id;
+                if (payload.transfer_account_id) list[idx].transfer_account_id = payload.transfer_account_id;
+                if (payload.proof) list[idx].proof = payload.proof;
             }
-        }
+        };
+        updateInList(state.orders);
+        updateInList(state.waiterOrders);
 
         if (typeof onPaymentCompleteCallback === 'function') {
             onPaymentCompleteCallback(response?.order || currentOrder);
