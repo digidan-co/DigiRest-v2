@@ -19,7 +19,7 @@ export const showConfirmModal = (title, msg, onConfirm, onCancel = null, okText 
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'confirm-modal';
-        modal.className = 'fixed inset-0 bg-black/60 z-[80] hidden flex justify-center items-center px-4 backdrop-blur-sm';
+        modal.className = 'fixed inset-0 bg-black/60 z-[110] hidden flex justify-center items-center px-4 backdrop-blur-sm';
         modal.innerHTML = `
             <div class="glass-panel w-full max-w-sm rounded-3xl shadow-2xl p-6 slide-up bg-white text-center">
                 <div class="text-4xl mb-4"><i class="fas fa-exclamation-triangle text-orange-500"></i></div>
@@ -74,7 +74,7 @@ export const showPromptModal = (title, msg, placeholder, onConfirm, options = {}
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'prompt-modal';
-        modal.className = 'fixed inset-0 bg-black/60 z-[80] hidden flex justify-center items-center px-4 backdrop-blur-sm';
+        modal.className = 'fixed inset-0 bg-black/60 z-[110] hidden flex justify-center items-center px-4 backdrop-blur-sm';
         modal.innerHTML = `
             <div id="prompt-modal-inner" class="glass-panel w-full max-w-sm rounded-3xl shadow-2xl p-6 slide-up bg-white text-center">
                 <h3 id="prompt-modal-title" class="font-bold text-xl text-gray-800 mb-2"></h3>
@@ -354,7 +354,7 @@ export const showAuthorizationModal = ({ title, msg, orderId, type = 'edit', onA
     if (!authModal) {
         authModal = document.createElement('div');
         authModal.id = 'general-auth-modal';
-        authModal.className = 'fixed inset-0 bg-black/60 z-[85] hidden flex justify-center items-center px-4 backdrop-blur-sm';
+        authModal.className = 'fixed inset-0 bg-black/60 z-[115] hidden flex justify-center items-center px-4 backdrop-blur-sm';
         document.body.appendChild(authModal);
     }
 
@@ -563,7 +563,7 @@ export function showModalAlert(title, msg, type = 'info') {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'generic-modal';
-        modal.className = 'fixed inset-0 bg-black/60 z-[60] hidden flex justify-center items-center px-4 backdrop-blur-sm';
+        modal.className = 'fixed inset-0 bg-black/60 z-[110] hidden flex justify-center items-center px-4 backdrop-blur-sm';
         modal.innerHTML = `
             <div class="glass-panel z w-full max-w-sm rounded-3xl shadow-2xl p-6 slide-up bg-white text-center">
                 <div id="generic-modal-icon" class="text-4xl mb-4"></div>

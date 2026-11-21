@@ -3397,7 +3397,7 @@
 
     <!-- Order Details Modal (Admin) -->
     <div id="order-details-modal"
-        class="fixed inset-0 bg-black/60 z-[90] hidden flex justify-center items-center p-4 backdrop-blur-sm">
+        class="fixed inset-0 bg-black/60 z-[30] hidden flex justify-center items-center p-4 backdrop-blur-sm">
         <div
             class="glass-panel w-full max-w-2xl rounded-3xl shadow-2xl p-0 overflow-hidden relative scale-in flex flex-col max-h-[90vh]">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
@@ -3550,26 +3550,26 @@
             </div>
 
             <div class="p-3 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
-                <div class="flex flex-wrap items-center gap-2" id="od-actions-group">
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto" id="od-actions-group">
                     <button type="button" id="btn-details-cobrar" onclick="cobrarFromDetails()"
-                        class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
+                        class="px-3 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
                         <i class="fas fa-cash-register"></i> <span>Cobrar</span>
                     </button>
                     <button type="button" id="btn-details-edit" onclick="editOrderFromDetails()"
-                        class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
+                        class="px-3 sm:px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
                         <i class="fas fa-edit"></i> <span>Editar</span>
                     </button>
                     <button type="button" id="btn-details-print" onclick="printOrderFromDetails()"
-                        class="px-3.5 py-2 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
+                        class="px-3 sm:px-3.5 py-2 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
                         <i class="fas fa-file-invoice"></i> <span>Imprimir</span>
                     </button>
                     <button type="button" id="btn-details-cancel" onclick="cancelOrderFromDetails()"
-                        class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
+                        class="px-3 sm:px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer">
                         <i class="fas fa-ban"></i> <span>Anular</span>
                     </button>
                 </div>
                 <button type="button" onclick="document.getElementById('order-details-modal').classList.add('hidden')"
-                    class="bg-gray-900 text-white px-5 py-2 rounded-xl font-bold text-xs shadow-sm hover:bg-black transition-transform active:scale-95 cursor-pointer ml-auto">
+                    class="hidden sm:inline-flex bg-gray-900 text-white px-5 py-2 rounded-xl font-bold text-xs shadow-sm hover:bg-black transition-transform active:scale-95 cursor-pointer ml-auto">
                     Cerrar
                 </button>
             </div>
