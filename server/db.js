@@ -572,6 +572,58 @@ function initSchema() {
             db.run("ALTER TABLE orders ADD COLUMN transfer_account_id INTEGER", (err) => { });
             db.run("ALTER TABLE orders ADD COLUMN payment_details TEXT", (err) => { });
 
+            // One-time auto-migration: Backfill historical orders with null account_id (executed once, zero-overhead on future boots)
+            db.get("SELECT 1 FROM config WHERE key = 'migrated_order_accounts_v1'", (cfgErr, cfgRow) => {
+                if (cfgErr || cfgRow) return;
+
+                db.get("SELECT 1 FROM orders WHERE status = 'Cobrado' AND (account_id IS NULL OR account_id = '' OR account_id = 0) LIMIT 1", (chkErr, needBackfill) => {
+                    if (needBackfill) {
+                        db.serialize(() => {
+                            db.run(`
+                                UPDATE orders 
+                                SET account_id = (SELECT id FROM finance_accounts WHERE type = 'Efectivo' AND is_active = 1 ORDER BY id ASC LIMIT 1)
+                                WHERE status = 'Cobrado' 
+                                  AND (account_id IS NULL OR account_id = '' OR account_id = 0)
+                                  AND (payment = 'Efectivo' OR payment IS NULL OR payment = '')
+                            `, (uErr) => { });
+
+                            db.run(`
+                                UPDATE orders 
+                                SET account_id = (SELECT id FROM finance_accounts WHERE type = 'Transferencia' AND is_active = 1 ORDER BY id ASC LIMIT 1),
+                                    transfer_account_id = COALESCE(transfer_account_id, (SELECT id FROM finance_accounts WHERE type = 'Transferencia' AND is_active = 1 ORDER BY id ASC LIMIT 1))
+                                WHERE status = 'Cobrado' 
+                                  AND (account_id IS NULL OR account_id = '' OR account_id = 0)
+                                  AND (payment = 'Transferencia' OR payment = 'Nequi' OR payment = 'Daviplata')
+                            `, (uErr) => { });
+
+                            db.run(`
+                                UPDATE orders 
+                                SET account_id = COALESCE(
+                                    (SELECT id FROM finance_accounts WHERE type = 'Datáfono' AND is_active = 1 ORDER BY id ASC LIMIT 1),
+                                    (SELECT id FROM finance_accounts WHERE type = 'Transferencia' AND is_active = 1 ORDER BY id ASC LIMIT 1)
+                                )
+                                WHERE status = 'Cobrado' 
+                                  AND (account_id IS NULL OR account_id = '' OR account_id = 0)
+                                  AND payment = 'Datáfono'
+                            `, (uErr) => { });
+
+                            db.run(`
+                                UPDATE orders 
+                                SET cash_account_id = COALESCE(cash_account_id, (SELECT id FROM finance_accounts WHERE type = 'Efectivo' AND is_active = 1 ORDER BY id ASC LIMIT 1)),
+                                    transfer_account_id = COALESCE(transfer_account_id, (SELECT id FROM finance_accounts WHERE type = 'Transferencia' AND is_active = 1 ORDER BY id ASC LIMIT 1))
+                                WHERE status = 'Cobrado' 
+                                  AND payment = 'Mixto'
+                                  AND (cash_account_id IS NULL OR cash_account_id = '' OR transfer_account_id IS NULL OR transfer_account_id = '')
+                            `, (uErr) => { });
+
+                            db.run("INSERT OR REPLACE INTO config (key, value) VALUES ('migrated_order_accounts_v1', 1)", (insErr) => { });
+                        });
+                    } else {
+                        db.run("INSERT OR REPLACE INTO config (key, value) VALUES ('migrated_order_accounts_v1', 1)", (insErr) => { });
+                    }
+                });
+            });
+
             // Migration: Add Option C columns to toppings (direct stock or linked kitchen supply)
             db.run("ALTER TABLE toppings ADD COLUMN inventory_mode TEXT DEFAULT 'direct'", (err) => { });
             db.run("ALTER TABLE toppings ADD COLUMN stock REAL DEFAULT 0", (err) => { });

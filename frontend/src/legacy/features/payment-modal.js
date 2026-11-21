@@ -431,9 +431,9 @@ function renderMixedRows() {
                 <div class="w-36 shrink-0">
                     <label class="text-[9px] font-bold text-gray-400 uppercase block mb-0.5">Método</label>
                     <select class="pm-split-method w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 outline-none focus:bg-white" data-index="${index}">
-                        <option value="Efectivo" ${split.method === 'Efectivo' ? 'selected' : ''}>💵 Efectivo</option>
-                        <option value="Transferencia" ${split.method === 'Transferencia' ? 'selected' : ''}>📱 Transferencia</option>
-                        <option value="Datáfono" ${split.method === 'Datáfono' ? 'selected' : ''}>💳 Datáfono</option>
+                        <option value="Efectivo" ${split.method === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
+                        <option value="Transferencia" ${split.method === 'Transferencia' ? 'selected' : ''}>Transferencia</option>
+                        <option value="Datáfono" ${split.method === 'Datáfono' ? 'selected' : ''}>Datáfono</option>
                     </select>
                 </div>
                 <div class="flex-1">
