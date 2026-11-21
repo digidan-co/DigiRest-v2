@@ -3954,6 +3954,25 @@
                     </div>
                 </div>
 
+                <!-- Fila Zona de Domicilio y Costo de Envío (visible cuando Tipo es Domicilio) -->
+                <div id="oe-delivery-container" class="grid grid-cols-2 gap-2 hidden p-2.5 bg-orange-50/60 border border-orange-200 rounded-xl">
+                    <div id="oe-delivery-zone-container">
+                        <label class="text-[10px] font-bold text-orange-800 uppercase ml-1 flex items-center gap-1">
+                            <i class="fas fa-map-marker-alt text-[9px]"></i> Zona de Domicilio
+                        </label>
+                        <select id="oe-delivery-zone" class="w-full p-2 border border-orange-200 rounded-lg bg-white outline-none text-xs font-medium text-gray-800 focus:border-orange-500">
+                            <option value="">Seleccionar zona...</option>
+                        </select>
+                    </div>
+                    <div id="oe-delivery-fee-container">
+                        <label class="text-[10px] font-bold text-orange-800 uppercase ml-1 flex items-center gap-1">
+                            <i class="fas fa-motorcycle text-[9px]"></i> Costo Domicilio ($)
+                        </label>
+                        <input type="number" id="oe-delivery-fee" min="0" step="100" value="0" placeholder="$0"
+                            class="w-full p-2 border border-orange-200 rounded-lg bg-white outline-none text-xs font-bold text-gray-800 focus:border-orange-500">
+                    </div>
+                </div>
+
                 <!-- Contenedor opcional para desglose en Pago Mixto -->
                 <div id="oe-mixed-container" class="p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2 hidden">
                     <div class="grid grid-cols-2 gap-2">
@@ -4017,7 +4036,10 @@
                 <div class="border border-gray-100 rounded-xl p-3 bg-gray-50/50">
                     <div class="flex justify-between items-center mb-2">
                         <h4 class="text-xs font-bold text-gray-500 uppercase">Platos del Pedido</h4>
-                        <span id="oe-total" class="font-bold text-gray-800">Total: $0</span>
+                        <div class="flex items-center gap-2">
+                            <span id="oe-delivery-badge" class="hidden text-[10px] font-bold bg-orange-100 text-orange-800 px-2 py-0.5 rounded-md border border-orange-200"></span>
+                            <span id="oe-total" class="font-bold text-gray-800">Total: $0</span>
+                        </div>
                     </div>
 
                     <div id="oe-items-list" class="space-y-2 mb-3">

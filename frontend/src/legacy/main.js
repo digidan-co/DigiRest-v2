@@ -133,6 +133,35 @@ function buildEditProductOptions() {
         }).join('');
 }
 
+async function populateOrderEditDeliveryZones(currentZoneName, currentFee) {
+    let zones = state.deliveryZones;
+    if (!zones || zones.length === 0) {
+        try {
+            zones = await getDeliveryZones();
+            state.deliveryZones = zones || [];
+        } catch (e) {
+            console.error("Error loading delivery zones for edit modal:", e);
+        }
+    }
+    const zoneSelect = $('oe-delivery-zone');
+    if (zoneSelect) {
+        let html = '<option value="">Seleccionar zona...</option>';
+        (state.deliveryZones || []).forEach(z => {
+            const fee = parseFloat(z.fee) || 0;
+            const isSelected = (currentZoneName && (String(currentZoneName).toLowerCase() === String(z.name).toLowerCase() || String(currentZoneName) === String(z.id))) ? 'selected' : '';
+            html += `<option value="${escapeHtml(z.name)}" data-fee="${fee}" ${isSelected}>${escapeHtml(z.name)} (${formatMoney(fee)})</option>`;
+        });
+        zoneSelect.innerHTML = html;
+        if (currentZoneName) {
+            zoneSelect.value = currentZoneName;
+        }
+    }
+    const feeInput = $('oe-delivery-fee');
+    if (feeInput) {
+        feeInput.value = parseFloat(currentFee) || 0;
+    }
+}
+
 window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
     // Check if cashier requires authorization in strict mode
     const isCajero = state.user?.role === 'cajero';
@@ -196,9 +225,13 @@ window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
             tableField.value = order.table || "";
             tableContainer.classList.remove('hidden');
 
-            typeField.innerHTML = '<option value="Local">Local</option>';
-            typeField.value = "Local";
-            typeField.disabled = true;
+            typeField.innerHTML = `
+                <option value="Local">Local</option>
+                <option value="Recoger">Para Recoger</option>
+                <option value="Domicilio">A Domicilio</option>
+            `;
+            typeField.value = order.type || "Local";
+            typeField.disabled = false;
 
             payField.value = order.payment || "Efectivo";
             statusField.value = order.status || "Pendiente";
@@ -229,6 +262,7 @@ window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
             tableField.value = "";
 
             typeField.innerHTML = `
+                <option value="Local">Local</option>
                 <option value="Recoger">Para Recoger</option>
                 <option value="Domicilio">A Domicilio</option>
             `;
@@ -249,6 +283,9 @@ window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
                 $('oe-no-proof').classList.remove('hidden');
             }
         }
+
+        // Cargar y seleccionar zona y costo de domicilio
+        await populateOrderEditDeliveryZones(order.delivery_zone || '', order.delivery_fee || 0);
 
         $('oe-notes').value = order.notes || "";
         $('oe-tip').value = order.tip || 0;
@@ -281,17 +318,21 @@ window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
 
         // Auto balancing between mixed cash and transfer
         if ($('oe-mixed-cash') && $('oe-mixed-transfer')) {
+            const getEditTotalWithDelivery = () => {
+                const isDom = $('oe-type')?.value === 'Domicilio';
+                const dFee = isDom ? (parseFloat($('oe-delivery-fee')?.value) || 0) : 0;
+                return (currentEditingOrder?.items?.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0) || 0)
+                    + (parseFloat($('oe-tip').value) || 0) - (parseFloat($('oe-discount').value) || 0) + dFee;
+            };
             $('oe-mixed-cash').oninput = () => {
-                const total = (currentEditingOrder?.items?.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0) || 0)
-                    + (parseFloat($('oe-tip').value) || 0) - (parseFloat($('oe-discount').value) || 0);
+                const total = getEditTotalWithDelivery();
                 let cash = parseFloat($('oe-mixed-cash').value);
                 if (isNaN(cash) || cash < 0) cash = 0;
                 if (cash > total) cash = total;
                 $('oe-mixed-transfer').value = Math.max(0, total - cash);
             };
             $('oe-mixed-transfer').oninput = () => {
-                const total = (currentEditingOrder?.items?.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0) || 0)
-                    + (parseFloat($('oe-tip').value) || 0) - (parseFloat($('oe-discount').value) || 0);
+                const total = getEditTotalWithDelivery();
                 let trans = parseFloat($('oe-mixed-transfer').value);
                 if (isNaN(trans) || trans < 0) trans = 0;
                 if (trans > total) trans = total;
@@ -339,7 +380,7 @@ window.openOrderEditModal = async (id, isWaiter, bypassAuth = false) => {
  * Populates the same edit form used for online orders but marks
  * currentEditingOrder._offline so the save handler saves locally.
  */
-window.openOfflineOrderEditModal = (id) => {
+window.openOfflineOrderEditModal = async (id) => {
     let order = state.orders.find(o => o.id === id);
     if (!order && state.waiterOrders) {
         order = state.waiterOrders.find(o => o.id === id);
@@ -375,6 +416,7 @@ window.openOfflineOrderEditModal = (id) => {
     tableField.value = "";
 
     typeField.innerHTML = `
+        <option value="Local">Local</option>
         <option value="Recoger">Para Recoger</option>
         <option value="Domicilio">A Domicilio</option>
     `;
@@ -394,6 +436,9 @@ window.openOfflineOrderEditModal = (id) => {
         $('oe-current-proof').classList.add('hidden');
         $('oe-no-proof').classList.remove('hidden');
     }
+
+    // Cargar y seleccionar zona y costo de domicilio
+    await populateOrderEditDeliveryZones(order.delivery_zone || '', order.delivery_fee || 0);
 
     notesField.value = order.notes || "";
     $('oe-tip').value = order.tip || 0;
@@ -3038,12 +3083,26 @@ function renderEditItems() {
         list.appendChild(div);
     });
 
+    const isDomicilio = $('oe-type')?.value === 'Domicilio';
+    const deliveryFee = isDomicilio ? (parseFloat($('oe-delivery-fee')?.value) || 0) : 0;
     const tip = parseFloat($('oe-tip').value) || 0;
     const desc = parseFloat($('oe-discount').value) || 0;
-    const finalTotal = total + tip - desc;
+    const finalTotal = Math.max(0, total + tip - desc + deliveryFee);
+
+    const deliveryBadge = $('oe-delivery-badge');
+    if (deliveryBadge) {
+        if (isDomicilio && deliveryFee > 0) {
+            deliveryBadge.innerText = `+ Domicilio: ${formatMoney(deliveryFee)}`;
+            deliveryBadge.classList.remove('hidden');
+        } else {
+            deliveryBadge.classList.add('hidden');
+        }
+    }
 
     $('oe-total').innerText = `Total: ${formatMoney(finalTotal)}`;
     currentEditingOrder.total = finalTotal;
+    currentEditingOrder.delivery_fee = deliveryFee;
+    currentEditingOrder.delivery_zone = isDomicilio ? ($('oe-delivery-zone')?.value || '') : '';
 }
 
 window.updateEditItemQty = (index, change) => {
@@ -3135,12 +3194,31 @@ function toggleEditFields() {
     const pay = $('oe-pay').value;
     const isWaiter = currentEditingOrder.isWaiterOrder;
 
-    if (!isWaiter) {
-        if (type === 'Domicilio') $('oe-address').parentElement.classList.remove('hidden');
-        else $('oe-address').parentElement.classList.add('hidden');
-    } else {
-        // For waiter orders, show address (customer data now editable)
-        $('oe-address').parentElement.classList.remove('hidden');
+    const deliveryContainer = $('oe-delivery-container');
+    const tableContainer = $('oe-table-container');
+    const addressParent = $('oe-address')?.parentElement;
+    const phoneField = $('oe-phone');
+
+    if (type === 'Domicilio') {
+        if (addressParent) addressParent.classList.remove('hidden');
+        if (tableContainer) tableContainer.classList.add('hidden');
+        if (deliveryContainer) deliveryContainer.classList.remove('hidden');
+        if (phoneField) phoneField.required = true;
+    } else if (type === 'Local') {
+        if (tableContainer) tableContainer.classList.remove('hidden');
+        if (deliveryContainer) deliveryContainer.classList.add('hidden');
+        if (isWaiter && addressParent) addressParent.classList.remove('hidden');
+        else if (addressParent) addressParent.classList.add('hidden');
+        if (phoneField) phoneField.required = false;
+        if ($('oe-delivery-fee')) $('oe-delivery-fee').value = 0;
+        if ($('oe-delivery-zone')) $('oe-delivery-zone').value = '';
+    } else { // Recoger
+        if (tableContainer) tableContainer.classList.add('hidden');
+        if (deliveryContainer) deliveryContainer.classList.add('hidden');
+        if (addressParent) addressParent.classList.add('hidden');
+        if (phoneField) phoneField.required = true;
+        if ($('oe-delivery-fee')) $('oe-delivery-fee').value = 0;
+        if ($('oe-delivery-zone')) $('oe-delivery-zone').value = '';
     }
 
     const accountContainer = $('oe-account-container');
@@ -3201,8 +3279,44 @@ function toggleEditFields() {
     }
 }
 
-$('oe-type').addEventListener('change', toggleEditFields);
+$('oe-type').addEventListener('change', () => {
+    const newType = $('oe-type').value;
+    toggleEditFields();
+    if (newType === 'Domicilio') {
+        const zoneSelect = $('oe-delivery-zone');
+        if (zoneSelect && !zoneSelect.value) {
+            toast("Selecciona una zona de domicilio para calcular el costo de envío", "info");
+            setTimeout(() => zoneSelect.focus(), 80);
+        }
+    }
+    renderEditItems();
+});
+
 $('oe-pay').addEventListener('change', toggleEditFields);
+
+if ($('oe-delivery-zone')) {
+    $('oe-delivery-zone').addEventListener('change', (e) => {
+        const selectedZoneName = e.target.value;
+        const selectedOption = e.target.selectedOptions ? e.target.selectedOptions[0] : null;
+        let fee = 0;
+        if (selectedOption && selectedOption.dataset && selectedOption.dataset.fee !== undefined) {
+            fee = parseFloat(selectedOption.dataset.fee) || 0;
+        } else {
+            const zone = (state.deliveryZones || []).find(z => z.name === selectedZoneName || z.id === selectedZoneName);
+            if (zone) fee = parseFloat(zone.fee) || 0;
+        }
+        if ($('oe-delivery-fee')) {
+            $('oe-delivery-fee').value = fee;
+        }
+        renderEditItems();
+    });
+}
+
+if ($('oe-delivery-fee')) {
+    $('oe-delivery-fee').addEventListener('input', () => {
+        renderEditItems();
+    });
+}
 
 // Add image compression to edit modal proof upload
 $('oe-proof').addEventListener('change', async (e) => {
@@ -3244,6 +3358,26 @@ $('order-edit-form').addEventListener('submit', async (e) => {
         const discountVal = parseFloat($('oe-discount').value) || 0;
         const discountReasonVal = $('oe-discount-reason').value || "";
 
+        const isDomicilio = $('oe-type').value === 'Domicilio';
+        const deliveryZoneVal = isDomicilio ? ($('oe-delivery-zone')?.value?.trim() || '') : '';
+        const deliveryFeeVal = isDomicilio ? (parseFloat($('oe-delivery-fee')?.value) || 0) : 0;
+
+        if (isDomicilio) {
+            const hasZones = Array.isArray(state.deliveryZones) && state.deliveryZones.length > 0;
+            if (hasZones && !deliveryZoneVal) {
+                toast("Por favor selecciona una zona de domicilio", "warning");
+                $('oe-delivery-zone')?.focus();
+                setLoading('btn-save-oe', false);
+                return;
+            }
+            if (!$('oe-address').value.trim()) {
+                toast("Por favor ingresa la dirección de entrega", "warning");
+                $('oe-address')?.focus();
+                setLoading('btn-save-oe', false);
+                return;
+            }
+        }
+
         // Normalize items so every item carries id/productId (recovers legacy items added without id)
         currentEditingOrder.items = (currentEditingOrder.items || []).map(item => {
             let resolvedId = item.id || item.productId || item.combo_id;
@@ -3260,7 +3394,7 @@ $('order-edit-form').addEventListener('submit', async (e) => {
         // Base item total calculated from items logic
         const baseItemsTotal = currentEditingOrder.items.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0);
         // Adjusted Total Calculation
-        const calculatedTotal = baseItemsTotal + tipVal - discountVal;
+        const calculatedTotal = Math.max(0, baseItemsTotal + tipVal - discountVal + deliveryFeeVal);
 
         // ── OFFLINE / TEMP ID ORDER SAVE PATH ──
         const isTempId = String(currentEditingOrder.id).startsWith('OFF-');
@@ -3298,6 +3432,8 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 notes: $('oe-notes').value,
                 type: $('oe-type').value,
                 table: $('oe-table').value,
+                delivery_zone: deliveryZoneVal,
+                delivery_fee: deliveryFeeVal,
                 items: currentEditingOrder.items,
                 tip: tipVal,
                 discount: discountVal,
@@ -3328,6 +3464,8 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 notes: $('oe-notes').value,
                 type: $('oe-type').value,
                 table: $('oe-table').value,
+                delivery_zone: deliveryZoneVal,
+                delivery_fee: deliveryFeeVal,
                 items: JSON.stringify(currentEditingOrder.items),
                 tip: tipVal,
                 discount: discountVal,
@@ -3395,6 +3533,8 @@ $('order-edit-form').addEventListener('submit', async (e) => {
             formData.append('notes', $('oe-notes').value);
             formData.append('type', $('oe-type').value);
             formData.append('table', $('oe-table').value);
+            formData.append('delivery_zone', deliveryZoneVal);
+            formData.append('delivery_fee', deliveryFeeVal);
             formData.append('items', JSON.stringify(currentEditingOrder.items));
             formData.append('tip', tipVal);
             formData.append('discount', discountVal);
@@ -3430,6 +3570,8 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 notes: $('oe-notes').value,
                 type: $('oe-type').value,
                 table: $('oe-table').value,
+                delivery_zone: deliveryZoneVal,
+                delivery_fee: deliveryFeeVal,
                 items: currentEditingOrder.items,
                 tip: tipVal,
                 discount: discountVal,
@@ -3462,11 +3604,14 @@ $('order-edit-form').addEventListener('submit', async (e) => {
                 arr[idx].tip = tipVal;
                 arr[idx].discount = discountVal;
                 arr[idx].discount_reason = discountReasonVal;
+                arr[idx].delivery_zone = deliveryZoneVal;
+                arr[idx].delivery_fee = deliveryFeeVal;
                 arr[idx].status = $('oe-status').value;
                 arr[idx].payment = payMethod;
                 arr[idx].client = $('oe-client').value;
                 arr[idx].type = $('oe-type').value;
                 arr[idx].table = $('oe-table').value;
+                arr[idx].address = $('oe-address').value;
                 arr[idx].notes = $('oe-notes').value;
                 arr[idx].account_id = accId;
                 arr[idx].cash_amount = cashAmt;

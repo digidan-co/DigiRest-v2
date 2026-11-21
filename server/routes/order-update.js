@@ -22,6 +22,8 @@ module.exports = (io) => {
         const tip = parseFloat(req.body.tip) || 0;
         const discount = parseFloat(req.body.discount) || 0;
         const discount_reason = req.body.discount_reason || "";
+        const delivery_zone = req.body.delivery_zone !== undefined ? String(req.body.delivery_zone).trim() : '';
+        const delivery_fee = (type === 'Domicilio') ? Math.max(0, parseFloat(req.body.delivery_fee) || 0) : 0;
 
         const itemsJson = typeof items === 'string' ? items : JSON.stringify(items || []);
 
@@ -52,7 +54,7 @@ module.exports = (io) => {
         const proceedWithOrderUpdate = () => {
             let approvingAdmin = null;
             // First, get current order to see if there is an old file to delete
-            db.get('SELECT proof, type, waiterId, waiterName, timestamp, status FROM orders WHERE id = ?', [id], async (err, currentOrder) => {
+            db.get('SELECT proof, type, waiterId, waiterName, timestamp, status, delivery_zone, delivery_fee FROM orders WHERE id = ?', [id], async (err, currentOrder) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (!currentOrder) return res.status(404).json({ error: 'Order not found' });
 
@@ -97,29 +99,46 @@ module.exports = (io) => {
                 sql = `UPDATE orders SET 
                          client = ?, phone = ?, address = ?, notes = ?, 
                          type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?,
-                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?, proof = ?
+                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?,
+                         delivery_zone = ?, delivery_fee = ?, proof = ?
                          WHERE id = ?`;
-                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, newProofPath, id];
+                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, delivery_zone, delivery_fee, newProofPath, id];
             } else if (shouldRemoveProof) {
                 // UPDATE setting proof to NULL
                 sql = `UPDATE orders SET 
                          client = ?, phone = ?, address = ?, notes = ?, 
                          type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?,
-                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?, proof = NULL
+                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?,
+                         delivery_zone = ?, delivery_fee = ?, proof = NULL
                          WHERE id = ?`;
-                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, id];
+                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, delivery_zone, delivery_fee, id];
             } else {
                 // UPDATE without changing proof
                 sql = `UPDATE orders SET 
                          client = ?, phone = ?, address = ?, notes = ?, 
                          type = ?, payment = ?, status = ?, tableNum = ?, items = ?, total = ?, tip = ?, discount = ?, discount_reason = ?,
-                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?
+                         account_id = ?, cash_amount = ?, transfer_amount = ?, cash_account_id = ?, transfer_account_id = ?, payment_details = ?,
+                         delivery_zone = ?, delivery_fee = ?
                          WHERE id = ?`;
-                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, id];
+                params = [client, phone, address, notes, type, payment, status, table, itemsJson, total, tip, discount, discount_reason, account_id, cash_amount, transfer_amount, cash_account_id, transfer_account_id, payment_details, delivery_zone, delivery_fee, id];
             }
 
             db.run(sql, params, function (err) {
                 if (err) return res.status(500).json({ error: err.message });
+
+                // Update customer profile if phone is present
+                if (phone) {
+                    const custZone = (type === 'Domicilio' && delivery_zone) ? delivery_zone : '';
+                    db.run(
+                        `UPDATE customers SET 
+                            address = COALESCE(NULLIF(?, ''), address),
+                            delivery_zone = CASE WHEN ? != '' THEN ? ELSE delivery_zone END,
+                            updated_at = CURRENT_TIMESTAMP 
+                         WHERE phone = ?`,
+                        [address || '', custZone, custZone, phone],
+                        () => {}
+                    );
+                }
 
                 // Construct updated data object
                 const updateData = {
@@ -127,6 +146,8 @@ module.exports = (io) => {
                     ...req.body,
                     items: JSON.parse(itemsJson),
                     tip, discount, discount_reason,
+                    delivery_zone,
+                    delivery_fee,
                     proof: shouldReplaceProof ? newProofPath : (shouldRemoveProof ? null : currentOrder.proof),
                     waiterId: currentOrder.waiterId,
                     waiterName: currentOrder.waiterName
