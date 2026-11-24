@@ -526,6 +526,8 @@ function initSchema() {
             db.run("ALTER TABLE cierre_cajas ADD COLUMN total_descuentos REAL DEFAULT 0", (err) => { });
             // Migration: Add total_gastos to cierre_cajas
             db.run("ALTER TABLE cierre_cajas ADD COLUMN total_gastos REAL DEFAULT 0", (err) => { });
+            // Migration: Add total_domicilios to cierre_cajas
+            db.run("ALTER TABLE cierre_cajas ADD COLUMN total_domicilios REAL DEFAULT 0", (err) => { });
 
             // Migration: Add solved_at to order_notes
             db.run("ALTER TABLE order_notes ADD COLUMN solved_at DATETIME", (err) => { });

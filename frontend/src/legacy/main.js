@@ -685,6 +685,11 @@ function loadAdminConfig() {
         canEditEl.checked = state.restaurantData.cajeroCanEdit !== false;
     }
 
+    // Sync Delivery Fee Model (driver vs restaurant)
+    const deliveryModel = state.restaurantData.deliveryFeeModel || 'driver';
+    const deliveryModelRadio = document.querySelector(`input[name="conf-delivery-fee-model"][value="${deliveryModel}"]`);
+    if (deliveryModelRadio) deliveryModelRadio.checked = true;
+
     const acc = state.accountData || {};
     if ($('conf-bank-name')) $('conf-bank-name').value = acc.typeAcount || "";
     if ($('conf-bank-holder')) $('conf-bank-holder').value = acc.name || "";
@@ -2573,6 +2578,7 @@ $('config-form').addEventListener('submit', async (e) => {
             isOpen: $('conf-is-open') ? $('conf-is-open').checked : (state.config.isOpen !== false),
             cajeroCanCancel: $('conf-cajero-can-cancel') ? $('conf-cajero-can-cancel').checked : true,
             cajeroCanEdit: $('conf-cajero-can-edit') ? $('conf-cajero-can-edit').checked : true,
+            deliveryFeeModel: document.querySelector('input[name="conf-delivery-fee-model"]:checked')?.value || state.restaurantData.deliveryFeeModel || 'driver',
             socialNetworks: sn,
             businessHours: hours
         };

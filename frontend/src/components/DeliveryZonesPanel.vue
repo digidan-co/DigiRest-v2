@@ -5,6 +5,22 @@ import { formatMoney } from '@/legacy/utils/helpers.js';
 import { getDeliveryZones, toggleDeliveryZone, deleteDeliveryZone, listenToDeliveryZones, importDeliveryZonesCSV, exportDeliveryZonesCSV } from '@/legacy/services/delivery-service.js';
 import { openDeliveryZoneModal, populateClientDeliveryZones } from '@/legacy/features/delivery-zones-manager.js';
 import { toast, showConfirmModal } from '@/legacy/components/ui.js';
+import { ApiClient } from '@/legacy/services/api-client.js';
+
+const currentDeliveryModel = computed(() => state.restaurantData?.deliveryFeeModel || 'driver');
+
+async function setDeliveryModel(model) {
+    if (currentDeliveryModel.value === model) return;
+    try {
+        const newData = { ...state.restaurantData, deliveryFeeModel: model };
+        await ApiClient.post('/config', { key: 'dataRestaurant', value: newData });
+        state.restaurantData.deliveryFeeModel = model;
+        toast(model === 'driver' ? 'Modelo configurado: Domiciliarios Tercerizados' : 'Modelo configurado: Domiciliarios Propios', 'success');
+    } catch (err) {
+        console.error(err);
+        toast('Error guardando configuración', 'error');
+    }
+}
 
 const searchTerm = ref('');
 const openMenuId = ref(null);
@@ -113,6 +129,41 @@ onUnmounted(() => {
 </script>
 
 <template>
+    <!-- Banner de Modelo de Recaudo de Domicilios -->
+    <div class="bg-gradient-to-r from-orange-50 to-amber-50/50 p-4 rounded-2xl border border-orange-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+        <div class="flex items-start gap-3">
+            <span class="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                <i class="fas fa-hand-holding-usd text-xs"></i>
+            </span>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h4 class="font-extrabold text-xs text-gray-900">Modelo Contable de Recaudo por Domicilio</h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                        :class="currentDeliveryModel === 'driver' ? 'bg-orange-100 text-orange-800 border border-orange-300' : 'bg-blue-100 text-blue-800 border border-blue-300'">
+                        {{ currentDeliveryModel === 'driver' ? 'Tercerizado / Repartidores' : 'Propio / Nómina' }}
+                    </span>
+                </div>
+                <p class="text-[11px] text-gray-600 mt-0.5 leading-relaxed">
+                    {{ currentDeliveryModel === 'driver' 
+                        ? 'El cobro del domicilio pertenece al repartidor independiente. En el cierre de caja se liquida registrando un egreso formal para que la caja física cuadre exacta.'
+                        : 'El cobro del domicilio ingresa como venta y beneficio operativo directo del restaurante para cubrir costos fijos o nómina.' }}
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center bg-white p-1 rounded-xl border border-orange-200 shadow-2xs shrink-0 self-end sm:self-center">
+            <button type="button" @click="setDeliveryModel('driver')"
+                class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                :class="currentDeliveryModel === 'driver' ? 'bg-orange-500 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'">
+                Tercerizado
+            </button>
+            <button type="button" @click="setDeliveryModel('restaurant')"
+                class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                :class="currentDeliveryModel === 'restaurant' ? 'bg-blue-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'">
+                Propio
+            </button>
+        </div>
+    </div>
+
     <!-- Header / Barra de controles -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
         <div>

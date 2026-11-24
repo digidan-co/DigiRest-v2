@@ -36,10 +36,13 @@ module.exports = function (io) {
             cantidad_pedidos,
             cantidad_platos,
             total_anulados,
+            total_propinas,
+            total_descuentos,
             ingreso_efectivo,
             ingreso_transferencia,
             total_general,
-            usuario
+            usuario,
+            total_domicilios
         } = req.body;
 
         if (!fecha || !hora || !usuario) {
@@ -58,8 +61,8 @@ module.exports = function (io) {
 
             const query = `
                 INSERT INTO cierre_cajas 
-                (fecha, hora, cantidad_pedidos, cantidad_platos, total_anulados, ingreso_efectivo, ingreso_transferencia, total_general, usuario, total_gastos)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (fecha, hora, cantidad_pedidos, cantidad_platos, total_anulados, total_propinas, total_descuentos, ingreso_efectivo, ingreso_transferencia, total_general, usuario, total_gastos, total_domicilios)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             const params = [
@@ -68,11 +71,14 @@ module.exports = function (io) {
                 cantidad_pedidos || 0,
                 cantidad_platos || 0,
                 total_anulados || 0,
+                total_propinas || 0,
+                total_descuentos || 0,
                 ingreso_efectivo || 0,
                 ingreso_transferencia || 0,
                 adjustedTotal,
                 usuario,
-                totalGastos
+                totalGastos,
+                parseFloat(total_domicilios) || 0
             ];
 
             db.run(query, params, function (err) {
@@ -91,11 +97,48 @@ module.exports = function (io) {
                     ingresoEfectivo: ingreso_efectivo,
                     ingresoTransferencia: ingreso_transferencia,
                     totalGastos,
-                    adjustedTotal
+                    adjustedTotal,
+                    totalDomicilios: total_domicilios || 0
                 });
 
-                res.status(201).json({ success: true, id: this.lastID, total_gastos: totalGastos, adjusted_total: adjustedTotal });
+                res.status(201).json({ success: true, id: this.lastID, total_gastos: totalGastos, adjusted_total: adjustedTotal, total_domicilios: total_domicilios || 0 });
             });
+        });
+    });
+
+    // POST liquidar repartidor de domicilio (Admin / Cajero) -> registra egreso en gastos_dia
+    router.post('/cierre-caja/liquidar-domicilio', verifyToken, requireRole(['admin', 'cajero']), (req, res) => {
+        const { driverName, amount, count, date } = req.body;
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            return res.status(400).json({ error: 'Monto de liquidación inválido' });
+        }
+        const name = (driverName || 'Repartidor General').trim();
+        const trips = parseInt(count, 10) || 1;
+        const fechaDesc = date ? ` - Fecha: ${date}` : '';
+        const descripcion = `Liquidación Domicilios: ${name} (${trips} pedido${trips > 1 ? 's' : ''})${fechaDesc}`;
+        const anotaciones = `Liquidación a repartidor independiente realizada por ${req.user?.name || req.user?.username || 'Cajero'}`;
+
+        const query = `INSERT INTO gastos_dia (destino, descripcion, valor, anotaciones) VALUES ('Otro', ?, ?, ?)`;
+        db.run(query, [descripcion, numAmount, anotaciones], function (err) {
+            if (err) {
+                console.error('Error registrando liquidación de domicilio en gastos_dia:', err);
+                return res.status(500).json({ error: 'Error al registrar liquidación' });
+            }
+
+            if (io) {
+                io.emit('gasto_created', { id: this.lastID, valor: numAmount, descripcion });
+            }
+
+            logAudit('DELIVERY_LIQUIDATION_RECORDED', req.user?.id || 'unknown', req.ip, {
+                gastoId: this.lastID,
+                driverName: name,
+                amount: numAmount,
+                count: trips,
+                userName: req.user?.name || req.user?.username
+            });
+
+            res.status(201).json({ success: true, id: this.lastID, amount: numAmount, message: 'Liquidación registrada como egreso correctamente' });
         });
     });
 

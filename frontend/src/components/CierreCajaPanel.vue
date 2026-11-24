@@ -158,6 +158,9 @@ watch(() => state.user, (u) => {
                 <p class="text-xs text-gray-500">Listado de todos los cierres diarios</p>
             </div>
             <div class="flex items-center gap-3 w-full sm:w-auto">
+                <span class="text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 shadow-2xs whitespace-nowrap">
+                    <i class="fas fa-motorcycle text-orange-500"></i> Domicilios: {{ (state.restaurantData?.deliveryFeeModel || 'driver') === 'driver' ? 'Tercerizado' : 'Propio' }}
+                </span>
                 <div class="relative w-full sm:w-auto">
                     <input type="date" v-model="filterDate"
                         class="w-full text-sm py-2 px-3 border border-gray-200 rounded-lg outline-none text-gray-600 focus:border-blue-500 transition-colors">
@@ -179,6 +182,7 @@ watch(() => state.user, (u) => {
                         <th class="p-4 text-red-500">Anulados</th>
                         <th class="p-4 text-green-600">Efectivo</th>
                         <th class="p-4 text-blue-600">Transf</th>
+                        <th class="p-4 text-orange-600">Domicilios</th>
                         <th class="p-4 text-red-400">Gastos</th>
                         <th class="p-4 text-gray-900 border-l border-gray-200">Total</th>
                         <th class="p-4 text-center">Usuario</th>
@@ -186,10 +190,10 @@ watch(() => state.user, (u) => {
                 </thead>
                 <tbody class="divide-y divide-gray-50">
                     <tr v-if="loading">
-                        <td :colspan="isAdmin ? 9 : 8" class="text-center py-6 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Cargando historial...</td>
+                        <td :colspan="isAdmin ? 10 : 9" class="text-center py-6 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Cargando historial...</td>
                     </tr>
                     <tr v-else-if="pageItems.length === 0">
-                        <td :colspan="isAdmin ? 9 : 8" class="text-center py-6 text-gray-400">No hay cierres registrados.</td>
+                        <td :colspan="isAdmin ? 10 : 9" class="text-center py-6 text-gray-400">No hay cierres registrados.</td>
                     </tr>
                     <tr v-for="c in pageItems" :key="c.id" class="hover:bg-gray-50 transition-colors">
                         <td class="p-4 text-center" v-if="isAdmin">
@@ -204,6 +208,7 @@ watch(() => state.user, (u) => {
                         <td class="p-4 text-red-500 font-bold">{{ c.total_anulados }} uds</td>
                         <td class="p-4 text-green-600 font-bold">{{ formatMoney(c.ingreso_efectivo) }}</td>
                         <td class="p-4 text-blue-600 font-bold">{{ formatMoney(c.ingreso_transferencia) }}</td>
+                        <td class="p-4 text-orange-600 font-bold">{{ formatMoney(c.total_domicilios || 0) }}</td>
                         <td class="p-4 text-red-500 font-bold">{{ formatMoney(c.total_gastos || 0) }}</td>
                         <td class="p-4 text-gray-900 font-black border-l border-gray-100">{{ formatMoney(c.total_general) }}</td>
                         <td class="p-4 text-center text-gray-500 text-xs">{{ c.usuario || '' }}</td>

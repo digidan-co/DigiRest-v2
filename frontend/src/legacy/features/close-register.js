@@ -101,7 +101,8 @@ export function setupCloseRegisterListeners() {
                 ingreso_efectivo: summary.totalCash,
                 ingreso_transferencia: summary.totalTransfer,
                 total_general: summary.totalSales,
-                usuario: state.user ? state.user.name : 'Admin'
+                usuario: state.user ? state.user.name : 'Admin',
+                total_domicilios: summary.totalDeliveryFees || 0
             };
 
             await ApiClient.post('/cierre-caja', data);
@@ -338,6 +339,25 @@ function calculateDailyStats() {
     // Convert map to array sorted by qty desc
     const itemsArray = Array.from(itemMap.values()).sort((a, b) => b.qty - a.qty);
 
+    // Domicilios analysis
+    const deliveryOrders = validOrders.filter(o => o.type === 'Domicilio');
+    let totalDeliveryFees = 0;
+    const driverStatsMap = new Map();
+
+    deliveryOrders.forEach(o => {
+        const fee = parseFloat(o.delivery_fee) || 0;
+        totalDeliveryFees += fee;
+        const driverName = (o.deliveryDriverName || 'Sin asignar').trim();
+        if (!driverStatsMap.has(driverName)) {
+            driverStatsMap.set(driverName, { name: driverName, count: 0, totalFee: 0, driverId: o.deliveryDriverId || '' });
+        }
+        const st = driverStatsMap.get(driverName);
+        st.count += 1;
+        st.totalFee += fee;
+    });
+
+    const driverBreakdown = Array.from(driverStatsMap.values());
+
     return {
         totalOrders: validOrders.length,
         totalSales: totalSales,
@@ -347,7 +367,10 @@ function calculateDailyStats() {
         totalDiscounts: totalDiscounts,
         breakdown: breakdown,
         items: itemsArray,
-        canceledItemsQty: canceledItemsQty
+        canceledItemsQty: canceledItemsQty,
+        totalDeliveryFees: totalDeliveryFees,
+        deliveryOrdersCount: deliveryOrders.length,
+        driverBreakdown: driverBreakdown
     };
 }
 
@@ -377,8 +400,8 @@ function renderSummaryModal(data) {
     // Gastos and Adjusted Total
     const totalGastosEl = $('summary-total-gastos');
     const adjustedEl = $('summary-adjusted-total');
-    const totalGastosVal = parseFloat(data.totalGastos || 0);
-    const adjustedVal = parseFloat(data.adjustedTotal !== undefined ? data.adjustedTotal : ((data.totalSales || 0) - totalGastosVal));
+    let totalGastosVal = parseFloat(data.totalGastos || 0);
+    let adjustedVal = parseFloat(data.adjustedTotal !== undefined ? data.adjustedTotal : ((data.totalSales || 0) - totalGastosVal));
     if (totalGastosEl) totalGastosEl.innerText = formatter.format(totalGastosVal);
     if (adjustedEl) adjustedEl.innerText = formatter.format(adjustedVal);
 
@@ -389,6 +412,178 @@ function renderSummaryModal(data) {
             <td class="py-2 text-right text-gray-800 font-bold">${formatter.format(i.total)}</td>
         </tr>
     `).join('');
+
+    // Domicilios Section
+    const deliveryTotalEl = $('summary-delivery-total');
+    const deliveryCountEl = $('summary-delivery-count');
+    const deliveryDescEl = $('summary-delivery-model-desc');
+    const driversListEl = $('summary-delivery-drivers-list');
+    const actionContainer = $('summary-delivery-action-container');
+    const pendingAmountEl = $('summary-delivery-pending-amount');
+    const btnLiquidateAll = $('btn-liquidate-all-drivers');
+
+    const isDriverModel = (state.restaurantData?.deliveryFeeModel || 'driver') === 'driver';
+    const totalFee = data.totalDeliveryFees || 0;
+    const delCount = data.deliveryOrdersCount || 0;
+
+    if (deliveryTotalEl) deliveryTotalEl.innerText = formatter.format(totalFee);
+    if (deliveryCountEl) deliveryCountEl.innerText = `${delCount} pedido${delCount === 1 ? '' : 's'}`;
+    if (deliveryDescEl) {
+        deliveryDescEl.innerText = isDriverModel
+            ? 'Modelo: Domiciliarios Tercerizados (Liquidación como egreso de caja)'
+            : 'Modelo: Domiciliarios Propios (Ingreso operativo directo del restaurante)';
+    }
+
+    const gastosRows = data.gastosRows || [];
+
+    // Helper to check if a driver was liquidated today
+    const isDriverLiquidated = (dName) => {
+        const needle = dName.toLowerCase();
+        return gastosRows.some(g => {
+            const desc = (g.descripcion || '').toLowerCase();
+            return desc.includes('liquidación domicilios') && (desc.includes(needle) || desc.includes('todos'));
+        });
+    };
+
+    let totalPendingFee = 0;
+    const pendingDrivers = [];
+
+    if (driversListEl) {
+        if (!data.driverBreakdown || data.driverBreakdown.length === 0) {
+            driversListEl.innerHTML = '<div class="text-xs text-gray-400 py-1 italic">No hay domicilios cobrados en este turno.</div>';
+            if (actionContainer) actionContainer.classList.add('hidden');
+        } else {
+            driversListEl.innerHTML = data.driverBreakdown.map(d => {
+                const isLiq = isDriverLiquidated(d.name);
+                if (!isLiq) {
+                    totalPendingFee += d.totalFee;
+                    pendingDrivers.push(d);
+                }
+
+                let statusBadge = '';
+                if (!isDriverModel) {
+                    statusBadge = '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">Ingreso Restaurante</span>';
+                } else if (isLiq) {
+                    statusBadge = '<span class="text-[10px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200 flex items-center gap-1"><i class="fas fa-check-circle text-[9px]"></i> Liquidado</span>';
+                } else {
+                    statusBadge = `
+                        <button type="button" class="btn-liquidate-driver text-[10px] font-bold bg-orange-100 hover:bg-orange-200 text-orange-800 border border-orange-300 px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                            data-name="${escapeHtml(d.name)}" data-amount="${d.totalFee}" data-count="${d.count}">
+                            Liquidar
+                        </button>
+                    `;
+                }
+
+                return `
+                    <div class="flex items-center justify-between p-2 rounded-xl bg-gray-50/70 border border-gray-100 text-xs">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-bold">
+                                <i class="fas fa-motorcycle text-[9px]"></i>
+                            </span>
+                            <div>
+                                <span class="font-bold text-gray-800">${escapeHtml(d.name)}</span>
+                                <span class="text-[10px] text-gray-400 ml-1">(${d.count} carrera${d.count > 1 ? 's' : ''})</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-black text-orange-700">${formatter.format(d.totalFee)}</span>
+                            ${statusBadge}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (actionContainer) {
+                if (!isDriverModel || totalFee === 0) {
+                    actionContainer.classList.add('hidden');
+                } else {
+                    actionContainer.classList.remove('hidden');
+                    if (pendingAmountEl) pendingAmountEl.innerText = formatter.format(totalPendingFee);
+
+                    if (btnLiquidateAll) {
+                        btnLiquidateAll.disabled = pendingDrivers.length === 0;
+                        btnLiquidateAll.innerHTML = pendingDrivers.length === 0
+                            ? '<i class="fas fa-check-circle text-green-400 mr-1"></i> Todos Liquidados'
+                            : '<i class="fas fa-hand-holding-usd mr-1"></i> Liquidar Todos';
+                    }
+                }
+            }
+
+            // Function to perform liquidation of one driver
+            const doLiquidate = async (driverName, amount, count) => {
+                try {
+                    const dateIso = new Date().toISOString().split('T')[0];
+                    await ApiClient.post('/cierre-caja/liquidar-domicilio', {
+                        driverName,
+                        amount,
+                        count,
+                        date: dateIso
+                    });
+
+                    toast(`Liquidación de ${driverName} registrada como egreso`, 'success');
+
+                    // Refresh daily gastos
+                    const gastosRes = await ApiClient.get(`/gastos-dia?date=${dateIso}`);
+                    const newGastosRows = gastosRes?.data || [];
+                    const newTotalGastos = newGastosRows.reduce((s, g) => s + (parseFloat(g.valor) || 0), 0);
+
+                    data.gastosRows = newGastosRows;
+                    data.totalGastos = newTotalGastos;
+                    data.adjustedTotal = data.totalSales - newTotalGastos;
+
+                    totalGastosVal = newTotalGastos;
+                    adjustedVal = data.adjustedTotal;
+
+                    if (totalGastosEl) totalGastosEl.innerText = formatter.format(totalGastosVal);
+                    if (adjustedEl) adjustedEl.innerText = formatter.format(adjustedVal);
+
+                    // Re-render modal to reflect new liquidation state
+                    renderSummaryModal(data);
+                } catch (err) {
+                    console.error('Error liquidating driver:', err);
+                    toast('Error al registrar liquidación: ' + (err.message || ''), 'error');
+                }
+            };
+
+            // Attach listener to single driver liquidation buttons
+            driversListEl.querySelectorAll('.btn-liquidate-driver').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const dName = btn.dataset.name;
+                    const dAmount = parseFloat(btn.dataset.amount) || 0;
+                    const dCount = parseInt(btn.dataset.count, 10) || 1;
+
+                    showConfirmModal(
+                        'Liquidar Domiciliario',
+                        `¿Deseas registrar un egreso de caja por ${formatter.format(dAmount)} para liquidar a ${dName} (${dCount} pedido${dCount > 1 ? 's' : ''})?`,
+                        () => doLiquidate(dName, dAmount, dCount),
+                        null,
+                        'Registrar Egreso'
+                    );
+                };
+            });
+
+            // Attach listener to liquidate all button
+            if (btnLiquidateAll) {
+                btnLiquidateAll.onclick = (e) => {
+                    e.stopPropagation();
+                    if (pendingDrivers.length === 0) return;
+
+                    showConfirmModal(
+                        'Liquidar Todos los Domiciliarios',
+                        `¿Deseas registrar un egreso de caja por ${formatter.format(totalPendingFee)} para liquidar a todos los repartidores pendientes (${pendingDrivers.length})?`,
+                        async () => {
+                            for (const d of pendingDrivers) {
+                                await doLiquidate(d.name, d.totalFee, d.count);
+                            }
+                        },
+                        null,
+                        'Liquidar Todos'
+                    );
+                };
+            }
+        }
+    }
 
     $('daily-summary-modal').classList.remove('hidden');
 }
@@ -532,6 +727,25 @@ async function printReport() {
                 <span class="bold">TOTAL GASTOS:</span>
                 <span class="bold">${formatter.format(totalGastos)}</span>
             </div>
+
+            <!-- Recaudo Domicilios -->
+            ${data.totalDeliveryFees > 0 ? `
+            <div class="section-title">RECAUDO DOMICILIOS</div>
+            <div class="line"></div>
+            <div style="display:flex; justify-content:space-between; font-size: 11px;">
+                <span>TOTAL RECAUDADO:</span>
+                <span class="bold">${formatter.format(data.totalDeliveryFees)} (${data.deliveryOrdersCount} ped)</span>
+            </div>
+            <div style="font-size: 9px; color: #555; margin-bottom: 4px;">
+                Modelo: ${(state.restaurantData?.deliveryFeeModel || 'driver') === 'driver' ? 'Tercerizado (Fondo Repartidores)' : 'Propio (Ingreso Operativo)'}
+            </div>
+            ${(data.driverBreakdown || []).map(d => `
+                <div style="display:flex; justify-content:space-between; font-size: 10px;">
+                    <span>• ${escapeHtml(d.name)} (${d.count} ped):</span>
+                    <span>${formatter.format(d.totalFee)}</span>
+                </div>
+            `).join('')}
+            ` : ''}
 
             <div class="line" style="margin-top: 15px;"></div>
             <div style="display:flex; justify-content:space-between; font-size: 14px;">

@@ -865,12 +865,15 @@ export function getDishToppingsConfig() {
             const type = row.querySelector('.t-dish-type')?.value || 'optional';
             const price = Number(row.querySelector('.t-dish-price')?.value) || 0;
 
+            const basePrice = Number(row.querySelector('.t-dish-price')?.dataset.basePrice) || (type === 'required' ? 0 : price);
+
             config.push({
                 id,
                 name,
                 group_name: groupName,
                 is_required: type === 'required',
-                price: type === 'required' ? 0 : price
+                price: type === 'required' ? 0 : price,
+                base_price: basePrice > 0 ? basePrice : price
             });
         }
     });

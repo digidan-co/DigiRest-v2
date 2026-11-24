@@ -1224,20 +1224,43 @@ export function openClientToppingsModal(product, { onConfirm = null } = {}) {
         if (!name) return;
         const groupName = (item.group_name || 'Adiciones').trim();
         const isRequired = item.is_required === true || item.is_required === 1 || item.is_required === '1';
-        const price = isRequired ? 0 : (Number(item.price) || 0);
+
+        // Base price of the topping when added as an extra / optional addition
+        let extraPrice = Number(item.price) || 0;
+        if (extraPrice <= 0 && item.base_price) {
+            extraPrice = Number(item.base_price) || 0;
+        }
+        if (extraPrice <= 0 && state.toppings && state.toppings.length > 0) {
+            const defT = state.toppings.find(t => String(t.id) === String(id) || String(t.name).trim().toLowerCase() === name.toLowerCase());
+            if (defT && Number(defT.price) > 0) {
+                extraPrice = Number(defT.price);
+            }
+        }
 
         if (isRequired) {
             if (!mandMap.has(groupName)) {
                 mandMap.set(groupName, { name: groupName, items: [] });
             }
-            mandMap.get(groupName).items.push({ id, name, group_name: groupName, price: 0, is_required: true });
-        } else {
-            if (!optMap.has(groupName)) {
-                optMap.set(groupName, { name: groupName, items: [] });
+            mandMap.get(groupName).items.push({ id, name, group_name: groupName, price: 0, is_required: true, base_price: extraPrice });
+
+            // Allow selecting as optional extra as well (even if part of mandatory group)
+            if (!allOpt.some(o => String(o.id) === String(id))) {
+                if (!optMap.has(groupName)) {
+                    optMap.set(groupName, { name: groupName, items: [] });
+                }
+                const optItem = { id, name, group_name: groupName, price: extraPrice, is_required: false };
+                optMap.get(groupName).items.push(optItem);
+                allOpt.push(optItem);
             }
-            const optItem = { id, name, group_name: groupName, price, is_required: false };
-            optMap.get(groupName).items.push(optItem);
-            allOpt.push(optItem);
+        } else {
+            if (!allOpt.some(o => String(o.id) === String(id))) {
+                if (!optMap.has(groupName)) {
+                    optMap.set(groupName, { name: groupName, items: [] });
+                }
+                const optItem = { id, name, group_name: groupName, price: extraPrice, is_required: false };
+                optMap.get(groupName).items.push(optItem);
+                allOpt.push(optItem);
+            }
         }
     });
 
@@ -1734,7 +1757,7 @@ function handleAddCustomizedDishToCart() {
     let toppingsText = '';
     if (selectedToppings.length > 0) {
         toppingsText = selectedToppings
-            .map(t => t.price > 0 ? `${t.name} (+${formatMoney(t.price)})` : t.name)
+            .map(t => t.is_required ? `${t.name} (Incluido)` : (t.price > 0 ? `${t.name} (+${formatMoney(t.price)})` : t.name))
             .join(', ');
     }
 
