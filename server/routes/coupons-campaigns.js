@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { verifyToken, requireRole } = require('./auth');
 const { v4: uuidv4 } = require('uuid');
+const { filterActiveCampaigns } = require('../utils/campaign-calculator');
 
 module.exports = (io) => {
 
@@ -552,48 +553,12 @@ module.exports = (io) => {
     // =========================================================================
     router.get('/active-discounts', async (req, res) => {
         try {
-            const now = new Date();
-            // Formatos locales YYYY-MM-DD y HH:MM
-            const todayStr = now.toISOString().slice(0, 10);
-            const currentHours = String(now.getHours()).padStart(2, '0');
-            const currentMins = String(now.getMinutes()).padStart(2, '0');
-            const currentTimeStr = `${currentHours}:${currentMins}`;
-            // Día de la semana (1 = Lunes, ..., 7 = Domingo)
-            const dayOfWeek = String(now.getDay() === 0 ? 7 : now.getDay());
-
             const campaigns = await dbAllAsync(`
                 SELECT * FROM discount_campaigns 
                 WHERE active = 1
             `);
 
-            const activeCampaigns = campaigns.filter(c => {
-                // Filtro fecha inicio y fin
-                if (c.start_date && todayStr < c.start_date) return false;
-                if (c.end_date && todayStr > c.end_date) return false;
-
-                // Filtro horario
-                if (c.start_time && currentTimeStr < c.start_time) return false;
-                if (c.end_time && currentTimeStr > c.end_time) return false;
-
-                // Filtro días de la semana
-                let days = ['1', '2', '3', '4', '5', '6', '7'];
-                try {
-                    days = JSON.parse(c.days_of_week || '[]');
-                } catch (e) { }
-                if (days.length > 0 && !days.includes(dayOfWeek)) return false;
-
-                return true;
-            }).map(c => ({
-                id: c.id,
-                name: c.name,
-                description: c.description,
-                discount_percent: c.discount_percent,
-                scope: c.scope,
-                category_id: c.category_id,
-                category_name: c.category_name,
-                product_ids: typeof c.product_ids === 'string' ? JSON.parse(c.product_ids || '[]') : c.product_ids,
-                channels: typeof c.channels === 'string' ? JSON.parse(c.channels || '[]') : c.channels
-            }));
+            const activeCampaigns = filterActiveCampaigns(campaigns, req.query.channel || null);
 
             res.json({
                 activeCampaigns

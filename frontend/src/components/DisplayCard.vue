@@ -1,5 +1,7 @@
 <script setup>
 import { formatMoney } from '@/legacy/utils/helpers.js';
+import { state } from '@/legacy/core/state.js';
+import { getMatchingCampaignForProduct, calculateProductCampaignPrice } from '@/legacy/utils/campaign-calculator.js';
 
 const props = defineProps({
     p: Object,
@@ -10,8 +12,30 @@ const props = defineProps({
 });
 const emit = defineEmits(['open']);
 
-function effectivePrice(x) { return (x.is_promo && x.promo_price) ? x.promo_price : x.price; }
-function hasDiscount(x) { return x.is_promo && x.promo_price && x.promo_price < x.price; }
+function getProductCampaign(x) {
+    return getMatchingCampaignForProduct(x, 'Domicilio', state.activeCampaigns);
+}
+
+function effectivePrice(x) {
+    const camp = getProductCampaign(x);
+    if (camp) {
+        const res = calculateProductCampaignPrice(x, camp);
+        return res.finalPrice;
+    }
+    return (x.is_promo && x.promo_price) ? x.promo_price : x.price;
+}
+
+function hasDiscount(x) {
+    return Boolean((x.is_promo && x.promo_price && x.promo_price < x.price) || getProductCampaign(x));
+}
+
+function getDiscountBadge(x) {
+    const camp = getProductCampaign(x);
+    if (camp && camp.discount_percent > 0) {
+        return `-${camp.discount_percent}%`;
+    }
+    return 'Promo';
+}
 </script>
 
 <template>
@@ -20,7 +44,7 @@ function hasDiscount(x) { return x.is_promo && x.promo_price && x.promo_price < 
         <div class="hidden sm:block sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl overflow-hidden shrink-0 bg-gray-50 relative">
             <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy"
                 class="display-img-target w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-            <span v-if="hasDiscount(p)" class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">Promo</span>
+            <span v-if="hasDiscount(p)" class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">{{ getDiscountBadge(p) }}</span>
             <span v-else-if="isRec || p.is_recommended" class="badge-recommended absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider text-white shadow-xs flex items-center gap-0.5" style="background-color: #d97706; color: #ffffff;"><i class="fas fa-star text-[7px] text-amber-200"></i> Top</span>
             <span v-if="isTop && rank" class="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black bg-orange-500 text-white shadow-xs">#{{ rank }}</span>
         </div>
@@ -28,7 +52,7 @@ function hasDiscount(x) { return x.is_promo && x.promo_price && x.promo_price < 
             <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 mb-0.5">
                     <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider truncate">{{ p.category }}</span>
-                    <span v-if="hasDiscount(p)" class="sm:hidden px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-100 text-red-700">Promo</span>
+                    <span v-if="hasDiscount(p)" class="sm:hidden px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-100 text-red-700">{{ getDiscountBadge(p) }}</span>
                     <span v-if="p.has_variants && p.has_toppings" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Variantes + Extras</span>
                     <span v-else-if="p.has_variants" class="sm:hidden text-[8px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded">Variantes</span>
                     <span v-else-if="p.has_toppings" class="sm:hidden text-[8px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Toppings</span>

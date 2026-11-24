@@ -17,6 +17,7 @@ export const state = reactive({
     customers: [],
     customerStats: {},
     topDishes7d: [],
+    activeCampaigns: [],
     cart: [],
     user: initialUser,
     orders: [],

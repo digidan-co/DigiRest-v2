@@ -12,7 +12,8 @@ import {
     getDiscountCampaigns,
     saveDiscountCampaign,
     toggleDiscountCampaign,
-    deleteDiscountCampaign
+    deleteDiscountCampaign,
+    getActiveDiscounts
 } from '@/legacy/services/coupons-service.js';
 
 const activeSubtab = ref('coupons'); // 'coupons' | 'campaigns'
@@ -324,6 +325,10 @@ async function handleSaveCampaign() {
         toast(isEditingCampaign.value ? 'Campaña actualizada con éxito' : 'Campaña creada con éxito', 'success');
         showCampaignModal.value = false;
         await loadCampaigns();
+        try {
+            const activeRes = await getActiveDiscounts();
+            state.activeCampaigns = activeRes.activeCampaigns || [];
+        } catch (_) {}
     } catch (e) {
         console.error(e);
         toast(e.message || 'Error guardando campaña', 'error');
@@ -336,6 +341,10 @@ async function handleToggleCampaign(c) {
     try {
         await toggleDiscountCampaign(c.id);
         c.active = c.active ? 0 : 1;
+        try {
+            const activeRes = await getActiveDiscounts();
+            state.activeCampaigns = activeRes.activeCampaigns || [];
+        } catch (_) {}
         toast(c.active ? `Campaña ${c.name} activada` : `Campaña ${c.name} pausada`, 'info');
     } catch (e) {
         toast('Error cambiando estado de la campaña', 'error');
@@ -355,6 +364,10 @@ async function handleDeleteCampaign(c) {
         await deleteDiscountCampaign(c.id);
         toast(`Campaña ${c.name} eliminada`, 'success');
         await loadCampaigns();
+        try {
+            const activeRes = await getActiveDiscounts();
+            state.activeCampaigns = activeRes.activeCampaigns || [];
+        } catch (_) {}
     } catch (e) {
         toast('Error eliminando campaña', 'error');
     }

@@ -4,6 +4,8 @@ import { state } from '@/legacy/core/state.js';
 import { addToCart, openDisplayDetail, openComboDisplayDetail, setupClientToppingsModalListeners, updateCartUI } from '@/legacy/views/client-view.js';
 import { getTopDishes7d } from '@/legacy/services/product-service.js';
 import { getPromotionsCombos, listenToPromotionsCombos, calculateComboPricing } from '@/legacy/services/promotions-service.js';
+import { getActiveDiscounts } from '@/legacy/services/coupons-service.js';
+import { getMatchingCampaignForProduct, calculateProductCampaignPrice } from '@/legacy/utils/campaign-calculator.js';
 import { OfflineDB } from '@/legacy/services/offline-db.js';
 import { formatMoney } from '@/legacy/utils/helpers.js';
 import { toast } from '@/legacy/components/ui.js';
@@ -19,7 +21,7 @@ const isOpen = computed(() => state.restaurantData.isOpen !== false);
 const sn = computed(() => state.restaurantData.socialNetworks || {});
 
 const availableProducts = computed(() => (state.products || []).filter(p => p.available !== 0 && p.available !== false));
-const hasPromos = computed(() => availableProducts.value.some(p => p.is_promo));
+const hasPromos = computed(() => availableProducts.value.some(p => hasDiscount(p)));
 const hasRecommended = computed(() => availableProducts.value.some(p => p.is_recommended));
 const hasTopDishes = computed(() => (state.topDishes7d || []).length > 0);
 
@@ -49,7 +51,7 @@ const filteredCombos = computed(() => {
     );
 });
 
-const promoDishes = computed(() => availableProducts.value.filter(p => p.is_promo));
+const promoDishes = computed(() => availableProducts.value.filter(p => hasDiscount(p)));
 const recDishes = computed(() => availableProducts.value.filter(p => p.is_recommended));
 const topDishes = computed(() => (state.topDishes7d || []).filter(p => p.available !== 0 && p.available !== false).slice(0, 8));
 
@@ -93,8 +95,30 @@ const categoryChips = computed(() => {
     return chips;
 });
 
-function effectivePrice(p) { return (p.is_promo && p.promo_price) ? p.promo_price : p.price; }
-function hasDiscount(p) { return p.is_promo && p.promo_price && p.promo_price < p.price; }
+function getProductCampaign(p) {
+    return getMatchingCampaignForProduct(p, 'Domicilio', state.activeCampaigns);
+}
+
+function effectivePrice(p) {
+    const camp = getProductCampaign(p);
+    if (camp) {
+        const res = calculateProductCampaignPrice(p, camp);
+        return res.finalPrice;
+    }
+    return (p.is_promo && p.promo_price) ? p.promo_price : p.price;
+}
+
+function hasDiscount(p) {
+    return Boolean((p.is_promo && p.promo_price && p.promo_price < p.price) || getProductCampaign(p));
+}
+
+function getDiscountBadge(p) {
+    const camp = getProductCampaign(p);
+    if (camp && camp.discount_percent > 0) {
+        return `-${camp.discount_percent}%`;
+    }
+    return '¡Oferta!';
+}
 
 function toggleCat(name) {
     const next = new Set(expandedCats.value);
@@ -210,6 +234,10 @@ function handleAddCombo(combo, qty = 1) {
 
 onMounted(async () => {
     setupClientToppingsModalListeners();
+    try {
+        const campRes = await getActiveDiscounts();
+        state.activeCampaigns = campRes.activeCampaigns || [];
+    } catch (_) {}
     try {
         rawCombos.value = await getPromotionsCombos(true);
     } catch (e) {
@@ -398,7 +426,7 @@ onMounted(async () => {
                     @click="handleSelectProduct(p.id)">
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                        <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
+                        <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">{{ getDiscountBadge(p) }}</span>
                         <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Variantes y Adiciones">
                             <i class="fas fa-layer-group text-[10px]"></i>
                             <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>
@@ -461,7 +489,7 @@ onMounted(async () => {
                     @click="handleSelectProduct(p.id)">
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                        <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
+                        <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">{{ getDiscountBadge(p) }}</span>
                         <span v-else class="badge-recommended absolute top-2 left-2 px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider text-white shadow-xs flex items-center gap-1" style="background-color: #d97706; color: #ffffff;">
                             <i class="fas fa-star text-[8px] text-amber-200"></i> Recomendado
                         </span>
@@ -527,7 +555,7 @@ onMounted(async () => {
                     @click="handleSelectProduct(p.id)">
                     <div class="aspect-square w-full relative bg-gray-50 overflow-hidden shrink-0">
                         <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy" class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                        <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">¡Oferta!</span>
+                        <span v-if="hasDiscount(p)" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">{{ getDiscountBadge(p) }}</span>
                         <span v-else-if="idx === 0" class="absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[9px] font-black bg-orange-500 text-white shadow-xs">#{{ idx + 1 }} Más Pedido</span>
                         <span v-if="p.has_variants && p.has_toppings" class="absolute top-2 right-2 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Variantes y Adiciones">
                             <i class="fas fa-layer-group text-[10px]"></i>
@@ -590,7 +618,7 @@ onMounted(async () => {
                         <div class="aspect-square w-full bg-gray-50 relative overflow-hidden shrink-0">
                             <img :src="p.img || '/img/placeholder-dish.svg'" :alt="'Foto de ' + p.name" loading="lazy"
                                 class="display-img-target absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                            <span v-if="hasDiscount(p)" class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">Promo</span>
+                            <span v-if="hasDiscount(p)" class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">{{ getDiscountBadge(p) }}</span>
                             <span v-if="p.has_variants && p.has_toppings" class="absolute top-1.5 right-1.5 px-1.5 h-6 rounded-full bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 border border-gray-100/80 z-10 pointer-events-none" title="Variantes y Adiciones">
                                 <i class="fas fa-layer-group text-[10px]"></i>
                                 <i class="fas fa-cookie-bite text-[10px] text-amber-600"></i>

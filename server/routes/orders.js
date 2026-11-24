@@ -12,6 +12,7 @@ const path = require('path');
 const { processProof } = require('../utils/imageProcessor');
 const { deductStockForOrder, revertStockForOrder } = require('../utils/inventory-helper');
 const { calculateOrderCombos } = require('../utils/combo-calculator');
+const { filterActiveCampaigns, calculateOrderCampaignDiscount } = require('../utils/campaign-calculator');
 const { isSameDayOrder, getColombiaDateString } = require('../utils/date-helper');
 const { verifyAdminCode, consumeAdminVerification } = require('../utils/admin-verifier');
 const saasService = require('../saasService');
@@ -46,7 +47,7 @@ function dbAllAsync(sql, params = []) {
  */
 async function recalculatePublicOrderPricing(rawItems, rawDeliveryZone, orderType, rawDeliveryFee) {
     const [products, toppings, combos, zones] = await Promise.all([
-        dbAllAsync("SELECT id, name, price, is_promo, promo_price, has_variants, variants_config FROM products"),
+        dbAllAsync("SELECT id, name, price, category, is_promo, promo_price, has_variants, variants_config FROM products"),
         dbAllAsync("SELECT id, name, price FROM toppings"),
         dbAllAsync("SELECT id, name, type, combo_price, discount_value FROM promotions_combos"),
         dbAllAsync("SELECT id, name, fee FROM delivery_zones")
@@ -209,7 +210,8 @@ async function recalculatePublicOrderPricing(rawItems, rawDeliveryZone, orderTyp
     return {
         sanitizedItems,
         comboCalc,
-        verifiedDeliveryFee
+        verifiedDeliveryFee,
+        prodById
     };
 }
 
@@ -370,17 +372,33 @@ module.exports = (io) => {
             }
 
             let finalOrderTotal = Math.max(0, parseFloat(total) || 0);
+            let pricing = null;
+
+            const orderChannel = type || 'Domicilio';
+            const allDbCampaigns = await new Promise((resolve) => {
+                db.all("SELECT * FROM discount_campaigns WHERE active = 1", (err, rows) => resolve(rows || []));
+            });
+            const activeCampaigns = filterActiveCampaigns(allDbCampaigns, orderChannel);
 
             if (!staffUser) {
                 // Recalcular estrictamente precios, variantes, promos, toppings, combos y domicilio desde SQLite
-                const pricing = await recalculatePublicOrderPricing(parsedItems, delivery_zone, type || 'Domicilio', delivery_fee);
+                pricing = await recalculatePublicOrderPricing(parsedItems, delivery_zone, orderChannel, delivery_fee);
                 parsedItems = pricing.sanitizedItems;
                 delivery_fee = pricing.verifiedDeliveryFee;
                 discount = pricing.comboCalc.totalComboDiscount;
                 discount_reason = pricing.comboCalc.discountReason || '';
-                finalOrderTotal = Math.max(0, pricing.comboCalc.netItemsTotal + delivery_fee + tip);
+
+                // Aplicar campaña de descuento automática si aplica
+                const campaignCalc = calculateOrderCampaignDiscount(parsedItems, orderChannel, activeCampaigns, pricing.prodById);
+                if (campaignCalc.totalDiscount > 0) {
+                    discount += campaignCalc.totalDiscount;
+                    const campReason = `Campaña: ${campaignCalc.campaignReason}`;
+                    discount_reason = discount_reason ? `${discount_reason} (${campReason})` : campReason;
+                }
+
+                finalOrderTotal = Math.max(0, pricing.comboCalc.netItemsTotal - campaignCalc.totalDiscount + delivery_fee + tip);
             } else {
-                // Personal autenticado: mantener flujo actual con auto-evaluación de combos
+                // Personal autenticado: mantener flujo actual con auto-evaluación de combos y campañas
                 const comboCalc = calculateOrderCombos(parsedItems);
                 if (comboCalc.totalComboDiscount > 0) {
                     if (discount === 0) {
@@ -393,6 +411,21 @@ module.exports = (io) => {
                         discount_reason = comboCalc.discountReason;
                     } else if (!discount_reason.includes(comboCalc.discountReason)) {
                         discount_reason = `${discount_reason} (${comboCalc.discountReason})`;
+                    }
+                }
+
+                // Aplicar campaña de descuento para pedidos de personal si aplica
+                const campaignCalc = calculateOrderCampaignDiscount(parsedItems, orderChannel, activeCampaigns);
+                if (campaignCalc.totalDiscount > 0) {
+                    discount += campaignCalc.totalDiscount;
+                    if (finalOrderTotal >= campaignCalc.totalDiscount) {
+                        finalOrderTotal = Math.max(0, finalOrderTotal - campaignCalc.totalDiscount);
+                    }
+                    const campReason = `Campaña: ${campaignCalc.campaignReason}`;
+                    if (!discount_reason) {
+                        discount_reason = campReason;
+                    } else if (!discount_reason.includes(campaignCalc.campaignReason)) {
+                        discount_reason = `${discount_reason} (${campReason})`;
                     }
                 }
             }

@@ -17,6 +17,7 @@ import { getTopDishes7d } from '../services/product-service.js';
 import { calculateOrderCombos } from '../utils/combo-calculator.js';
 import { calculateComboPricing } from '../services/promotions-service.js';
 import { validateCoupon } from '../services/coupons-service.js';
+import { getMatchingCampaignForProduct, calculateProductCampaignPrice, calculateOrderCampaignDiscount } from '../utils/campaign-calculator.js';
 
 let currentDisplayCategory = 'Todos';
 let currentClientCategory = 'Todos';
@@ -284,11 +285,17 @@ export function openDisplayDetail(id, cardElement) {
     $('display-category').innerText = product.category;
     $('display-desc').innerText = product.desc || "Delicioso plato preparado con los mejores ingredientes de la casa.";
 
+    const activeCamp = getMatchingCampaignForProduct(product, 'Domicilio', state.activeCampaigns);
+
     const badgeExtra = $('display-badge-extra');
     if (badgeExtra) {
         if (product.has_variants && product.has_toppings) {
             badgeExtra.className = 'inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 bg-indigo-100 px-2.5 py-0.5 rounded-full';
             badgeExtra.innerHTML = '<i class="fas fa-layer-group text-[10px] text-indigo-600"></i><i class="fas fa-cookie-bite text-[10px] text-amber-600"></i> Variantes y Adiciones';
+            badgeExtra.classList.remove('hidden');
+        } else if (activeCamp && activeCamp.discount_percent > 0) {
+            badgeExtra.className = 'inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-100 px-2.5 py-0.5 rounded-full';
+            badgeExtra.innerHTML = `<i class="fas fa-bullhorn text-[10px]"></i> Campaña: -${activeCamp.discount_percent}%`;
             badgeExtra.classList.remove('hidden');
         } else if (product.has_variants) {
             badgeExtra.className = 'inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-900 bg-indigo-100 px-2.5 py-0.5 rounded-full';
@@ -313,17 +320,29 @@ export function openDisplayDetail(id, cardElement) {
 
     const priceContainer = $('display-price');
     if (priceContainer) {
+        const campPrice = activeCamp ? calculateProductCampaignPrice(product, activeCamp) : null;
+
         if (product.has_variants) {
-            const hasPromo = Boolean(product.is_promo && product.promo_price && product.promo_price < product.price);
+            const hasPromo = Boolean((product.is_promo && product.promo_price && product.promo_price < product.price) || (campPrice && campPrice.discountAmount > 0));
+            const displayFinal = campPrice && campPrice.discountAmount > 0 ? campPrice.finalPrice : (product.is_promo && product.promo_price ? product.promo_price : product.price);
+            const displayBase = campPrice && campPrice.discountAmount > 0 ? campPrice.basePrice : product.price;
+
             priceContainer.innerHTML = `
                 <div class="flex items-baseline gap-2">
                     <span class="text-xs font-bold text-gray-400 uppercase">Desde</span>
                     ${hasPromo ? `
-                        <span class="text-2xl sm:text-3xl font-extrabold text-red-600">${formatMoney(product.promo_price)}</span>
-                        <span class="text-xs sm:text-sm text-gray-400 line-through">${formatMoney(product.price)}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-red-600">${formatMoney(displayFinal)}</span>
+                        <span class="text-xs sm:text-sm text-gray-400 line-through">${formatMoney(displayBase)}</span>
                     ` : `
                         <span class="text-2xl sm:text-3xl font-extrabold text-gray-900">${formatMoney(product.price)}</span>
                     `}
+                </div>
+            `;
+        } else if (campPrice && campPrice.discountAmount > 0) {
+            priceContainer.innerHTML = `
+                <div class="flex items-baseline gap-2">
+                    <span class="text-2xl sm:text-3xl font-extrabold text-red-600">${formatMoney(campPrice.finalPrice)}</span>
+                    <span class="text-xs sm:text-sm text-gray-400 line-through">${formatMoney(campPrice.basePrice)}</span>
                 </div>
             `;
         } else if (product.is_promo && product.promo_price) {
@@ -1837,6 +1856,25 @@ export function updateCheckoutTotals() {
         }
     }
 
+    // Fila de ahorro por campañas de descuento automáticas
+    const campaignCalc = calculateOrderCampaignDiscount(state.cart, orderType || 'Domicilio', state.activeCampaigns, state.products);
+    const campaignDiscount = campaignCalc.totalDiscount || 0;
+    const campaignRow = $('cart-campaign-row');
+    const campaignDiscountEl = $('cart-campaign-discount');
+    const campaignLabel = $('cart-campaign-label');
+
+    if (campaignRow && campaignDiscountEl) {
+        if (campaignDiscount > 0) {
+            campaignRow.classList.remove('hidden');
+            campaignDiscountEl.textContent = `-${formatMoney(campaignDiscount)}`;
+            if (campaignLabel) {
+                campaignLabel.innerHTML = `<i class="fas fa-bullhorn text-[10px] mr-1"></i> Descuento (${escapeHtml(campaignCalc.campaignReason)}):`;
+            }
+        } else {
+            campaignRow.classList.add('hidden');
+        }
+    }
+
     // Fila de ahorro por cupón de descuento
     const couponRow = $('cart-coupon-row');
     const couponDiscountEl = $('cart-coupon-discount');
@@ -1844,7 +1882,7 @@ export function updateCheckoutTotals() {
     let couponDiscount = 0;
 
     if (state.appliedCoupon) {
-        const currentSub = comboCalc.netItemsTotal || subtotal;
+        const currentSub = Math.max(0, (comboCalc.netItemsTotal || subtotal) - campaignDiscount);
         if (state.appliedCoupon.discount_type === 'PERCENT') {
             couponDiscount = Math.round((currentSub * state.appliedCoupon.discount_value) / 100);
         } else {
@@ -1885,7 +1923,7 @@ export function updateCheckoutTotals() {
     } else {
         if (zoneInfo) zoneInfo.classList.add('hidden');
         if (deliveryRow) deliveryRow.classList.add('hidden');
-        if (breakdownContainer && (subtotal > 0 || comboDiscount > 0 || couponDiscount > 0)) {
+        if (breakdownContainer && (subtotal > 0 || comboDiscount > 0 || campaignDiscount > 0 || couponDiscount > 0)) {
             breakdownContainer.classList.remove('hidden');
         } else if (breakdownContainer && !isDomicilio) {
             breakdownContainer.classList.add('hidden');
@@ -1893,7 +1931,7 @@ export function updateCheckoutTotals() {
     }
 
     if (subtotalEl) subtotalEl.textContent = formatMoney(subtotal);
-    const grandTotal = Math.max(0, subtotal - comboDiscount - couponDiscount + deliveryFee);
+    const grandTotal = Math.max(0, subtotal - comboDiscount - campaignDiscount - couponDiscount + deliveryFee);
     if (totalEl) totalEl.textContent = formatMoney(grandTotal);
 
     if ($('c-pay')?.value === 'Mixto' && typeof window.updateClientMixedBalance === 'function') {
@@ -2224,8 +2262,10 @@ export async function handleSendOrder() {
         deliveryZoneName = selectedZone.name;
     }
 
+    const campaignCalc = calculateOrderCampaignDiscount(state.cart, orderType || 'Domicilio', state.activeCampaigns, state.products);
+    const campaignDiscount = campaignCalc.totalDiscount || 0;
     const couponDiscount = state.appliedCoupon ? (state.appliedCoupon.discountAmount || 0) : 0;
-    const totalWithDelivery = Math.max(0, cartSubtotal - comboDiscount - couponDiscount + deliveryFee);
+    const totalWithDelivery = Math.max(0, cartSubtotal - comboDiscount - campaignDiscount - couponDiscount + deliveryFee);
 
     const role = state.user ? state.user.role : null;
     const isStaffOrder = role === 'admin' ||
@@ -2283,8 +2323,12 @@ export async function handleSendOrder() {
         address: orderType === 'Domicilio' ? $('c-address').value : 'N/A',
         delivery_zone: deliveryZoneName,
         delivery_fee: deliveryFee,
-        discount: comboDiscount + couponDiscount,
-        discount_reason: [comboCalc.discountReason, state.appliedCoupon ? state.appliedCoupon.discountReason : ''].filter(Boolean).join(' + '),
+        discount: comboDiscount + campaignDiscount + couponDiscount,
+        discount_reason: [
+            comboCalc.discountReason,
+            campaignCalc.campaignReason ? `Campaña: ${campaignCalc.campaignReason}` : '',
+            state.appliedCoupon ? state.appliedCoupon.discountReason : ''
+        ].filter(Boolean).join(' + '),
         coupon_code: state.appliedCoupon ? state.appliedCoupon.code : undefined,
         items: state.cart.map(({ _editingNote, ...rest }) => ({
             ...rest,

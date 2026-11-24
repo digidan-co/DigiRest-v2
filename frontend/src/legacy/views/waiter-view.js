@@ -9,6 +9,7 @@ import { addOrderNotes, getOrderNotes, deleteOrderNote } from '../services/note-
 import { compressProof } from '../utils/image-utils.js';
 import { openClientToppingsModal } from './client-view.js';
 import { validateCoupon } from '../services/coupons-service.js';
+import { calculateOrderCampaignDiscount } from '../utils/campaign-calculator.js';
 
 let waiterCart = [];
 let waiterCurrentCategory = 'all';
@@ -528,7 +529,22 @@ function renderReviewCartList() {
         `;
     }
 
-    let subtotalBase = comboCalc.totalComboDiscount > 0 ? comboCalc.netItemsTotal : total;
+    // Descuento de campaña automática si aplica para Local
+    const campaignCalc = calculateOrderCampaignDiscount(waiterCart, 'Local', state.activeCampaigns, state.products);
+    const campaignDiscount = campaignCalc.totalDiscount || 0;
+    if (campaignDiscount > 0) {
+        list.innerHTML += `
+            <div class="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-xs flex justify-between items-center font-bold mt-2 shadow-2xs">
+                <span class="flex items-center gap-1.5">
+                    <i class="fas fa-bullhorn text-emerald-600 mr-0.5"></i>
+                    <span>Descuento Campaña (${escapeHtml(campaignCalc.campaignReason)}):</span>
+                </span>
+                <span class="font-black text-emerald-700">-${formatMoney(campaignDiscount)}</span>
+            </div>
+        `;
+    }
+
+    let subtotalBase = Math.max(0, (comboCalc.totalComboDiscount > 0 ? comboCalc.netItemsTotal : total) - campaignDiscount);
     let couponDiscount = 0;
     if (waiterAppliedCoupon) {
         if (waiterAppliedCoupon.discount_type === 'PERCENT') {
@@ -1104,10 +1120,16 @@ export async function handleSendWaiterOrder() {
             ? comboCalc.netItemsTotal
             : waiterCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
+        const campaignCalc = calculateOrderCampaignDiscount(waiterCart, 'Local', state.activeCampaigns, state.products);
+        const campaignDiscount = campaignCalc.totalDiscount || 0;
         const couponDisc = waiterAppliedCoupon ? (waiterAppliedCoupon.discountAmount || 0) : 0;
-        const totalDiscount = (comboCalc.totalComboDiscount || 0) + couponDisc;
-        const totalDiscountReason = [comboCalc.discountReason, waiterAppliedCoupon?.discountReason].filter(Boolean).join(' + ');
-        const finalTotal = Math.max(0, baseItemsTotal - couponDisc);
+        const totalDiscount = (comboCalc.totalComboDiscount || 0) + campaignDiscount + couponDisc;
+        const totalDiscountReason = [
+            comboCalc.discountReason,
+            campaignCalc.campaignReason ? `Campaña: ${campaignCalc.campaignReason}` : '',
+            waiterAppliedCoupon?.discountReason
+        ].filter(Boolean).join(' + ');
+        const finalTotal = Math.max(0, baseItemsTotal - campaignDiscount - couponDisc);
 
         const clientOrderId = 'LOCAL_' + (state.user?.id || 'w') + '_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 

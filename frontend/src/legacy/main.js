@@ -64,6 +64,7 @@ const DEFAULT_WA_TEMPLATES = {
 import { listenToOrders, listenToWaiterOrders, getOrder } from './services/order-service.js';
 import { loginUser, logoutUser, confirmLogin, saveUser, deleteUser as serviceDeleteUser, getUsers } from './services/auth-service.js';
 import { saveProduct, deleteProduct, saveCategory, deleteCategory, getProducts, getCategories, listenToProducts } from './services/product-service.js';
+import { getActiveDiscounts } from './services/coupons-service.js';
 import { compressImage, compressImageAsBlob, compressProof, compressBanner } from './utils/image-utils.js';
 import { setLoading } from './components/ui.js';
 
@@ -1140,6 +1141,22 @@ async function init() {
             if (!$('admin-view').classList.contains('hidden')) {
                 loadAdminUsers();
             }
+        });
+
+        // Listen for Realtime Discount Campaign Updates
+        const reloadActiveCampaigns = async () => {
+            try {
+                const res = await getActiveDiscounts();
+                state.activeCampaigns = res.activeCampaigns || [];
+                if (typeof updateCartUI === 'function') updateCartUI();
+                if (typeof updateCheckoutTotals === 'function') updateCheckoutTotals();
+            } catch (_) {
+                state.activeCampaigns = [];
+            }
+        };
+        reloadActiveCampaigns();
+        socket.on('campaign_changed', () => {
+            reloadActiveCampaigns();
         });
 
         // Global Listener for Instant Waiter Updates (Force Refresh)
